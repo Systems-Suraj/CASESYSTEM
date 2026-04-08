@@ -135,7 +135,7 @@ function debounce(func, wait) {
 }
 
 // ==========================================
-// STRICT MENTION RESTRICTION LOGIC (THE CORE)
+// 🔒 STRICT MENTION RESTRICTION LOGIC
 // ==========================================
 function checkComposerRestrictions(editor, type = 'main') {
     if (!editor) return;
@@ -164,17 +164,6 @@ function checkComposerRestrictions(editor, type = 'main') {
         if(submitBtn) { submitBtn.disabled = true; submitBtn.classList.add('opacity-50', 'cursor-not-allowed'); }
         formatBtns.forEach(b => { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); });
         typeSelectors.forEach(b => { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); });
-    }
-
-    // STRICT TYPING GUARD: Clear text if they bypass
-    if (!hasMention) {
-        const textContent = editor.textContent.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
-        const hasHtmlNodes = editor.children.length > 0;
-        
-        if ((textContent.length > 0 && !textContent.startsWith('@')) || (hasHtmlNodes && textContent === '')) {
-            editor.innerHTML = ''; 
-            showCustomDialog("Mention Required ⚠️", "Aap bina kisi ko @mention kiye message type, format ya attach nahi kar sakte.\n\nPlease type '@' to select a user from the list first.", false);
-        }
     }
 }
 
@@ -222,33 +211,44 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// MENTION KEYDOWN / PASTE LOGIC
+// 🔒 STRICT KEYDOWN GUARD: Blocks typing if @Mention is not explicitly selected from list
 document.addEventListener('keydown', function(e) {
     const target = e.target;
     if (target && (target.id === 'detail-reply-input' || target.classList?.contains('inline-reply-input'))) {
         const editor = target;
-        const sel = window.getSelection();
-        let isTypingMention = false;
-        
-        if (sel.rangeCount > 0 && sel.getRangeAt(0).startContainer.nodeType === Node.TEXT_NODE) {
-            const range = sel.getRangeAt(0);
-            const text = range.startContainer.textContent.substring(0, range.startOffset);
-            const currentWord = text.split(/[\s\u00A0]+/).pop(); 
-            if (currentWord && currentWord.startsWith('@')) {
-                isTypingMention = true;
-            }
-        }
-
-        if (e.key.length > 1 || e.key === '@' || e.ctrlKey || e.metaKey || e.altKey) return;
         const hasInitialMention = !!editor.querySelector('.mention-badge');
         const isDifferentMode = editor.id === 'detail-reply-input' && typeof replyComposerState !== 'undefined' && replyComposerState.mode === 'DIFFERENT';
-        
-        if (!hasInitialMention && !isTypingMention) {
-            // Restrictions handled beautifully in checkComposerRestrictions
+
+        // Allow functional keys (Backspace, Arrows, etc.)
+        const isFunctionalKey = e.key.length > 1 || e.ctrlKey || e.metaKey || e.altKey;
+
+        if (!hasInitialMention) {
+            // LOCK 1: Cannot press Space or Enter before selecting a name from the list
+            if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                showCustomDialog("Mention Required ⚠️", "Please click/select a user from the dropdown list before typing further.", false);
+                return;
+            }
+
+            // LOCK 2: Cannot type any first character other than '@'
+            const textContent = editor.textContent.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+            if (textContent.length === 0 && e.key !== '@' && !isFunctionalKey) {
+                e.preventDefault();
+                showCustomDialog("Mention Required ⚠️", "Please start by typing '@' to mention someone.", false);
+                return;
+            }
+        } else if (isDifferentMode) {
+            // In 'Different' mode, block normal typing in main input (except adding another @)
+            if (!isFunctionalKey && e.key !== '@') {
+                e.preventDefault();
+                showCustomDialog("Delegation Mode", "In 'Different Action' mode, please type your message in the specific boxes below.", false);
+                return;
+            }
         }
     }
 });
 
+// 🔒 STRICT PASTE GUARD
 document.addEventListener('paste', function(e) {
     const target = e.target;
     if (target && (target.id === 'detail-reply-input' || target.classList?.contains('inline-reply-input'))) {
@@ -708,11 +708,12 @@ function finalizeReplyMention(name, email, role) {
       window.currentCaseAllMembers.push(email);
       const detAdm = document.getElementById('detail-admins'); const detUsr = document.getElementById('detail-users');
       const badgeHtml = `<span class="px-2 py-0.5 ${role === 'Admin' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-600 border-slate-200'} border text-[10px] rounded font-bold shadow-sm">${role === 'Admin' ? '👑' : '👤'} ${name.split('@')[0]}</span>`;
-      if (role === 'Admin') detAdm.insertAdjacentHTML('afterbegin', badgeHtml); else detUsr.insertAdjacentHTML('afterbegin', badgeHtml);
+      if (role === 'Admin') { detAdm.insertAdjacentHTML('afterbegin', badgeHtml); } 
+      else { detUsr.insertAdjacentHTML('afterbegin', badgeHtml); }
       apiCall('updateCaseMembers', { id: document.getElementById('detail-conv-id').value, admins: currentCaseAdmins, users: currentCaseUsers }).catch(e=>{});
   }
 
-  if(!replyComposerState.recipients.find(r=>r.email === email)) replyComposerState.recipients.push({name: name, email: email, role: role, type: replyComposerState.globalType, customText: ''});
+  if(!replyComposerState.recipients.find(r=>r.email === email)) { replyComposerState.recipients.push({name: name, email: email, role: role, type: replyComposerState.globalType, customText: ''}); }
   const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(replySavedRange);
   const textNode = replySavedRange.startContainer;
   replySavedRange.setStart(textNode, textNode.textContent.lastIndexOf('@', replySavedRange.startOffset - 1)); replySavedRange.deleteContents();
