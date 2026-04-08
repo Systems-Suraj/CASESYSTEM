@@ -1,0 +1,108 @@
+/* ===== GLOBAL RESET & SMOOTH SCROLL ===== */
+* { 
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent; 
+  scroll-behavior: smooth; 
+}
+
+html, body { 
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden; 
+  background: #f9fafb; 
+  position: relative; 
+}
+
+a { text-decoration: none; }
+
+/* ===== PERFORMANCE FIX ===== */
+.expandable-content { display: none; }
+.expandable-content.expanded { display: block; animation: slideDown 0.2s ease-out forwards; }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ===== COMPONENTS ===== */
+.mention-badge { padding: 2px 6px; border-radius: 6px; font-weight: bold; font-size: 13px; display: inline-block; }
+.loader { border: 3px solid #f3f3f3; border-top: 3px solid #2563eb; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin: auto; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  body { font-size: 14px; }
+  .reply-input { font-size: 14px; }
+}
+
+/* ===== MOBILE SCROLL FIXES (UPDATED) ===== */
+/* Enable hardware acceleration to prevent UI thread hangs */
+.card-main, #conversationFeed, #caseDetailView {
+  transform: translateZ(0);
+  will-change: transform, opacity;
+}
+
+/* Enable iOS momentum/inertia scrolling */
+.overflow-y-auto, .overflow-x-hidden, #caseDetailView {
+  -webkit-overflow-scrolling: touch !important;
+}
+
+#caseDetailView {
+  height: auto !important;
+  min-height: 100vh;
+}
+
+#caseDetailView > div {
+  overflow: visible !important;
+}
+
+#detail-thread-container {
+  overflow: visible;
+}
+
+/* 🔥 ANDROID CHROME PERFORMANCE HACKS 🔥 */
+/* 1. Sirf visible elements ko render karega (Saves massive RAM on mobile) */
+.card-main {
+  content-visibility: auto;
+  contain-intrinsic-size: 250px; 
+}
+
+/* 2. Android rendering engine heavy shadows aur blurs se hang hota hai - removed expensive filters */
+.backdrop-blur-sm {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background-color: rgba(15, 23, 42, 0.85) !important;
+}
+
+.shadow-xl, .shadow-2xl {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* FIX: Input appearances */
+input[type="text"], input[type="password"], textarea, [contenteditable] {
+  -webkit-appearance: none;
+}
+input[type="checkbox"], input[type="radio"] {
+  -webkit-appearance: auto;
+  appearance: auto;
+  accent-color: #4f46e5;
+}
+
+/* 🔥 MENTION DROPDOWN FIX (Both Inline & Main Composer) 🔥 */
+#reply_mention_dropdown, .inline-mention-dropdown, [id$="Dropdown"] {
+  max-height: 250px !important;
+  overflow-y: auto !important;  
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1) !important; 
+  border-radius: 8px !important;
+}
+
+/* Forces dropdowns to open UPWARDS properly */
+#reply_mention_dropdown, .inline-mention-dropdown {
+  bottom: 100% !important;
+  top: auto !important; 
+  margin-bottom: 8px !important;
+}
+
+/* Original Inline Styles */
+[contenteditable]:empty:before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }
+/* Modern Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
