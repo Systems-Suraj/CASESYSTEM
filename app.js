@@ -4,12 +4,79 @@
 const API_URL = "https://script.google.com/macros/s/AKfycby7v3RgQBtfhHAIMA5wFA1IL-Qife_1jSF341RBvYt4jqiuA8-oA6E4cg-F_1jM4jPWOQ/exec"; 
 
 // ==========================================
-// API COMMUNICATION (Replaces google.script.run)
+// OFFLINE DATABASE (IndexedDB Setup)
+// ==========================================
+const DB_NAME = 'CaseSysOfflineDB';
+const STORE_NAME = 'offlineRequests';
+
+function openOfflineDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function saveOfflineRequest(action, params) {
+    const db = await openOfflineDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.add({ action, params, timestamp: new Date().getTime() });
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
+async function getOfflineRequests() {
+    const db = await openOfflineDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function deleteOfflineRequest(id) {
+    const db = await openOfflineDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
+// ==========================================
+// API COMMUNICATION (With Offline Support)
 // ==========================================
 async function apiCall(action, params = {}) {
     if (currentUser && currentUser.email) {
         params.reqUserEmail = currentUser.email; 
     }
+
+    // A. Agar Internet Nahi Hai (Offline State)
+    if (!navigator.onLine) {
+        // Sirf naye Case banane aur Reply karne ko offline queue mein daalenge
+        if (action === 'createCase' || action === 'addNewComment' || action === 'uploadFile') {
+            await saveOfflineRequest(action, params);
+            showCustomDialog("You are Offline 📡", "Your action has been saved to the offline queue. It will automatically sync when you connect to the internet.", false);
+            return { success: true, offline: true };
+        } else {
+            throw new Error("You are offline. This action requires internet.");
+        }
+    }
+
+    // B. Agar Internet Hai (Online State) - Normal Fetch
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
@@ -208,7 +275,7 @@ function closeDialog() {
 }
 
 // ==========================================
-// AUTHENTICATION LOGIC (Fetch Based)
+// AUTHENTICATION LOGIC
 // ==========================================
 function checkAuthStatus() {
   const localUser = localStorage.getItem("user");
@@ -1688,12 +1755,8 @@ let deferredPrompt;
 const installBtn = document.getElementById('installAppBtn');
 
 window.addEventListener('beforeinstallprompt', (e) => {
-  // Browser ke default popup ko rokein
   e.preventDefault();
-  // Event ko save karein taaki button click par use kar sakein
   deferredPrompt = e;
-  
-  // Apna custom Install Button show karein
   if (installBtn) {
     installBtn.classList.remove('hidden');
     installBtn.classList.add('flex');
@@ -1703,28 +1766,72 @@ window.addEventListener('beforeinstallprompt', (e) => {
 if (installBtn) {
   installBtn.addEventListener('click', async () => {
     if (!deferredPrompt) return;
-    
-    // Install prompt show karein
     deferredPrompt.prompt();
-    
-    // User ke response ka wait karein
     const { outcome } = await deferredPrompt.userChoice;
     console.log(`User response to the install prompt: ${outcome}`);
-    
-    // Prompt use ho gaya, ab isse clear kar dein
     deferredPrompt = null;
-    
-    // Button ko wapas hide kar dein
     installBtn.classList.add('hidden');
     installBtn.classList.remove('flex');
   });
 }
 
-// Agar user ne app successfully install kar liya hai
 window.addEventListener('appinstalled', () => {
   if (installBtn) {
     installBtn.classList.add('hidden');
     installBtn.classList.remove('flex');
   }
   console.log('PWA CaseSys install ho gaya!');
+});
+
+// ==========================================
+// NOTIFICATIONS PERMISSION & AUTO SYNC
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+        Notification.requestPermission();
+    }
+});
+
+function showLocalNotification(title, body) {
+    if ("Notification" in window && Notification.permission === "granted") {
+        new Notification(title, {
+            body: body,
+            icon: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
+            badge: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png'
+        });
+    }
+}
+
+// Auto Sync when internet comes back
+window.addEventListener('online', async () => {
+    console.log("Internet is back! Checking offline queue...");
+    const requests = await getOfflineRequests();
+    
+    if (requests.length > 0) {
+        let successCount = 0;
+        
+        for (const req of requests) {
+            try {
+                await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: req.action, params: req.params })
+                });
+                await deleteOfflineRequest(req.id);
+                successCount++;
+            } catch (err) {
+                console.error("Failed to sync offline request:", err);
+            }
+        }
+        
+        if (successCount > 0) {
+            if(currentUser) loadConversations();
+            showLocalNotification("Sync Complete ✅", `${successCount} offline action(s) synced successfully to CaseSys.`);
+            showCustomDialog("Sync Complete", `${successCount} items from your offline queue have been uploaded to the server!`, false);
+        }
+    }
+});
+
+window.addEventListener('offline', () => {
+    console.log("You are now offline. Actions will be queued.");
 });
