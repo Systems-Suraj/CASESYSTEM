@@ -1384,13 +1384,16 @@ async function loadConversations() {
   } catch(e) { console.error(e); }
 }
 
-// ==========================================
-// PWA INSTALLATION LOGIC (Universal Fallback)
-// ==========================================
 let deferredPrompt = null; 
 const installBtn = document.getElementById('installAppBtn');
 
-if (installBtn) {
+// ✅ Helper: Check if it's a mobile device
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// Button Visibility Logic
+if (installBtn && isMobileDevice()) {
     installBtn.classList.remove('hidden');
     installBtn.classList.add('flex');
 }
@@ -1398,6 +1401,11 @@ if (installBtn) {
 window.addEventListener('beforeinstallprompt', (e) => { 
     e.preventDefault(); 
     deferredPrompt = e; 
+    // Show button if browser supports native install
+    if (installBtn && isMobileDevice()) {
+        installBtn.classList.remove('hidden');
+        installBtn.classList.add('flex');
+    }
 });
 
 if (installBtn) { 
@@ -1409,6 +1417,7 @@ if (installBtn) {
             installBtn.classList.add('hidden'); 
             installBtn.classList.remove('flex'); 
         } else {
+            // Fallback for Manual Install (iPhone or In-App Browsers)
             showCustomDialog(
                 "Install CaseSys 📱", 
                 "Direct install is not supported in this browser.\n\nTo install manually:\n1. Click the 3-dots menu (⋮) or Share icon.\n2. Select 'Add to Home screen'.", 
@@ -1418,21 +1427,31 @@ if (installBtn) {
     }); 
 }
 
+// ✅ IMPORTANT: Trigger Permission when App is Installed Successfully
 window.addEventListener('appinstalled', () => { 
     if (installBtn) { 
         installBtn.classList.add('hidden'); 
         installBtn.classList.remove('flex'); 
     } 
+    console.log('CaseSys has been installed!');
+    
+    // 🔔 Asking for permission right after installation
+    requestNotificationPermission();
 });
 
 // ==========================================
 // NOTIFICATIONS PERMISSION & AUTO SYNC
 // ==========================================
 function requestNotificationPermission() {
-    if ("Notification" in window && Notification.permission === "default") {
-        Notification.requestPermission().then(permission => {
-            console.log("Notification permission:", permission);
-        });
+    if ("Notification" in window) {
+        // Notification permission status check
+        if (Notification.permission === "default") {
+            Notification.requestPermission().then(permission => {
+                if (permission === "granted") {
+                    console.log("Notification permission granted!");
+                }
+            });
+        }
     }
 }
 
@@ -1446,6 +1465,7 @@ function showLocalNotification(title, body) {
     } 
 }
 
+// Auto Sync when internet comes back
 window.addEventListener('online', async () => {
     console.log("Internet is back! Checking offline queue...");
     const requests = await getOfflineRequests();
@@ -1464,6 +1484,7 @@ window.addEventListener('online', async () => {
         }
         if (successCount > 0) { 
             if(currentUser) loadConversations(); 
+            // 🔔 Show Notification after sync
             showLocalNotification("Sync Complete ✅", `${successCount} offline action(s) synced successfully to CaseSys.`); 
             showCustomDialog("Sync Complete", `${successCount} items from your offline queue have been uploaded to the server!`, false); 
         }
