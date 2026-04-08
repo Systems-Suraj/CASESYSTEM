@@ -309,6 +309,9 @@ function handleNextOrLogin() {
   const statusEl = document.getElementById("login_status");
   const loginBtn = document.getElementById("loginBtn");
   
+  // ✅ लॉगिन प्रोसेस शुरू होते ही नोटिफिकेशन परमिशन मांगेगा (User Gesture)
+  requestNotificationPermission();
+
   if (loginStep === 1) {
     if(!idVal) return;
     loginBtn.disabled = true;
@@ -318,8 +321,10 @@ function handleNextOrLogin() {
         if(res.success) {
           loginStep = 2; detectedUser = res;
           document.getElementById('login_id').disabled = true;
-          document.getElementById('nameField').classList.remove('hidden'); document.getElementById('login_name').value = res.name;
-          document.getElementById('pwdField').classList.remove('hidden'); document.getElementById('btnText').innerText = "Sign In";
+          document.getElementById('nameField').classList.remove('hidden'); 
+          document.getElementById('login_name').value = res.name;
+          document.getElementById('pwdField').classList.remove('hidden'); 
+          document.getElementById('btnText').innerText = "Sign In";
         } else { statusEl.innerText = res.message || "User not found."; }
       })
       .catch(err => { loginBtn.disabled = false; statusEl.innerText = "Error connecting to server."; });
@@ -332,7 +337,6 @@ function handleNextOrLogin() {
       .catch(err => { loginBtn.disabled = false; statusEl.innerText = "Error connecting to server."; });
   }
 }
-
 function handleLoginResponse(res) {
   if(res.status === "success" || res.success){ 
       localStorage.setItem("user", JSON.stringify(res.user));
@@ -1390,24 +1394,20 @@ async function loadConversations() {
 let deferredPrompt = null; 
 const installBtn = document.getElementById('installAppBtn');
 
-// ✅ Helper: Check if it's a mobile device
 function isMobileDevice() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
-// Button Visibility Logic
+// Show button for all mobile users on load
 if (installBtn && isMobileDevice()) {
     installBtn.classList.remove('hidden');
-    installBtn.classList.add('flex');
 }
 
 window.addEventListener('beforeinstallprompt', (e) => { 
     e.preventDefault(); 
     deferredPrompt = e; 
-    // Show button if browser supports native install
     if (installBtn && isMobileDevice()) {
         installBtn.classList.remove('hidden');
-        installBtn.classList.add('flex');
     }
 });
 
@@ -1415,21 +1415,13 @@ if (installBtn) {
     installBtn.addEventListener('click', async () => { 
         if (deferredPrompt) { 
             deferredPrompt.prompt(); 
-            const { outcome } = await deferredPrompt.userChoice; 
             deferredPrompt = null; 
             installBtn.classList.add('hidden'); 
-            installBtn.classList.remove('flex'); 
         } else {
-            // Fallback for Manual Install (iPhone or In-App Browsers)
-            showCustomDialog(
-                "Install CaseSys 📱", 
-                "Direct install is not supported in this browser.\n\nTo install manually:\n1. Click the 3-dots menu (⋮) or Share icon.\n2. Select 'Add to Home screen'.", 
-                false
-            );
+            showCustomDialog("Install CaseSys 📱", "Click 3-dots (⋮) and select 'Add to Home screen'.", false);
         }
     }); 
 }
-
 // ✅ IMPORTANT: Trigger Permission when App is Installed Successfully
 window.addEventListener('appinstalled', () => { 
     if (installBtn) { 
@@ -1446,46 +1438,37 @@ window.addEventListener('appinstalled', () => {
 // NOTIFICATIONS PERMISSION & AUTO SYNC
 // ==========================================
 function requestNotificationPermission() {
-    if (!("Notification" in window)) {
-        console.log("This browser does not support desktop notification");
-        return;
-    }
+    if (!("Notification" in window)) return;
 
-    if (Notification.permission === "default") {
+    if (Notification.permission !== "granted" && Notification.permission !== "denied") {
         Notification.requestPermission().then(permission => {
             if (permission === "granted") {
-                console.log("Notification allowed!");
-                // Permission milte hi ek welcome notification bhej kar check karein
-                showLocalNotification("CaseSys Connected 🔔", "Aapko ab important updates ke notifications milte rahenge.");
+                console.log("Notification Allowed!");
+                // तुरंत एक टेस्ट नोटिफिकेशन भेजें ताकि कन्फर्म हो जाए
+                showLocalNotification("CaseSys Activated 🔔", "Aapko ab updates milte rahenge.");
             }
         });
-    } else if (Notification.permission === "granted") {
-        // Agar pehle se permission hai to seedha test bhej sakte hain
-        console.log("Notification already granted.");
-    } else {
-        console.log("Notification permission was denied.");
     }
 }
 
-// Ye function notification ko notification bar mein dhakelega
 function showLocalNotification(title, body) { 
     if ("Notification" in window && Notification.permission === "granted") { 
-        // Mobile notification bar ke liye Service Worker ka use karna best hota hai
+        // PWA में नोटिफिकेशन हमेशा Service Worker के थ्रू भेजनी चाहिए
         navigator.serviceWorker.ready.then(registration => {
-            registration.showNotification(title, {
-                body: body,
-                icon: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
+            registration.showNotification(title, { 
+                body: body, 
+                icon: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png', 
                 badge: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
-                vibrate: [200, 100, 200], // Mobile vibration pattern
-                tag: 'casesys-sync' // Purani notifications ko replace karne ke liye
-            });
+                vibrate: [200, 100, 200],
+                tag: 'casesys-alert',
+                renotify: true
+            }); 
         });
     } 
 }
 
 // Auto Sync when internet comes back
 window.addEventListener('online', async () => {
-    console.log("Internet is back! Checking offline queue...");
     const requests = await getOfflineRequests();
     if (requests.length > 0) {
         let successCount = 0;
@@ -1502,9 +1485,8 @@ window.addEventListener('online', async () => {
         }
         if (successCount > 0) { 
             if(currentUser) loadConversations(); 
-            // 🔔 Show Notification after sync
-            showLocalNotification("Sync Complete ✅", `${successCount} offline action(s) synced successfully to CaseSys.`); 
-            showCustomDialog("Sync Complete", `${successCount} items from your offline queue have been uploaded to the server!`, false); 
+            showLocalNotification("Sync Complete ✅", `${successCount} offline actions uploaded successfully.`); 
+            showCustomDialog("Sync Complete", `${successCount} items synced!`, false); 
         }
     }
 });
