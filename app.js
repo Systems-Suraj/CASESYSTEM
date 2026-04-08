@@ -1680,3 +1680,51 @@ async function loadConversations() {
     switchTab(currentTab); 
   } catch(e) { console.error(e); }
 }
+
+// ==========================================
+// PWA INSTALLATION LOGIC
+// ==========================================
+let deferredPrompt;
+const installBtn = document.getElementById('installAppBtn');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Browser ke default popup ko rokein
+  e.preventDefault();
+  // Event ko save karein taaki button click par use kar sakein
+  deferredPrompt = e;
+  
+  // Apna custom Install Button show karein
+  if (installBtn) {
+    installBtn.classList.remove('hidden');
+    installBtn.classList.add('flex');
+  }
+});
+
+if (installBtn) {
+  installBtn.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    
+    // Install prompt show karein
+    deferredPrompt.prompt();
+    
+    // User ke response ka wait karein
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User response to the install prompt: ${outcome}`);
+    
+    // Prompt use ho gaya, ab isse clear kar dein
+    deferredPrompt = null;
+    
+    // Button ko wapas hide kar dein
+    installBtn.classList.add('hidden');
+    installBtn.classList.remove('flex');
+  });
+}
+
+// Agar user ne app successfully install kar liya hai
+window.addEventListener('appinstalled', () => {
+  if (installBtn) {
+    installBtn.classList.add('hidden');
+    installBtn.classList.remove('flex');
+  }
+  console.log('PWA CaseSys install ho gaya!');
+});
