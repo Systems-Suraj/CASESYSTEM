@@ -3,6 +3,7 @@
 // ==========================================
 const API_URL = "https://script.google.com/macros/s/AKfycby7v3RgQBtfhHAIMA5wFA1IL-Qife_1jSF341RBvYt4jqiuA8-oA6E4cg-F_1jM4jPWOQ/exec"; 
 // ==========================================
+// ==========================================
 // OFFLINE DATABASE (IndexedDB Setup)
 // ==========================================
 const DB_NAME = 'CaseSysOfflineDB';
@@ -151,19 +152,27 @@ function checkComposerRestrictions(editor, type = 'main') {
     const typeSelectors = container.querySelectorAll('#global_type_selector button, .inline-type-btn');
 
     if (hasMention) {
-        // UNLOCK Everything
         if(attachLabel) attachLabel.classList.remove('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
         if(attachInput) attachInput.disabled = false;
         if(submitBtn) { submitBtn.disabled = false; submitBtn.classList.remove('opacity-50', 'cursor-not-allowed'); }
         formatBtns.forEach(b => { b.disabled = false; b.classList.remove('opacity-50', 'cursor-not-allowed'); });
         typeSelectors.forEach(b => { b.disabled = false; b.classList.remove('opacity-50', 'cursor-not-allowed'); });
     } else {
-        // LOCK Everything
         if(attachLabel) attachLabel.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
         if(attachInput) attachInput.disabled = true;
         if(submitBtn) { submitBtn.disabled = true; submitBtn.classList.add('opacity-50', 'cursor-not-allowed'); }
         formatBtns.forEach(b => { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); });
         typeSelectors.forEach(b => { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); });
+    }
+
+    if (!hasMention) {
+        const textContent = editor.textContent.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+        const hasHtmlNodes = editor.children.length > 0;
+        
+        if ((textContent.length > 0 && !textContent.startsWith('@')) || (hasHtmlNodes && textContent === '')) {
+            editor.innerHTML = ''; 
+            showCustomDialog("Mention Required ⚠️", "Aap bina kisi ko @mention kiye message type, format ya attach nahi kar sakte.\n\nPlease type '@' to select a user from the list first.", false);
+        }
     }
 }
 
@@ -211,26 +220,21 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// 🔒 STRICT KEYDOWN GUARD: Blocks typing if @Mention is not explicitly selected from list
+// 🔒 STRICT KEYDOWN GUARD
 document.addEventListener('keydown', function(e) {
     const target = e.target;
     if (target && (target.id === 'detail-reply-input' || target.classList?.contains('inline-reply-input'))) {
         const editor = target;
         const hasInitialMention = !!editor.querySelector('.mention-badge');
         const isDifferentMode = editor.id === 'detail-reply-input' && typeof replyComposerState !== 'undefined' && replyComposerState.mode === 'DIFFERENT';
-
-        // Allow functional keys (Backspace, Arrows, etc.)
         const isFunctionalKey = e.key.length > 1 || e.ctrlKey || e.metaKey || e.altKey;
 
         if (!hasInitialMention) {
-            // LOCK 1: Cannot press Space or Enter before selecting a name from the list
             if (e.key === ' ' || e.key === 'Enter') {
                 e.preventDefault();
                 showCustomDialog("Mention Required ⚠️", "Please click/select a user from the dropdown list before typing further.", false);
                 return;
             }
-
-            // LOCK 2: Cannot type any first character other than '@'
             const textContent = editor.textContent.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
             if (textContent.length === 0 && e.key !== '@' && !isFunctionalKey) {
                 e.preventDefault();
@@ -238,7 +242,6 @@ document.addEventListener('keydown', function(e) {
                 return;
             }
         } else if (isDifferentMode) {
-            // In 'Different' mode, block normal typing in main input (except adding another @)
             if (!isFunctionalKey && e.key !== '@') {
                 e.preventDefault();
                 showCustomDialog("Delegation Mode", "In 'Different Action' mode, please type your message in the specific boxes below.", false);
@@ -248,7 +251,6 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-// 🔒 STRICT PASTE GUARD
 document.addEventListener('paste', function(e) {
     const target = e.target;
     if (target && (target.id === 'detail-reply-input' || target.classList?.contains('inline-reply-input'))) {
@@ -871,7 +873,6 @@ function openCaseDetail(cardEl) {
       document.getElementById('detail-reply-input').innerHTML = ''; 
       setReplyGlobalType('Message');
       
-      // APPLY DEFAULT LOCK TO COMPOSER
       checkComposerRestrictions(document.getElementById('detail-reply-input'), 'main');
 
       document.getElementById('dashboardView').classList.add('hidden'); document.getElementById('caseDetailView').classList.remove('hidden');
@@ -908,9 +909,37 @@ function renderReplyFileList() {
 function removeReplyFile(index) { pendingReplyFiles.splice(index, 1); renderReplyFileList(); }
 
 // ==========================================
-// THREAD & COMMENT SYSTEM
+// ⚡ OPTIMISTIC UI: THREAD & COMMENT SYSTEM
 // ==========================================
 let allLoadedComments = [];
+
+// Helper function to render comments locally without calling API
+function renderAllCommentsLocally() {
+    const container = document.getElementById("detail-thread-container");
+    const threadsMap = {};
+    allLoadedComments.forEach(c => {
+        const tId = c.threadId || c.uniqueId || 'default_thread';
+        if (!threadsMap[tId]) { threadsMap[tId] = { id: tId, items: [], startTime: new Date(c.timestamp) }; }
+        threadsMap[tId].items.push(c);
+        if (new Date(c.timestamp) < threadsMap[tId].startTime) { threadsMap[tId].startTime = new Date(c.timestamp); }
+    });
+    const sortedThreadGroups = Object.values(threadsMap).sort((a, b) => a.startTime - b.startTime);
+    let finalHtml = '';
+    sortedThreadGroups.forEach(threadGroup => {
+        const roots = [];
+        threadGroup.items.forEach(item => { item.children = []; });
+        threadGroup.items.forEach(item => {
+            if (item.type === 'Reply' && item.parentAskId) {
+                const parentAsk = threadGroup.items.find(p => p.type === 'Ask' && String(p.askId).trim() === String(item.parentAskId).trim());
+                if (parentAsk) parentAsk.children.push(item); else roots.push(item);
+            } else { roots.push(item); }
+        });
+        roots.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        finalHtml += renderThreadHTML(roots, 0); 
+    });
+    container.innerHTML = finalHtml;
+}
+
 function loadCommentsPaginated(caseId, reset = false) {
     if (isLoading || !hasMore) return;
     isLoading = true;
@@ -927,28 +956,8 @@ function loadCommentsPaginated(caseId, reset = false) {
             if (data.length < limit) hasMore = false;
             allLoadedComments = allLoadedComments.concat(data);
             
-            const threadsMap = {};
-            allLoadedComments.forEach(c => {
-                const tId = c.threadId || c.uniqueId || 'default_thread';
-                if (!threadsMap[tId]) { threadsMap[tId] = { id: tId, items: [], startTime: new Date(c.timestamp) }; }
-                threadsMap[tId].items.push(c);
-                if (new Date(c.timestamp) < threadsMap[tId].startTime) { threadsMap[tId].startTime = new Date(c.timestamp); }
-            });
-            const sortedThreadGroups = Object.values(threadsMap).sort((a, b) => a.startTime - b.startTime);
-            let finalHtml = '';
-            sortedThreadGroups.forEach(threadGroup => {
-                const roots = [];
-                threadGroup.items.forEach(item => { item.children = []; });
-                threadGroup.items.forEach(item => {
-                    if (item.type === 'Reply' && item.parentAskId) {
-                        const parentAsk = threadGroup.items.find(p => p.type === 'Ask' && String(p.askId).trim() === String(item.parentAskId).trim());
-                        if (parentAsk) parentAsk.children.push(item); else roots.push(item);
-                    } else { roots.push(item); }
-                });
-                roots.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-                finalHtml += renderThreadHTML(roots, 0); 
-            });
-            container.innerHTML = finalHtml; page++;
+            renderAllCommentsLocally();
+            page++;
         }).catch(err => { isLoading = false; console.error(err); });
 }
 
@@ -1061,13 +1070,45 @@ async function submitDetailReply() {
         }
 
         await apiCall('addNewComment', payloadToSend);
+        
+        // ⚡ INSTANT LOCAL UI RENDER (Optimistic Update)
+        const localSenderName = currentUser.name || currentUser.email;
+        const payloads = Array.isArray(payloadToSend) ? payloadToSend : [payloadToSend];
+        payloads.forEach(p => {
+             allLoadedComments.push({
+                 caseId: p.caseId,
+                 timestamp: new Date().getTime(),
+                 sender: localSenderName,
+                 receiver: p.receiver || '',
+                 text: p.text,
+                 attachmentUrl: p.attachmentUrl || '',
+                 attachmentFileName: p.attachmentFileName || '',
+                 type: p.mentionType,
+                 askId: '', 
+                 status: '',
+                 parentAskId: p.parentAskId || '',
+                 uniqueId: 'LOCAL-' + Math.random(),
+                 threadId: p.threadId || 'LOCAL-T-' + Math.random(),
+                 threadColor: p.threadColor || '#f8fafc'
+             });
+        });
+
         inputDiv.innerHTML = ''; pendingReplyFiles = []; 
         if(document.getElementById('reply_file_list')) renderReplyFileList();
         replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' }; setReplyGlobalType('Message');
         
         // Re-lock composer
         checkComposerRestrictions(document.getElementById('detail-reply-input'), 'main');
-        loadCommentsPaginated(caseId, true);
+        
+        // Render Instantly without loading state
+        renderAllCommentsLocally();
+        
+        // Scroll to bottom
+        setTimeout(() => {
+            const detailView = document.getElementById("caseDetailView");
+            detailView.scrollTop = detailView.scrollHeight;
+        }, 100);
+
     } catch(e) { showCustomDialog("Error", "Failed to post reply. Reason: \n" + (e.message || e), false); } finally { submitBtn.disabled = false; submitBtn.innerText = originalText; }
 }
 
@@ -1235,8 +1276,30 @@ async function submitInlineReply(btn) {
         }
 
         await apiCall('addNewComment', { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName });
+        
+        // ⚡ INSTANT LOCAL UI RENDER (Optimistic Update)
+        const localSenderName = currentUser.name || currentUser.email;
+        allLoadedComments.push({
+             caseId: caseId,
+             timestamp: new Date().getTime(),
+             sender: localSenderName,
+             receiver: '', 
+             text: msgHTML,
+             attachmentUrl: fileUrl,
+             attachmentFileName: fileName,
+             type: typeVal,
+             askId: '', 
+             status: '',
+             parentAskId: toggleBtn ? toggleBtn.getAttribute('data-askid') : '',
+             uniqueId: 'LOCAL-' + Math.random(),
+             threadId: toggleBtn ? toggleBtn.getAttribute('data-threadid') : 'LOCAL-T-' + Math.random(),
+             threadColor: toggleBtn ? toggleBtn.getAttribute('data-threadcolor') : '#f8fafc'
+         });
+
         inputDiv.innerHTML = ''; inlinePendingFiles = []; replyBox.querySelector('.inline-file-list').innerHTML = ''; replyBox.classList.add('hidden');
-        loadCommentsPaginated(caseId, true);
+        
+        renderAllCommentsLocally();
+        
     } catch(e) { showCustomDialog("Error", "Failed to post inline reply.\n" + (e.message || e), false); btn.disabled = false; btn.innerText = originalText; }
 }
 
