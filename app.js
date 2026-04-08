@@ -337,7 +337,10 @@ function handleLoginResponse(res) {
   if(res.status === "success" || res.success){ 
       localStorage.setItem("user", JSON.stringify(res.user));
       showAppScreen(res.user); 
-      requestNotificationPermission(); // Ask for notification permission on login
+      
+      // ✅ AB YAHAN SE FORCE PERMISSION MAANGEGA
+      requestNotificationPermission(); 
+      
   } else { 
       document.getElementById("login_status").innerText = res.message || "Login failed.";
       document.getElementById("loginBtn").disabled = false;
@@ -1443,25 +1446,40 @@ window.addEventListener('appinstalled', () => {
 // NOTIFICATIONS PERMISSION & AUTO SYNC
 // ==========================================
 function requestNotificationPermission() {
-    if ("Notification" in window) {
-        // Notification permission status check
-        if (Notification.permission === "default") {
-            Notification.requestPermission().then(permission => {
-                if (permission === "granted") {
-                    console.log("Notification permission granted!");
-                }
-            });
-        }
+    if (!("Notification" in window)) {
+        console.log("This browser does not support desktop notification");
+        return;
+    }
+
+    if (Notification.permission === "default") {
+        Notification.requestPermission().then(permission => {
+            if (permission === "granted") {
+                console.log("Notification allowed!");
+                // Permission milte hi ek welcome notification bhej kar check karein
+                showLocalNotification("CaseSys Connected 🔔", "Aapko ab important updates ke notifications milte rahenge.");
+            }
+        });
+    } else if (Notification.permission === "granted") {
+        // Agar pehle se permission hai to seedha test bhej sakte hain
+        console.log("Notification already granted.");
+    } else {
+        console.log("Notification permission was denied.");
     }
 }
 
+// Ye function notification ko notification bar mein dhakelega
 function showLocalNotification(title, body) { 
     if ("Notification" in window && Notification.permission === "granted") { 
-        new Notification(title, { 
-            body: body, 
-            icon: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png', 
-            badge: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png' 
-        }); 
+        // Mobile notification bar ke liye Service Worker ka use karna best hota hai
+        navigator.serviceWorker.ready.then(registration => {
+            registration.showNotification(title, {
+                body: body,
+                icon: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
+                badge: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
+                vibrate: [200, 100, 200], // Mobile vibration pattern
+                tag: 'casesys-sync' // Purani notifications ko replace karne ke liye
+            });
+        });
     } 
 }
 
