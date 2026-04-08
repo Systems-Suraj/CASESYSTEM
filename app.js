@@ -3,7 +3,6 @@
 // ==========================================
 const API_URL = "https://script.google.com/macros/s/AKfycby7v3RgQBtfhHAIMA5wFA1IL-Qife_1jSF341RBvYt4jqiuA8-oA6E4cg-F_1jM4jPWOQ/exec"; 
 // ==========================================
-// ==========================================
 // OFFLINE DATABASE (IndexedDB Setup)
 // ==========================================
 const DB_NAME = 'CaseSysOfflineDB';
@@ -913,7 +912,6 @@ function removeReplyFile(index) { pendingReplyFiles.splice(index, 1); renderRepl
 // ==========================================
 let allLoadedComments = [];
 
-// Helper function to render comments locally without calling API
 function renderAllCommentsLocally() {
     const container = document.getElementById("detail-thread-container");
     const threadsMap = {};
@@ -1037,21 +1035,24 @@ function renderThreadHTML(list, level = 0) {
     }).join('');
 }
 
+// ⚡ COMPLETELY OPTIMISTIC: Updates UI instantly BEFORE waiting for server
 async function submitDetailReply() {
     const inputDiv = document.getElementById('detail-reply-input');
     const msgHTML = inputDiv.innerHTML.trim();
     if (!inputDiv.querySelector('.mention-badge')) {
         return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
     }
-    
     if(!msgHTML && pendingReplyFiles.length === 0) return showCustomDialog("Notice", "Please write a message or attach a file.", false);
+    
     const caseId = document.getElementById('detail-conv-id').value;
     const submitBtn = document.getElementById('detailSubmitBtn');
     const originalText = submitBtn.innerText;
     submitBtn.innerText = 'Posting...';
     submitBtn.disabled = true;
+    
     try {
         let fileUrl = ''; let fileName = '';
+        // If there is a file, we MUST upload it first to get the URL
         if(pendingReplyFiles.length > 0) { 
             const file = pendingReplyFiles[0];
             const base64 = await new Promise(res => { const reader = new FileReader(); reader.onload = e => res(e.target.result); reader.readAsDataURL(file); });
@@ -1069,9 +1070,7 @@ async function submitDetailReply() {
             payloadToSend = { caseId: caseId, text: msgHTML, mentionType: replyComposerState.globalType || 'Message', sender: currentUser.email, receiver: replyComposerState.recipients.map(r => r.email).join(','), parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName };
         }
 
-        await apiCall('addNewComment', payloadToSend);
-        
-        // ⚡ INSTANT LOCAL UI RENDER (Optimistic Update)
+        // ⚡ 1. INSTANT LOCAL UI UPDATE (0ms lag)
         const localSenderName = currentUser.name || currentUser.email;
         const payloads = Array.isArray(payloadToSend) ? payloadToSend : [payloadToSend];
         payloads.forEach(p => {
@@ -1093,23 +1092,27 @@ async function submitDetailReply() {
              });
         });
 
+        // 2. Clear Composer UI Instantly
         inputDiv.innerHTML = ''; pendingReplyFiles = []; 
         if(document.getElementById('reply_file_list')) renderReplyFileList();
         replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' }; setReplyGlobalType('Message');
-        
-        // Re-lock composer
         checkComposerRestrictions(document.getElementById('detail-reply-input'), 'main');
         
-        // Render Instantly without loading state
+        // 3. Re-render the chat feed and scroll to bottom
         renderAllCommentsLocally();
-        
-        // Scroll to bottom
         setTimeout(() => {
-            const detailView = document.getElementById("caseDetailView");
-            detailView.scrollTop = detailView.scrollHeight;
-        }, 100);
+            const scrollArea = document.getElementById("detail-thread-container").parentElement;
+            if(scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
+        }, 50);
 
-    } catch(e) { showCustomDialog("Error", "Failed to post reply. Reason: \n" + (e.message || e), false); } finally { submitBtn.disabled = false; submitBtn.innerText = originalText; }
+        // 4. NOW hit backend silently in background
+        await apiCall('addNewComment', payloadToSend);
+
+    } catch(e) { 
+        showCustomDialog("Error", "Failed to post reply. Reason: \n" + (e.message || e), false); 
+    } finally { 
+        submitBtn.disabled = false; submitBtn.innerText = originalText; 
+    }
 }
 
 function toggleInlineReply(btn) {
@@ -1253,6 +1256,7 @@ function finalizeInlineMention(name, email, role) {
     checkComposerRestrictions(activeInlineBox.querySelector('.inline-reply-input'), 'inline');
 }
 
+// ⚡ COMPLETELY OPTIMISTIC INLINE SUBMIT
 async function submitInlineReply(btn) {
     const container = btn.closest('[data-id="reply-container"]'); const replyBox = container.querySelector('[data-id="inline-reply-box"]');
     const inputDiv = replyBox.querySelector('.inline-reply-input');
@@ -1275,9 +1279,9 @@ async function submitInlineReply(btn) {
             if(result && result.url) { fileUrl = result.url; fileName = result.name || file.name; }
         }
 
-        await apiCall('addNewComment', { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName });
-        
-        // ⚡ INSTANT LOCAL UI RENDER (Optimistic Update)
+        const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName };
+
+        // ⚡ 1. INSTANT LOCAL UI RENDER
         const localSenderName = currentUser.name || currentUser.email;
         allLoadedComments.push({
              caseId: caseId,
@@ -1290,17 +1294,26 @@ async function submitInlineReply(btn) {
              type: typeVal,
              askId: '', 
              status: '',
-             parentAskId: toggleBtn ? toggleBtn.getAttribute('data-askid') : '',
+             parentAskId: payload.parentAskId,
              uniqueId: 'LOCAL-' + Math.random(),
-             threadId: toggleBtn ? toggleBtn.getAttribute('data-threadid') : 'LOCAL-T-' + Math.random(),
-             threadColor: toggleBtn ? toggleBtn.getAttribute('data-threadcolor') : '#f8fafc'
+             threadId: payload.threadId || 'LOCAL-T-' + Math.random(),
+             threadColor: payload.threadColor || '#f8fafc'
          });
 
+        // 2. Clear UI instantly
         inputDiv.innerHTML = ''; inlinePendingFiles = []; replyBox.querySelector('.inline-file-list').innerHTML = ''; replyBox.classList.add('hidden');
         
+        // 3. Render feed instantly
         renderAllCommentsLocally();
+
+        // 4. Send to backend silently
+        await apiCall('addNewComment', payload);
         
-    } catch(e) { showCustomDialog("Error", "Failed to post inline reply.\n" + (e.message || e), false); btn.disabled = false; btn.innerText = originalText; }
+    } catch(e) { 
+        showCustomDialog("Error", "Failed to post inline reply.\n" + (e.message || e), false); 
+    } finally {
+        btn.disabled = false; btn.innerText = originalText;
+    }
 }
 
 // ==========================================
