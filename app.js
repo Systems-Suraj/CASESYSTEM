@@ -2,6 +2,7 @@
 // CONFIGURATION: REPLACE THIS URL!
 // ==========================================
 const API_URL = "https://script.google.com/macros/s/AKfycby7v3RgQBtfhHAIMA5wFA1IL-Qife_1jSF341RBvYt4jqiuA8-oA6E4cg-F_1jM4jPWOQ/exec"; 
+
 // ==========================================
 // OFFLINE DATABASE (IndexedDB Setup)
 // ==========================================
@@ -296,7 +297,7 @@ function showCustomDialog(title, message, isConfirm, onConfirmCallback) {
 function closeDialog() { document.getElementById('customDialog').classList.add('hidden'); }
 
 // ==========================================
-// AUTHENTICATION LOGIC
+// AUTHENTICATION LOGIC & NOTIFICATION PERMISSION
 // ==========================================
 function checkAuthStatus() {
   const localUser = localStorage.getItem("user");
@@ -336,6 +337,7 @@ function handleLoginResponse(res) {
   if(res.status === "success" || res.success){ 
       localStorage.setItem("user", JSON.stringify(res.user));
       showAppScreen(res.user); 
+      requestNotificationPermission(); // Ask for notification permission on login
   } else { 
       document.getElementById("login_status").innerText = res.message || "Login failed.";
       document.getElementById("loginBtn").disabled = false;
@@ -1052,7 +1054,6 @@ async function submitDetailReply() {
     
     try {
         let fileUrl = ''; let fileName = '';
-        // If there is a file, we MUST upload it first to get the URL
         if(pendingReplyFiles.length > 0) { 
             const file = pendingReplyFiles[0];
             const base64 = await new Promise(res => { const reader = new FileReader(); reader.onload = e => res(e.target.result); reader.readAsDataURL(file); });
@@ -1384,23 +1385,91 @@ async function loadConversations() {
 }
 
 // ==========================================
-// PWA INSTALLATION LOGIC
+// PWA INSTALLATION LOGIC (Universal Fallback)
 // ==========================================
-let deferredPrompt; const installBtn = document.getElementById('installAppBtn');
-window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; if (installBtn) { installBtn.classList.remove('hidden'); installBtn.classList.add('flex'); } });
-if (installBtn) { installBtn.addEventListener('click', async () => { if (!deferredPrompt) return; deferredPrompt.prompt(); const { outcome } = await deferredPrompt.userChoice; deferredPrompt = null; installBtn.classList.add('hidden'); installBtn.classList.remove('flex'); }); }
-window.addEventListener('appinstalled', () => { if (installBtn) { installBtn.classList.add('hidden'); installBtn.classList.remove('flex'); } });
+let deferredPrompt = null; 
+const installBtn = document.getElementById('installAppBtn');
+
+if (installBtn) {
+    installBtn.classList.remove('hidden');
+    installBtn.classList.add('flex');
+}
+
+window.addEventListener('beforeinstallprompt', (e) => { 
+    e.preventDefault(); 
+    deferredPrompt = e; 
+});
+
+if (installBtn) { 
+    installBtn.addEventListener('click', async () => { 
+        if (deferredPrompt) { 
+            deferredPrompt.prompt(); 
+            const { outcome } = await deferredPrompt.userChoice; 
+            deferredPrompt = null; 
+            installBtn.classList.add('hidden'); 
+            installBtn.classList.remove('flex'); 
+        } else {
+            showCustomDialog(
+                "Install CaseSys 📱", 
+                "Direct install is not supported in this browser.\n\nTo install manually:\n1. Click the 3-dots menu (⋮) or Share icon.\n2. Select 'Add to Home screen'.", 
+                false
+            );
+        }
+    }); 
+}
+
+window.addEventListener('appinstalled', () => { 
+    if (installBtn) { 
+        installBtn.classList.add('hidden'); 
+        installBtn.classList.remove('flex'); 
+    } 
+});
 
 // ==========================================
 // NOTIFICATIONS PERMISSION & AUTO SYNC
 // ==========================================
-document.addEventListener('DOMContentLoaded', () => { if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") { Notification.requestPermission(); } });
-function showLocalNotification(title, body) { if ("Notification" in window && Notification.permission === "granted") { new Notification(title, { body: body, icon: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png', badge: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png' }); } }
+function requestNotificationPermission() {
+    if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission().then(permission => {
+            console.log("Notification permission:", permission);
+        });
+    }
+}
+
+function showLocalNotification(title, body) { 
+    if ("Notification" in window && Notification.permission === "granted") { 
+        new Notification(title, { 
+            body: body, 
+            icon: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png', 
+            badge: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png' 
+        }); 
+    } 
+}
+
 window.addEventListener('online', async () => {
+    console.log("Internet is back! Checking offline queue...");
     const requests = await getOfflineRequests();
     if (requests.length > 0) {
         let successCount = 0;
-        for (const req of requests) { try { await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: req.action, params: req.params }) }); await deleteOfflineRequest(req.id); successCount++; } catch (err) { } }
-        if (successCount > 0) { if(currentUser) loadConversations(); showLocalNotification("Sync Complete ✅", `${successCount} offline action(s) synced successfully to CaseSys.`); showCustomDialog("Sync Complete", `${successCount} items from your offline queue have been uploaded to the server!`, false); }
+        for (const req of requests) { 
+            try { 
+                await fetch(API_URL, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
+                    body: JSON.stringify({ action: req.action, params: req.params }) 
+                }); 
+                await deleteOfflineRequest(req.id); 
+                successCount++; 
+            } catch (err) { console.error("Sync failed:", err); } 
+        }
+        if (successCount > 0) { 
+            if(currentUser) loadConversations(); 
+            showLocalNotification("Sync Complete ✅", `${successCount} offline action(s) synced successfully to CaseSys.`); 
+            showCustomDialog("Sync Complete", `${successCount} items from your offline queue have been uploaded to the server!`, false); 
+        }
     }
+});
+
+window.addEventListener('offline', () => {
+    console.log("You are now offline. Actions will be queued.");
 });
