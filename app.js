@@ -1494,3 +1494,20 @@ window.addEventListener('online', async () => {
 window.addEventListener('offline', () => {
     console.log("You are now offline. Actions will be queued.");
 });
+
+function afterLoginSuccess(user) {
+
+  console.log("✅ Login Success:", user);
+
+  // 🔥 ANDROID BRIDGE CALL
+  try {
+    if (window.Android && user.email) {
+      Android.sendUserEmail(user.email);
+      console.log("📲 Sent email to Android:", user.email);
+    } else {
+      console.log("⚠️ Android bridge not available");
+    }
+  } catch (e) {
+    console.error("❌ Android bridge error:", e);
+  }
+}
