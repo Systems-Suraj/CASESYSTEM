@@ -339,13 +339,14 @@ function handleNextOrLogin() {
 }
 function handleLoginResponse(res) {
   if(res.status === "success" || res.success){ 
-      localStorage.setItem("user", JSON.stringify(res.user));
-      showAppScreen(res.user); 
-      
-      // ✅ AB YAHAN SE FORCE PERMISSION MAANGEGA
-      requestNotificationPermission(); 
-      
-  } else { 
+    localStorage.setItem("user", JSON.stringify(res.user));
+    showAppScreen(res.user); 
+    
+    // 🔥 ANDROID TOKEN TRIGGER (FIXED)
+    afterLoginSuccess(res.user);
+
+    requestNotificationPermission(); 
+} else { 
       document.getElementById("login_status").innerText = res.message || "Login failed.";
       document.getElementById("loginBtn").disabled = false;
   }
