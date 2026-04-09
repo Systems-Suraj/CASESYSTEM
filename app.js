@@ -376,6 +376,17 @@ function showAppScreen(userObj) {
   fetchUsersForMentions(); 
   loadConversations();
   loadLabelsForForm();
+// 🔥 ensure token always sent
+setTimeout(() => {
+  try {
+    if (window.Android && userObj.email) {
+      Android.sendUserEmail(userObj.email);
+      console.log("📲 Auto sent email:", userObj.email);
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}, 2000);
 }
 
 // ==========================================
