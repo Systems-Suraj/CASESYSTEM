@@ -34,32 +34,40 @@ if (firebase.messaging.isSupported()) {
 
       const data = payload?.data || {};
 
-      const title = data.title || "Notification";
-      const body = data.body || "";
+      let title = data.title || "";
+let body = data.body || "";
+
+// ❌ अगर body empty है → ignore
+if (!body || body.trim() === "") {
+  console.log("❌ Empty notification skipped");
+  return;
+}
+
+// 🔥 safe fallback (rare)
+if (!title) title = "Case Update";
       const caseId = data.caseId || "";
 
       // 👉 अगर app खुला है → direct case open
-      if (caseId && typeof openCase === "function") {
-        openCase(caseId);
-      }
-
-      // 👉 optional UI feedback (alert की जगह better UX use करो)
-      console.log("🔔 " + title + " - " + body);
-
-      // OPTIONAL: toast UI (अगर function है)
-      if (typeof showToast === "function") {
-        showToast(title, body);
-      }
-
-    } catch (err) {
-      console.error("❌ Foreground notification error:", err);
+         if (caseId && typeof openCase === "function") {
+      openCase(caseId);
     }
 
-  });
+    // 🔔 system notification
+    new Notification(title, {
+      body: body,
+      icon: "https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png"
+    });
 
-} else {
-  console.warn("⚠️ Firebase messaging not supported in this browser");
-}
+    // 👉 optional toast
+    if (typeof showToast === "function") {
+      showToast(title, body);
+    }
+
+  } catch (err) {
+    console.error("❌ Foreground notification error:", err);
+  }
+
+});
 
 async function initNotifications(user) {
   try {
