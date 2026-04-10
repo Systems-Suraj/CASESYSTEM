@@ -56,11 +56,9 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-
 // =======================================================
 // 🔥 FIREBASE PUSH NOTIFICATION (ADD ONLY THIS PART)
 // =======================================================
-
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
@@ -72,7 +70,6 @@ firebase.initializeApp({
   appId: "1:399513476851:web:668ec94543bbe3c1186186"
 });
 
-firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
 // 🔥 BACKGROUND NOTIFICATION
