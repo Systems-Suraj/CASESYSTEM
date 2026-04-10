@@ -127,6 +127,11 @@ const limit = 5;
 let isLoading = false;
 let hasMore = true;
 
+// 🔥 1. GLOBAL STATE (REALTIME DATA)
+let lastTimestamp = 0;
+let seenMessages = new Set();
+let realtimeInterval = null;
+
 function debounce(func, wait) {
   let timeout;
   return function(...args) {
@@ -896,11 +901,25 @@ function openCaseDetail(cardEl) {
       checkComposerRestrictions(document.getElementById('detail-reply-input'), 'main');
 
       document.getElementById('dashboardView').classList.add('hidden'); document.getElementById('caseDetailView').classList.remove('hidden');
+      
+      // 🔥 REALTIME START (Reset & Start Polling)
+      lastTimestamp = 0;
+      seenMessages.clear();
+      if (realtimeInterval) {
+          clearInterval(realtimeInterval);
+      }
+      realtimeInterval = setInterval(fetchNewMessages, 3000);
+
       loadCommentsPaginated(convId, true);
   } catch(e) { console.error("Open Case Error:", e); }
 }
 
 function closeCaseDetail() { 
+    if (realtimeInterval) {
+        clearInterval(realtimeInterval);
+        realtimeInterval = null;
+    }
+
     document.getElementById('caseDetailView').classList.add('hidden');
     document.getElementById('dashboardView').classList.remove('hidden'); 
     document.getElementById('detail-thread-container').innerHTML = '';
@@ -973,11 +992,64 @@ function loadCommentsPaginated(caseId, reset = false) {
                 hasMore = false; return;
             }
             if (data.length < limit) hasMore = false;
+            
+            // 🔥 Update Timestamp & Seen Messages (Backend Tracking)
+            data.forEach(msg => {
+                if (msg.timestamp > lastTimestamp) {
+                    lastTimestamp = msg.timestamp;
+                }
+                const id = msg.uniqueId || (msg.timestamp + msg.sender);
+                seenMessages.add(id);
+            });
+
             allLoadedComments = allLoadedComments.concat(data);
             
             renderAllCommentsLocally();
             page++;
         }).catch(err => { isLoading = false; console.error(err); });
+}
+
+// 🔥 REALTIME FETCH (MATCHING YOUR API)
+async function fetchNewMessages() {
+    const caseId = document.getElementById('detail-conv-id').value;
+    if (!caseId || document.getElementById("caseDetailView").classList.contains("hidden")) return;
+
+    try {
+        const messages = await apiCall('getNewComments', {
+            caseId: caseId,
+            lastTimestamp: lastTimestamp
+        });
+
+        if (!messages || messages.length === 0) return;
+
+        let hasNew = false;
+        messages.forEach(msg => {
+            const id = msg.uniqueId || (msg.timestamp + msg.sender);
+            
+            // 🔥 duplicate stop
+            if (seenMessages.has(id)) return;
+
+            seenMessages.add(id);
+            allLoadedComments.push(msg);
+            hasNew = true;
+
+            // 🔥 update timestamp
+            if (msg.timestamp > lastTimestamp) {
+                lastTimestamp = msg.timestamp;
+            }
+        });
+
+        if (hasNew) {
+            renderAllCommentsLocally();
+            setTimeout(() => {
+                const scrollArea = document.getElementById("detail-thread-container").parentElement;
+                if(scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
+            }, 50);
+        }
+
+    } catch (err) {
+        console.error("Realtime error:", err);
+    }
 }
 
 function setInlineType(btn, type) {
@@ -1094,6 +1166,9 @@ async function submitDetailReply() {
         const localSenderName = currentUser.name || currentUser.email;
         const payloads = Array.isArray(payloadToSend) ? payloadToSend : [payloadToSend];
         payloads.forEach(p => {
+             const tempId = "temp_" + Date.now() + "_" + Math.random();
+             seenMessages.add(tempId); // 🔥 Track to avoid duplication
+             
              allLoadedComments.push({
                  caseId: p.caseId,
                  timestamp: new Date().getTime(),
@@ -1106,7 +1181,7 @@ async function submitDetailReply() {
                  askId: '', 
                  status: '',
                  parentAskId: p.parentAskId || '',
-                 uniqueId: 'LOCAL-' + Math.random(),
+                 uniqueId: tempId,
                  threadId: p.threadId || 'LOCAL-T-' + Math.random(),
                  threadColor: p.threadColor || '#f8fafc'
              });
@@ -1303,6 +1378,9 @@ async function submitInlineReply(btn) {
 
         // ⚡ 1. INSTANT LOCAL UI RENDER
         const localSenderName = currentUser.name || currentUser.email;
+        const tempId = "temp_" + Date.now() + "_" + Math.random();
+        seenMessages.add(tempId); // 🔥 Track to avoid duplication
+        
         allLoadedComments.push({
              caseId: caseId,
              timestamp: new Date().getTime(),
@@ -1315,7 +1393,7 @@ async function submitInlineReply(btn) {
              askId: '', 
              status: '',
              parentAskId: payload.parentAskId,
-             uniqueId: 'LOCAL-' + Math.random(),
+             uniqueId: tempId,
              threadId: payload.threadId || 'LOCAL-T-' + Math.random(),
              threadColor: payload.threadColor || '#f8fafc'
          });
