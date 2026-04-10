@@ -354,6 +354,8 @@ apiCall('loginUser', {
         email: res.email || detectedUser.email || detectedUser.mobile || ""
       };
 
+        initNotifications(user);
+
       // ⚡ Delay thoda dena (DOM + firebase ready)
       setTimeout(() => {
         if (typeof initNotifications === "function") {
