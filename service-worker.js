@@ -1,5 +1,5 @@
 // 🔥 CACHE VERSION BUMP (v1 se v2 kiya taaki phone naya code download kare)
-const CACHE_NAME = 'casesys-v2';
+const CACHE_NAME = 'casesys-v3';
 
 // 🔥 CACHE FILES
 const ASSETS_TO_CACHE = [
@@ -31,10 +31,8 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((name) => {
-          if (name !== CACHE_NAME) {
-            console.log('Deleting old cache:', name);
-            return caches.delete(name);
-          }
+          console.log("Deleting:", name);
+          return caches.delete(name); // 🔥 ALL delete
         })
       );
     })
@@ -93,7 +91,10 @@ messaging.onBackgroundMessage(function(payload) {
     return;
   }
 
-  const caseId = payload?.data?.caseId || '';
+  const caseId =
+  payload?.data?.caseId ||
+  payload?.notification?.caseId ||
+  '';
 
   const notificationOptions = {
     body: notificationBody,
