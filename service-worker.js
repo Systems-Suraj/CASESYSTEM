@@ -1,5 +1,5 @@
 // 🔥 CACHE VERSION BUMP (v1 se v2 kiya taaki phone naya code download kare)
-const CACHE_NAME = 'casesys-v5';
+const CACHE_NAME = 'casesys-v6';
 
 // 🔥 CACHE FILES
 const ASSETS_TO_CACHE = [
@@ -56,11 +56,14 @@ self.addEventListener('fetch', (event) => {
 });
 
 // =======================================================
-// 🔥 FIREBASE PUSH NOTIFICATION
+// 🔥 FIREBASE IMPORTS
 // =======================================================
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
+// =======================================================
+// 🔥 FIREBASE INIT
+// =======================================================
 firebase.initializeApp({
   apiKey: "AIzaSyAxn1ouF6XKnMGnD_unb4bxULotdL3VOko",
   authDomain: "casesys-d96b1.firebaseapp.com",
@@ -71,36 +74,72 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// 🔥 BACKGROUND NOTIFICATION HANDLER
+// =======================================================
+// 🔥 BACKGROUND NOTIFICATION HANDLER (FINAL)
+// =======================================================
 messaging.onBackgroundMessage(function(payload) {
-  console.log('🔥 FULL PAYLOAD:', payload);
+  console.log('🔥 FULL PAYLOAD:', JSON.stringify(payload));
 
-  const notificationTitle =
-    payload?.data?.title ||
-    payload?.notification?.title ||
-    '';
+  let title = "";
+  let body = "";
 
-  let notificationBody =
-    payload?.data?.body ||
-    payload?.notification?.body ||
-    '';
+  // 🔥 DATA PAYLOAD (PRIMARY)
+  if (payload.data) {
+    title = payload.data.title || "";
+    body = payload.data.body || "";
+  }
 
-  // ❌ अगर body empty है → notification मत दिखाओ
-  if (!notificationBody || notificationBody.trim() === '') {
-    console.log("❌ Empty message → notification skipped");
-    return;
+  // 🔥 FALLBACK (if needed)
+  if (!title && payload.notification) {
+    title = payload.notification.title || "";
+  }
+
+  if (!body && payload.notification) {
+    body = payload.notification.body || "";
+  }
+
+  // 🔥 FINAL SAFETY (no empty notification)
+  if (!body || body.trim() === "") {
+    body = "📩 New activity";
+  }
+
+  if (!title || title.trim() === "") {
+    title = "Case Update";
   }
 
   const caseId =
-  payload?.data?.caseId ||
-  payload?.notification?.caseId ||
-  '';
+    payload?.data?.caseId ||
+    payload?.notification?.caseId ||
+    "";
 
-  const notificationOptions = {
-    body: notificationBody,
+  self.registration.showNotification(title, {
+    body: body,
     icon: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
     data: { caseId }
-  };
+  });
+});
 
-  self.registration.showNotification(notificationTitle, notificationOptions);
+// =======================================================
+// 🔥 NOTIFICATION CLICK HANDLER (IMPORTANT)
+// =======================================================
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+
+  const caseId = event.notification?.data?.caseId || "";
+
+  // 🔥 open app (or focus if already open)
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+
+      for (let client of clientList) {
+        if (client.url.includes('index.html') && 'focus' in client) {
+          client.postMessage({ caseId: caseId }); // send caseId to app
+          return client.focus();
+        }
+      }
+
+      // 🔥 अगर app बंद है → नया open करो
+      return clients.openWindow('./index.html?caseId=' + caseId);
+    })
+  );
 });
