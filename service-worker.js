@@ -75,17 +75,30 @@ const messaging = firebase.messaging();
 
 // 🔥 BACKGROUND NOTIFICATION HANDLER
 messaging.onBackgroundMessage(function(payload) {
-  console.log('Received background message ', payload);
+  console.log('🔥 FULL PAYLOAD:', payload);
 
-  // ? lagane se error nahi aayega agar data empty ho
-  const notificationTitle = payload?.data?.title || '💬 New Message';
-  const notificationBody = payload?.data?.body || 'You have a new update'; 
+  const notificationTitle =
+    payload?.data?.title ||
+    payload?.notification?.title ||
+    '';
+
+  let notificationBody =
+    payload?.data?.body ||
+    payload?.notification?.body ||
+    '';
+
+  // ❌ अगर body empty है → notification मत दिखाओ
+  if (!notificationBody || notificationBody.trim() === '') {
+    console.log("❌ Empty message → notification skipped");
+    return;
+  }
+
   const caseId = payload?.data?.caseId || '';
 
   const notificationOptions = {
     body: notificationBody,
     icon: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
-    data: { caseId: caseId } // Future use ke liye (notification click karne par app open hone ke liye)
+    data: { caseId }
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
