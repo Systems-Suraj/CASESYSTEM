@@ -76,10 +76,12 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage(function(payload) {
   console.log("🔥 Background message:", payload);
 
+  const data = payload.data;
+
   self.registration.showNotification(
-    payload.notification.title,
+    data.title,
     {
-      body: payload.notification.body,
+      body: data.body,
       icon: "https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png"
     }
   );
