@@ -346,7 +346,7 @@ apiCall('loginUser', {
 .then(res => {
   handleLoginResponse(res);
 
-  // 🔥 AFTER LOGIN SUCCESS → INIT NOTIFICATIONS
+  // 🔥 AFTER LOGIN SUCCESS → INIT NOTIFICATIONS (Kept for fallback, but handled in handleLoginResponse now)
   try {
     if (res && res.status === "success") {
       const user = {
@@ -372,6 +372,7 @@ apiCall('loginUser', {
 });
   }
 }
+
 function handleLoginResponse(res) {
   if(res.status === "success" || res.success){ 
     localStorage.setItem("user", JSON.stringify(res.user));
@@ -379,6 +380,11 @@ function handleLoginResponse(res) {
     
     // 🔥 ANDROID TOKEN TRIGGER (FIXED)
     afterLoginSuccess(res.user);
+
+    // 🔥 MAIN FIX: INIT WEB PUSH NOTIFICATIONS ON LOGIN SUCCESS
+    if (typeof initNotifications === "function") {
+      initNotifications(res.user);
+    }
 
     requestNotificationPermission(); 
 } else { 
