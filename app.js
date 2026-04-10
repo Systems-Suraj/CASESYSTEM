@@ -547,25 +547,21 @@ function openSnoozeModal(btn) {
 
 async function confirmSnooze() {
     const dt = document.getElementById('snoozeDateTime').value;
-    if(!dt) return showCustomDialog("Notice", "Please select a date/time.", false);
-    
-    // 🔥 FIX: Handle custom DD-MM-YYYY HH:mm formats safely
-    let timestamp = new Date(dt).getTime();
-    if (isNaN(timestamp) && dt.includes('-')) {
-        const p = dt.split(/[- :T]/); 
-        // If the date parts match DD-MM-YYYY
-        if (p.length >= 5 && p[0].length === 2 && p[2].length === 4) {
-            timestamp = new Date(`${p[2]}-${p[1]}-${p[0]}T${p[3]}:${p[4]}:00`).getTime();
-        }
+
+    if (!dt) {
+        return showCustomDialog("Notice", "Please select a date/time.", false);
     }
 
-    if(isNaN(timestamp)) {
-        return showCustomDialog("Notice", "Invalid date format. Please try again.", false);
+    const timestamp = new Date(dt).getTime();
+    
+    // 🔥 BONUS BUG FIX: Catching invalid date formats immediately
+    if (isNaN(timestamp)) {
+        return showCustomDialog("Error", "Invalid date/time selected", false);
     }
 
     const id = document.getElementById('snoozeConvId').value;
-    
-    // ⏳ Add Loading State so it doesn't look like "nothing happened"
+
+    // Optional: Add a loading state to the button while waiting
     let btn = document.activeElement;
     if (!btn || btn.tagName !== 'BUTTON') {
         btn = document.querySelector('#snoozeModal button:last-of-type'); 
@@ -573,14 +569,30 @@ async function confirmSnooze() {
     const origText = btn ? btn.innerText : 'Snooze Now';
     if(btn) { btn.innerText = "Snoozing..."; btn.disabled = true; }
 
-    try { 
-        await apiCall('snoozeCase', { id: id, time: timestamp }); 
-        document.getElementById('snoozeModal').classList.add('hidden'); 
-        loadConversations(); 
-        if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
-    } catch(e) { 
-        showCustomDialog("Error", "Failed to snooze.", false); 
+    try {
+        const res = await apiCall('snoozeCase', { id: id, time: timestamp });
+
+        console.log("Snooze API Response:", res);
+
+        // 🔥 FORCE UI UPDATE
+        document.getElementById('snoozeModal').classList.add('hidden');
+
+        showCustomDialog("Success ✅", "Case Snoozed Successfully", false);
+
+        // 🔥 Delay so backend updates properly before reloading the feed
+        setTimeout(() => {
+            loadConversations();
+            // Close the detail view if it's currently open
+            if(!document.getElementById('caseDetailView').classList.contains('hidden')) {
+                closeCaseDetail();
+            }
+        }, 500);
+
+    } catch (e) {
+        console.error("Snooze Error:", e);
+        showCustomDialog("Error", "Failed to snooze.\n" + e.message, false);
     } finally {
+        // Reset button state
         if(btn) { btn.innerText = origText; btn.disabled = false; }
     }
 }
