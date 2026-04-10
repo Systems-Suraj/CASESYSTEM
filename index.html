@@ -438,53 +438,10 @@
         </div>
       </div>
     </template>
+
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
-
-<script>
-const firebaseConfig = {
-  apiKey: "AIzaSyAxn1ouF6XKnMGnD_unb4bxULotdL3VOko",
-  authDomain: "casesys-d96b1.firebaseapp.com",
-  projectId: "casesys-d96b1",
-  messagingSenderId: "399513476851",
-  appId: "1:399513476851:web:668ec94543bbe3c1186186"
-};
-
-firebase.initializeApp(firebaseConfig);
-
-const messaging = firebase.messaging();
-
-// 🔥 INIT AFTER LOGIN
-async function initNotifications(user) {
-  try {
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") return;
-
-    const token = await messaging.getToken({
-      vapidKey: "BGF23YCUEVWA9ZKDyD0NduAyLU_Cijhc_ZsO2UMAb8kQTThWSEBMJjnE3Qq3Ad1ys4ms1vETk3KyBeffAx9lHEw"
-    });
-
-    console.log("🔥 WEB TOKEN:", token);
-
-    await fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify({
-        action: "saveToken",
-        person: user.name || user.email,
-        email: user.email,
-        token: token,
-        platform: "web"
-      })
-    });
-
-  } catch (err) {
-    console.error("❌ Notification Error:", err);
-  }
-}
-</script>
-
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
     <script src="app.js"></script>
-
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
