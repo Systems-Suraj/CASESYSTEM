@@ -35,73 +35,62 @@ if (firebase.messaging.isSupported()) {
       const data = payload?.data || {};
 
       let title = data.title || "";
-let body = data.body || "";
-
-// ❌ अगर body empty है → ignore
-if (!body || body.trim() === "") {
-  console.log("❌ Empty notification skipped");
-  return;
-}
-
-// 🔥 safe fallback (rare)
-if (!title) title = "Case Update";
+      let body = data.body || "";
       const caseId = data.caseId || "";
 
-      // 👉 अगर app खुला है → direct case open
-         if (caseId && typeof openCase === "function") {
-      openCase(caseId);
+      // ❌ empty → skip
+      if (!body || body.trim() === "") return;
+
+      if (!title) title = "Case Update";
+
+      // 🔥 DO NOT AUTO OPEN
+      // ✅ only UI feedback
+      console.log("🔔 " + title + " - " + body);
+
+      if (typeof showToast === "function") {
+        showToast(title, body);
+      }
+
+    } catch (err) {
+      console.error("❌ Foreground notification error:", err);
     }
 
-    // 🔔 system notification
-    new Notification(title, {
-      body: body,
-      icon: "https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png"
-    });
+  });
 
-    // 👉 optional toast
-    if (typeof showToast === "function") {
-      showToast(title, body);
+  async function initNotifications(user) {
+    try {
+      console.log("🔥 Starting notification init...");
+
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") return;
+
+      const registration = await navigator.serviceWorker.register('service-worker.js');
+
+      const token = await messaging.getToken({
+        vapidKey: "BGF23YCUEVWA9ZKDyD0NduAyLU_Cijhc_ZsO2UMAb8kQTThWSEBMJjnE3Qq3Ad1ys4ms1vETk3KyBeffAx9lHEw",
+        serviceWorkerRegistration: registration
+      });
+
+      console.log("🔥 WEB TOKEN:", token);
+
+      if (!token) return;
+
+      await fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "saveToken",
+          person: user.name,
+          email: user.email,
+          token: token,
+          platform: "web"
+        })
+      });
+
+      console.log("✅ Token saved");
+
+    } catch (err) {
+      console.error("❌ Notification Error:", err);
     }
-
-  } catch (err) {
-    console.error("❌ Foreground notification error:", err);
-  }
-
-});
-
-async function initNotifications(user) {
-  try {
-    console.log("🔥 Starting notification init...");
-
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") return;
-
-    const registration = await navigator.serviceWorker.register('service-worker.js');
-
-    const token = await messaging.getToken({
-      vapidKey: "BGF23YCUEVWA9ZKDyD0NduAyLU_Cijhc_ZsO2UMAb8kQTThWSEBMJjnE3Qq3Ad1ys4ms1vETk3KyBeffAx9lHEw",
-      serviceWorkerRegistration: registration
-    });
-
-    console.log("🔥 WEB TOKEN:", token);
-
-    if (!token) return;
-
-    await fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify({
-        action: "saveToken",
-        person: user.name,
-        email: user.email,
-        token: token,
-        platform: "web"
-      })
-    });
-
-    console.log("✅ Token saved");
-
-  } catch (err) {
-    console.error("❌ Notification Error:", err);
   }
 }
 
