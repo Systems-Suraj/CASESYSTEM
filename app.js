@@ -548,9 +548,41 @@ function openSnoozeModal(btn) {
 async function confirmSnooze() {
     const dt = document.getElementById('snoozeDateTime').value;
     if(!dt) return showCustomDialog("Notice", "Please select a date/time.", false);
-    const timestamp = new Date(dt).getTime(); const id = document.getElementById('snoozeConvId').value;
-    try { await apiCall('snoozeCase', { id: id, time: timestamp }); document.getElementById('snoozeModal').classList.add('hidden'); loadConversations(); if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
-    } catch(e) { showCustomDialog("Error", "Failed to snooze.", false); }
+    
+    // 🔥 FIX: Handle custom DD-MM-YYYY HH:mm formats safely
+    let timestamp = new Date(dt).getTime();
+    if (isNaN(timestamp) && dt.includes('-')) {
+        const p = dt.split(/[- :T]/); 
+        // If the date parts match DD-MM-YYYY
+        if (p.length >= 5 && p[0].length === 2 && p[2].length === 4) {
+            timestamp = new Date(`${p[2]}-${p[1]}-${p[0]}T${p[3]}:${p[4]}:00`).getTime();
+        }
+    }
+
+    if(isNaN(timestamp)) {
+        return showCustomDialog("Notice", "Invalid date format. Please try again.", false);
+    }
+
+    const id = document.getElementById('snoozeConvId').value;
+    
+    // ⏳ Add Loading State so it doesn't look like "nothing happened"
+    let btn = document.activeElement;
+    if (!btn || btn.tagName !== 'BUTTON') {
+        btn = document.querySelector('#snoozeModal button:last-of-type'); 
+    }
+    const origText = btn ? btn.innerText : 'Snooze Now';
+    if(btn) { btn.innerText = "Snoozing..."; btn.disabled = true; }
+
+    try { 
+        await apiCall('snoozeCase', { id: id, time: timestamp }); 
+        document.getElementById('snoozeModal').classList.add('hidden'); 
+        loadConversations(); 
+        if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
+    } catch(e) { 
+        showCustomDialog("Error", "Failed to snooze.", false); 
+    } finally {
+        if(btn) { btn.innerText = origText; btn.disabled = false; }
+    }
 }
 
 async function processUnsnooze(btn) {
@@ -1458,25 +1490,45 @@ async function loadConversations() {
     if(allCasesData.length === 0) { feed.innerHTML = `<p class="text-center py-10 text-slate-500 font-medium">No cases found.</p>`; return; }
     const uEmail = (currentUser.email || '').toLowerCase(); const uName = (currentUser.name || '').toLowerCase();
     const fragment = document.createDocumentFragment();
+    
     allCasesData.forEach(conv => {
       const card = document.getElementById('cardTemplate').content.cloneNode(true); const cardDiv = card.querySelector('div');
       const hasAdminRights = conv.createdBy.toLowerCase().includes(uEmail) || conv.createdBy.toLowerCase().includes(uName) || conv.admins.some(a => a.toLowerCase().includes(uEmail) || a.toLowerCase().includes(uName));
+      
+      // 🔥 FIX: Normalize backend snooze string/number into strict milliseconds
+      let safeSnoozeMs = 0;
+      if (conv.snoozeTime) {
+          safeSnoozeMs = (typeof conv.snoozeTime === 'string' && conv.snoozeTime.includes('T')) 
+              ? new Date(conv.snoozeTime).getTime() 
+              : parseInt(conv.snoozeTime, 10) || 0;
+      }
+
       cardDiv._cachedLabels = conv.labels; cardDiv._cachedMembers = [...conv.admins, ...conv.users, conv.createdBy];
-      cardDiv.dataset.convId = conv.id; cardDiv.dataset.status = conv.status; cardDiv.dataset.snooze = conv.snoozeTime; cardDiv.dataset.hasAdminRights = hasAdminRights; cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments); cardDiv.dataset.labels = JSON.stringify(conv.labels); cardDiv.dataset.members = JSON.stringify([...conv.admins, ...conv.users, conv.createdBy]); cardDiv.dataset.caseAdmins = JSON.stringify(conv.admins); cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
+      
+      // 👇 Swapped out conv.snoozeTime for safeSnoozeMs in the dataset
+      cardDiv.dataset.convId = conv.id; cardDiv.dataset.status = conv.status; cardDiv.dataset.snooze = safeSnoozeMs; cardDiv.dataset.hasAdminRights = hasAdminRights; cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments); cardDiv.dataset.labels = JSON.stringify(conv.labels); cardDiv.dataset.members = JSON.stringify([...conv.admins, ...conv.users, conv.createdBy]); cardDiv.dataset.caseAdmins = JSON.stringify(conv.admins); cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
       card.querySelector('[data-id="conv-id"]').textContent = conv.id; card.querySelector('[data-id="subject"]').textContent = conv.subject; card.querySelector('[data-id="details"]').textContent = conv.details; card.querySelector('[data-id="message"]').innerHTML = conv.message; card.querySelector('[data-id="author"]').textContent = conv.createdBy; card.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString(); card.querySelector('[data-id="display-case-id"]').textContent = conv.id;
-      const isSnoozed = conv.snoozeTime > Date.now(); const badge = card.querySelector('[data-id="status-badge"]');
+      
+      // 👇 Updated the isSnoozed check calculation here
+      const isSnoozed = safeSnoozeMs > Date.now(); 
+      const badge = card.querySelector('[data-id="status-badge"]');
       badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm";
+      
       if(conv.status === 'Archived') { badge.classList.add('bg-emerald-700','text-white'); badge.innerText = "ARCHIVED"; } else if(isSnoozed) { badge.classList.add('bg-orange-100','text-orange-700'); badge.innerText = "SNOOZED"; } else { badge.classList.add('bg-emerald-500','text-white'); badge.innerText = "ACTIVE"; }
+      
       const footerActions = card.querySelector('.flex.items-center.gap-3.text-sm'); const cbContainer = footerActions.querySelector('.archive-cb-container'); const snoozeBtn = footerActions.querySelector('.snooze-card-btn'); const unsnoozeBtn = footerActions.querySelector('.unsnooze-card-btn'); const unarchiveBtn = footerActions.querySelector('.unarchive-card-btn'); const checkbox = footerActions.querySelector('.bulk-archive-cb');
       cbContainer.classList.add('hidden'); cbContainer.classList.remove('flex'); snoozeBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden'); unarchiveBtn.classList.add('hidden');
+      
       if (hasAdminRights) { if (conv.status === 'Archived') { unarchiveBtn.classList.remove('hidden'); } else if (isSnoozed) { unsnoozeBtn.classList.remove('hidden'); } }
       if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) { cbContainer.classList.remove('hidden'); cbContainer.classList.add('flex'); checkbox.disabled = false; snoozeBtn.classList.remove('hidden'); }
+      
       const lCont = card.querySelector('[data-id="labels-container"]'); conv.labels.forEach(l => { if(l){ const s = document.createElement('span'); s.className='px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded font-bold'; s.innerText=l; lCont.appendChild(s); } });
       const admCont = card.querySelector('[data-id="admins-container"]'); const usrCont = card.querySelector('[data-id="users-container"]');
       conv.admins.forEach(a => { if(a) admCont.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${a.split('@')[0]}</span>`; });
       conv.users.forEach(u => { if(u) usrCont.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${u.split('@')[0]}</span>`; });
       fragment.appendChild(card);
     });
+    
     feed.appendChild(fragment); switchTab(currentTab); 
   } catch(e) { console.error(e); }
 }
