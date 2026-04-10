@@ -9,21 +9,64 @@ const firebaseConfig = {
   appId: "1:399513476851:web:668ec94543bbe3c1186186"
 };
 
-// Initialize Firebase only if it hasn't been initialized yet
+// ===============================
+// 🔥 FIREBASE INIT (SAFE)
+// ===============================
+
+// Initialize Firebase only once
 if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
+  firebase.initializeApp(firebaseConfig);
 }
-const messaging = firebase.messaging();
+
+// Ensure messaging is supported
+let messaging = null;
+
+if (firebase.messaging.isSupported()) {
+  messaging = firebase.messaging();
+
+  // ===============================
+  // 🔥 FOREGROUND NOTIFICATION
+  // ===============================
+  messaging.onMessage((payload) => {
+
+    try {
+      console.log("🔥 Foreground message:", payload);
+
+      const data = payload?.data || {};
+
+      const title = data.title || "Notification";
+      const body = data.body || "";
+      const caseId = data.caseId || "";
+
+      // 👉 अगर app खुला है → direct case open
+      if (caseId && typeof openCase === "function") {
+        openCase(caseId);
+      }
+
+      // 👉 optional UI feedback (alert की जगह better UX use करो)
+      console.log("🔔 " + title + " - " + body);
+
+      // OPTIONAL: toast UI (अगर function है)
+      if (typeof showToast === "function") {
+        showToast(title, body);
+      }
+
+    } catch (err) {
+      console.error("❌ Foreground notification error:", err);
+    }
+
+  });
+
+} else {
+  console.warn("⚠️ Firebase messaging not supported in this browser");
+}
 
 async function initNotifications(user) {
   try {
     console.log("🔥 Starting notification init...");
 
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") {
-      console.log("❌ Permission denied");
-      return;
-    }
+    if (permission !== "granted") return;
 
     const registration = await navigator.serviceWorker.register('service-worker.js');
 
@@ -36,7 +79,6 @@ async function initNotifications(user) {
 
     if (!token) return;
 
-    // 🔥 SAVE TO SHEET
     await fetch(API_URL, {
       method: "POST",
       body: JSON.stringify({
