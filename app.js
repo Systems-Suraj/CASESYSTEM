@@ -1,4 +1,61 @@
 // ==========================================
+// 🔥 FIREBASE INIT (TOP - ONE TIME ONLY)
+// ==========================================
+const firebaseConfig = {
+  apiKey: "AIzaSyAxn1ouF6XKnMGnD_unb4bxULotdL3VOko",
+  authDomain: "casesys-d96b1.firebaseapp.com",
+  projectId: "casesys-d96b1",
+  messagingSenderId: "399513476851",
+  appId: "1:399513476851:web:668ec94543bbe3c1186186"
+};
+
+// Initialize Firebase only if it hasn't been initialized yet
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const messaging = firebase.messaging();
+
+async function initNotifications(user) {
+  try {
+    console.log("🔥 Starting notification init...");
+
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      console.log("❌ Permission denied");
+      return;
+    }
+
+    const registration = await navigator.serviceWorker.register('service-worker.js');
+
+    const token = await messaging.getToken({
+      vapidKey: "BGF23YCUEVWA9ZKDyD0NduAyLU_Cijhc_ZsO2UMAb8kQTThWSEBMJjnE3Qq3Ad1ys4ms1vETk3KyBeffAx9lHEw",
+      serviceWorkerRegistration: registration
+    });
+
+    console.log("🔥 WEB TOKEN:", token);
+
+    if (!token) return;
+
+    // 🔥 SAVE TO SHEET
+    await fetch(API_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "saveToken",
+        person: user.name,
+        email: user.email,
+        token: token,
+        platform: "web"
+      })
+    });
+
+    console.log("✅ Token saved");
+
+  } catch (err) {
+    console.error("❌ Notification Error:", err);
+  }
+}
+
+// ==========================================
 // CONFIGURATION: REPLACE THIS URL!
 // ==========================================
 const API_URL = "https://script.google.com/macros/s/AKfycby7v3RgQBtfhHAIMA5wFA1IL-Qife_1jSF341RBvYt4jqiuA8-oA6E4cg-F_1jM4jPWOQ/exec"; 
@@ -338,58 +395,41 @@ function handleNextOrLogin() {
     if(!pwd) return;
     loginBtn.disabled = true;
 
-apiCall('loginUser', { 
-  mobileOrEmail: detectedUser.mobile || detectedUser.email, 
-  password: pwd, 
-  isAutoLogin: false 
-})
-.then(res => {
-  handleLoginResponse(res);
-
-  // 🔥 AFTER LOGIN SUCCESS → INIT NOTIFICATIONS (Kept for fallback, but handled in handleLoginResponse now)
-  try {
-    if (res && res.status === "success") {
-      const user = {
-        name: res.name || detectedUser.name || "",
-        email: res.email || detectedUser.email || detectedUser.mobile || ""
-      };
-
-        initNotifications(user);
-
-      // ⚡ Delay thoda dena (DOM + firebase ready)
-      setTimeout(() => {
-        if (typeof initNotifications === "function") {
-          initNotifications(user);
-        }
-      }, 1000);
-    }
-  } catch (e) {
-    console.error("Notification init error:", e);
-  }
-
-})
-.catch(err => { 
-  loginBtn.disabled = false; 
-  statusEl.innerText = "Error connecting to server."; 
-});
+    apiCall('loginUser', { 
+      mobileOrEmail: detectedUser.mobile || detectedUser.email, 
+      password: pwd, 
+      isAutoLogin: false 
+    })
+    .then(res => {
+      // 🔥 Only call handleLoginResponse here, it will handle the initNotifications internally
+      handleLoginResponse(res);
+    })
+    .catch(err => { 
+      loginBtn.disabled = false; 
+      statusEl.innerText = "Error connecting to server."; 
+    });
   }
 }
 
 function handleLoginResponse(res) {
-  if(res.status === "success" || res.success){ 
+  if (res && (res.status === "success" || res.success)) { 
     localStorage.setItem("user", JSON.stringify(res.user));
+
+    const user = {
+      name: res.user.name || detectedUser.name || "",
+      email: res.user.email || detectedUser.email || detectedUser.mobile || ""
+    };
+
+    // 🔥🔥🔥 IMPORTANT LINE: CALL ONCE ON SUCCESS
+    initNotifications(user);
+
     showAppScreen(res.user); 
     
     // 🔥 ANDROID TOKEN TRIGGER (FIXED)
     afterLoginSuccess(res.user);
 
-    // 🔥 MAIN FIX: INIT WEB PUSH NOTIFICATIONS ON LOGIN SUCCESS
-    if (typeof initNotifications === "function") {
-      initNotifications(res.user);
-    }
-
     requestNotificationPermission(); 
-} else { 
+  } else { 
       document.getElementById("login_status").innerText = res.message || "Login failed.";
       document.getElementById("loginBtn").disabled = false;
   }
@@ -1520,7 +1560,7 @@ async function handleFormSubmit(e) {
         let fileUrls = [];
         if(pendingFiles.length > 0) { 
             for(let file of pendingFiles) { 
-                const base64 = await new Promise(res => { const reader = new FileReader(); reader.onload = ev => res(ev.target.result); reader.readAsDataURL(file); });
+                const base64 = await new Promise(res => { const reader = new FileReader(); reader.onload = ev => res(e.target.result); reader.readAsDataURL(file); });
                 const result = await apiCall('uploadFile', { base64: base64, filename: file.name });
                 if(result && result.url) fileUrls.push(result.url);
             } 
@@ -1703,5 +1743,3 @@ function afterLoginSuccess(user) {
     console.error("❌ Android bridge error:", e);
   }
 }
-
-
