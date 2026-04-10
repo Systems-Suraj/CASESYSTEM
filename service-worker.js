@@ -1,5 +1,5 @@
 // 🔥 CACHE VERSION BUMP (v1 se v2 kiya taaki phone naya code download kare)
-const CACHE_NAME = 'casesys-v3';
+const CACHE_NAME = 'casesys-v5';
 
 // 🔥 CACHE FILES
 const ASSETS_TO_CACHE = [
