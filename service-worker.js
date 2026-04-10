@@ -72,6 +72,7 @@ firebase.initializeApp({
   appId: "1:399513476851:web:668ec94543bbe3c1186186"
 });
 
+firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
 // 🔥 BACKGROUND NOTIFICATION
