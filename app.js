@@ -337,9 +337,39 @@ function handleNextOrLogin() {
     const pwd = document.getElementById("login_password").value.trim();
     if(!pwd) return;
     loginBtn.disabled = true;
-    apiCall('loginUser', { mobileOrEmail: detectedUser.mobile || detectedUser.email, password: pwd, isAutoLogin: false })
-      .then(handleLoginResponse)
-      .catch(err => { loginBtn.disabled = false; statusEl.innerText = "Error connecting to server."; });
+
+apiCall('loginUser', { 
+  mobileOrEmail: detectedUser.mobile || detectedUser.email, 
+  password: pwd, 
+  isAutoLogin: false 
+})
+.then(res => {
+  handleLoginResponse(res);
+
+  // 🔥 AFTER LOGIN SUCCESS → INIT NOTIFICATIONS
+  try {
+    if (res && res.status === "success") {
+      const user = {
+        name: res.name || detectedUser.name || "",
+        email: res.email || detectedUser.email || detectedUser.mobile || ""
+      };
+
+      // ⚡ Delay thoda dena (DOM + firebase ready)
+      setTimeout(() => {
+        if (typeof initNotifications === "function") {
+          initNotifications(user);
+        }
+      }, 1000);
+    }
+  } catch (e) {
+    console.error("Notification init error:", e);
+  }
+
+})
+.catch(err => { 
+  loginBtn.disabled = false; 
+  statusEl.innerText = "Error connecting to server."; 
+});
   }
 }
 function handleLoginResponse(res) {
