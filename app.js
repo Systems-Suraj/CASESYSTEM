@@ -1133,10 +1133,12 @@ function loadCommentsPaginated(caseId, reset = false) {
 
 // 🔥 REALTIME FETCH (MATCHING YOUR API)
 async function fetchNewMessages() {
+
     const caseId = document.getElementById('detail-conv-id').value;
     if (!caseId || document.getElementById("caseDetailView").classList.contains("hidden")) return;
 
     try {
+
         const messages = await apiCall('getNewComments', {
             caseId: caseId,
             lastTimestamp: lastTimestamp
@@ -1145,9 +1147,11 @@ async function fetchNewMessages() {
         if (!messages || messages.length === 0) return;
 
         let hasNew = false;
+
         messages.forEach(msg => {
+
             const id = msg.uniqueId || (msg.timestamp + msg.sender);
-            
+
             // 🔥 duplicate stop
             if (seenMessages.has(id)) return;
 
@@ -1159,14 +1163,34 @@ async function fetchNewMessages() {
             if (msg.timestamp > lastTimestamp) {
                 lastTimestamp = msg.timestamp;
             }
+
+            // ===================================
+            // 🔥 OPTION 2 → MARK SEEN (ONLY IF NOT)
+            // ===================================
+            if (!msg.seen || !msg.seen.includes(currentUser.email)) {
+
+                fetch(API_URL, {
+                    method: "POST",
+                    body: JSON.stringify({
+                        action: "markSeen",
+                        notificationId: msg.uniqueId,
+                        userEmail: currentUser.email
+                    })
+                });
+
+            }
+
         });
 
         if (hasNew) {
+
             renderAllCommentsLocally();
+
             setTimeout(() => {
                 const scrollArea = document.getElementById("detail-thread-container").parentElement;
-                if(scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
+                if (scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
             }, 50);
+
         }
 
     } catch (err) {
