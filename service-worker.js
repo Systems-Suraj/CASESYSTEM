@@ -1,4 +1,5 @@
-const CACHE_NAME = 'casesys-v1';
+// 🔥 CACHE VERSION BUMP (v1 se v2 kiya taaki phone naya code download kare)
+const CACHE_NAME = 'casesys-v2';
 
 // 🔥 CACHE FILES
 const ASSETS_TO_CACHE = [
@@ -15,15 +16,15 @@ const ASSETS_TO_CACHE = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('Opened cache');
+      console.log('Opened cache v2');
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
-  self.skipWaiting();
+  self.skipWaiting(); // Naya SW turant active hoga
 });
 
 // ============================
-// 🔹 ACTIVATE
+// 🔹 ACTIVATE (Purana Cache Delete Karega)
 // ============================
 self.addEventListener('activate', (event) => {
   event.waitUntil(
@@ -57,7 +58,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 // =======================================================
-// 🔥 FIREBASE PUSH NOTIFICATION (ADD ONLY THIS PART)
+// 🔥 FIREBASE PUSH NOTIFICATION
 // =======================================================
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
@@ -72,17 +73,20 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// 🔥 BACKGROUND NOTIFICATION
+// 🔥 BACKGROUND NOTIFICATION HANDLER
 messaging.onBackgroundMessage(function(payload) {
-  console.log("🔥 Background message:", payload);
+  console.log('Received background message ', payload);
 
-  const data = payload.data;
+  // ? lagane se error nahi aayega agar data empty ho
+  const notificationTitle = payload?.data?.title || '💬 New Message';
+  const notificationBody = payload?.data?.body || 'You have a new update'; 
+  const caseId = payload?.data?.caseId || '';
 
-  self.registration.showNotification(
-    data.title,
-    {
-      body: data.body,
-      icon: "https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png"
-    }
-  );
+  const notificationOptions = {
+    body: notificationBody,
+    icon: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
+    data: { caseId: caseId } // Future use ke liye (notification click karne par app open hone ke liye)
+  };
+
+  self.registration.showNotification(notificationTitle, notificationOptions);
 });
