@@ -9,50 +9,34 @@ const firebaseConfig = {
   appId: "1:399513476851:web:668ec94543bbe3c1186186"
 };
 
-// ===============================
-// 🔥 FIREBASE INIT (SAFE)
-// ===============================
-
 // Initialize Firebase only once
 if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
 
-// Ensure messaging is supported
 let messaging = null;
-
 if (firebase.messaging.isSupported()) {
   messaging = firebase.messaging();
 }
 
-// ===============================
-// 🔥 FOREGROUND NOTIFICATION (FINAL)
-// ===============================
 messaging.onMessage((payload) => {
   try {
     console.log("🔥 Foreground message:", payload);
-
     const data = payload?.data || {};
-
     let title = data.title || "Case Update";
     let body = data.body || "";
     const caseId = data.caseId || "";
 
-    // ❌ empty body → skip
     if (!body || body.trim() === "") return;
 
-    // 🔥 ADD TO NOTIFICATION LIST (if exists)
     if (typeof addNotification === "function") {
       addNotification(data);
     }
-
-    // 🔥 TOAST UI
     if (typeof showToast === "function") {
       showToast(title, body, caseId);
     } else {
       console.log("🔔 " + title + " - " + body);
     }
-
   } catch (err) {
     console.error("❌ Foreground notification error:", err);
   }
@@ -61,7 +45,8 @@ messaging.onMessage((payload) => {
 // ==========================================
 // CONFIGURATION: REPLACE THIS URL!
 // ==========================================
-const API_URL = "https://script.google.com/macros/s/AKfycby7v3RgQBtfhHAIMA5wFA1IL-Qife_1jSF341RBvYt4jqiuA8-oA6E4cg-F_1jM4jPWOQ/exec"; 
+// 🔥 IMPORTANT: After you deploy Google Apps Script as "New Deployment", paste the new link below.
+const API_URL = "https://script.google.com/macros/s/AKfycbwA-8jgesrDV2Sw5a_DzisHaKFEjljQ8PoJ43if50C4kuFamM37HEIESAnPx_oG3C5s/exec"; 
 
 // ==========================================
 // OFFLINE DATABASE (IndexedDB Setup)
@@ -137,7 +122,7 @@ async function apiCall(action, params = {}, retries = 2) {
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Safe for Apps Script CORS
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: action, params: params })
         });
         
@@ -148,13 +133,11 @@ async function apiCall(action, params = {}, retries = 2) {
         return result.data !== undefined ? result.data : result;
 
     } catch (err) {
-        // 🔥 RETRY LOGIC INJECTED HERE
         if (retries > 0 && navigator.onLine) {
             console.log(`🔁 Retrying [${action}]...`, retries);
             await new Promise(r => setTimeout(r, 1000));
             return apiCall(action, params, retries - 1);
         }
-
         console.error(`API Error [${action}]:`, err);
         throw err;
     }
@@ -196,7 +179,6 @@ const limit = 5;
 let isLoading = false;
 let hasMore = true;
 
-// 🔥 1. GLOBAL STATE (REALTIME DATA)
 let lastTimestamp = 0;
 let seenMessages = new Set();
 let realtimeInterval = null;
@@ -205,26 +187,27 @@ let notifications = [];
 
 function addNotification(data) {
   notifications.unshift(data);
-
   document.getElementById("notifCount").innerText = notifications.length;
   document.getElementById("notifCount").classList.remove("hidden");
-
   renderNotifications();
 }
 
 function renderNotifications() {
   const panel = document.getElementById("notifPanel");
-  panel.innerHTML = notifications.map(n => `
-    <div class="p-3 border-b cursor-pointer hover:bg-gray-50"
-         onclick="openCase('${n.caseId}')">
-      <div class="font-bold">${n.title}</div>
-      <div class="text-sm text-gray-500">${n.body}</div>
-    </div>
-  `).join("");
+  if(panel) {
+      panel.innerHTML = notifications.map(n => `
+        <div class="p-3 border-b cursor-pointer hover:bg-gray-50"
+             onclick="openCase('${n.caseId}')">
+          <div class="font-bold">${n.title}</div>
+          <div class="text-sm text-gray-500">${n.body}</div>
+        </div>
+      `).join("");
+  }
 }
 
 function toggleNotifications() {
-  document.getElementById("notifPanel").classList.toggle("hidden");
+  const panel = document.getElementById("notifPanel");
+  if(panel) panel.classList.toggle("hidden");
 }
 
 function debounce(func, wait) {
@@ -280,8 +263,6 @@ function checkComposerRestrictions(editor, type = 'main') {
 // DOM READY AND EVENT LISTENERS
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
-
-  // 🔥 WARMUP PING (login fast karega)
   fetch(API_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -291,11 +272,13 @@ document.addEventListener("DOMContentLoaded", () => {
   checkAuthStatus();
   const tzoffset = (new Date()).getTimezoneOffset() * 60000;
   const localISOTime = (new Date(Date.now() - tzoffset)).toISOString().slice(0, 16);
-  document.getElementById('snoozeDateTime').min = localISOTime;
+  if(document.getElementById('snoozeDateTime')) document.getElementById('snoozeDateTime').min = localISOTime;
 
   function handleScroll(e) {
-      if (document.getElementById("caseDetailView").classList.contains('hidden')) return;
-      const caseId = document.getElementById("detail-conv-id").value;
+      if (document.getElementById("caseDetailView") && document.getElementById("caseDetailView").classList.contains('hidden')) return;
+      const convEl = document.getElementById("detail-conv-id");
+      if(!convEl) return;
+      const caseId = convEl.value;
       if (!caseId) return;
 
       const el = e.target;
@@ -328,7 +311,6 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// 🔒 STRICT KEYDOWN GUARD
 document.addEventListener('keydown', function(e) {
     const target = e.target;
     if (target && (target.id === 'detail-reply-input' || target.classList?.contains('inline-reply-input'))) {
@@ -405,7 +387,7 @@ function showCustomDialog(title, message, isConfirm, onConfirmCallback) {
 function closeDialog() { document.getElementById('customDialog').classList.add('hidden'); }
 
 // ==========================================
-// 🔥 SIMPLE DIRECT LOGIN LOGIC (RESTORED)
+// 🔥 SIMPLE DIRECT LOGIN LOGIC
 // ==========================================
 
 function handleNextOrLogin() {
@@ -430,7 +412,6 @@ function handleNextOrLogin() {
   statusEl.style.display = "block";
   statusEl.innerText = "Checking...";
 
-  // 🔥 DIRECT LOGIN (OLD STYLE)
   apiCall('loginUser', { 
     mobileOrEmail: idVal,
     password: pwd,
@@ -438,22 +419,16 @@ function handleNextOrLogin() {
   })
   .then(res => {
     loginBtn.disabled = false;
-
     if (res && res.status === "success") {
-
-      // ✅ SAVE USER
       localStorage.setItem("user", JSON.stringify(res.user));
-
-      // ✅ DIRECT OPEN APP
       showAppScreen(res.user);
-
     } else {
       statusEl.innerText = res.message || "Invalid Login";
     }
   })
   .catch(err => {
     loginBtn.disabled = false;
-    statusEl.innerText = "Server Error";
+    statusEl.innerText = "Server Error: Make sure API_URL is correct.";
   });
 }
 
@@ -484,7 +459,6 @@ function showAppScreen(userObj) {
   if (document.getElementById("loginView")) document.getElementById("loginView").classList.add("hidden");
   if (document.getElementById("appView")) document.getElementById("appView").classList.remove("hidden");
 
-  // Android bridge auto sync
   setTimeout(() => {
     try {
       if (window.Android && userObj.email) {
@@ -496,9 +470,6 @@ function showAppScreen(userObj) {
   }, 2000);
 }
 
-// ==========================================
-// 🔥 WINDOW ONLOAD: 45 SEC BACKGROUND TASKS
-// ==========================================
 window.onload = function() {
   setTimeout(() => {
     if (currentUser) {
@@ -524,17 +495,19 @@ function escapeHTML(str) {
 function switchTab(tab) {
   currentTab = tab;
   ['Live', 'Snooze', 'Archive'].forEach(t => { 
-    document.getElementById(`tab-${t}`).className = t === tab 
-      ? "px-6 py-4 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 transition-colors" 
-      : "px-6 py-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-colors"; 
+    if(document.getElementById(`tab-${t}`)) {
+      document.getElementById(`tab-${t}`).className = t === tab 
+        ? "px-6 py-4 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 transition-colors" 
+        : "px-6 py-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-colors"; 
+    }
   });
-  document.getElementById('bulkArchiveBtn').classList.toggle('hidden', tab !== 'Live');
+  if(document.getElementById('bulkArchiveBtn')) document.getElementById('bulkArchiveBtn').classList.toggle('hidden', tab !== 'Live');
   document.querySelectorAll('.archive-cb-container').forEach(container => {
       if (tab === 'Live') { container.classList.remove('hidden'); container.classList.add('flex'); } 
       else { container.classList.add('hidden'); container.classList.remove('flex'); }
       container.querySelector('.bulk-archive-cb').checked = false;
   });
-  document.getElementById('reply_mention_dropdown').classList.add('hidden');
+  if(document.getElementById('reply_mention_dropdown')) document.getElementById('reply_mention_dropdown').classList.add('hidden');
   document.querySelectorAll('.inline-mention-dropdown').forEach(d => d.classList.add('hidden'));
 
   applyFilters();
@@ -547,6 +520,7 @@ function populateFilterDropdowns() {
 
 function renderLookerDropdown(containerId, items, type) {
     const container = document.getElementById(containerId);
+    if(!container) return;
     const inputClass = type === 'Label' ? 'flabel' : 'fmember';
     let html = `
        <div class="flex justify-between items-center px-4 py-2.5 border-b border-slate-100 bg-slate-50/80">
@@ -574,6 +548,7 @@ function renderLookerDropdown(containerId, items, type) {
 
 function toggleDropdown(id, forceClose = false) {
     const drop = document.getElementById(id);
+    if(!drop) return;
     if (forceClose) { drop.classList.add('hidden'); } else {
         const isClosing = !drop.classList.contains('hidden');
         if (isClosing) { drop.classList.add('hidden'); } else {
@@ -604,14 +579,18 @@ function applyLookerFilters(containerId, type) {
     allBoxes.forEach(cb => { if (cb.checked) cb.setAttribute('data-applied', 'true'); else cb.removeAttribute('data-applied'); });
     const appliedBoxes = Array.from(document.getElementById(containerId).querySelectorAll('input[type="checkbox"][data-applied="true"]'));
     const btnText = document.getElementById(containerId + 'Text');
-    if (appliedBoxes.length === 0) { btnText.innerText = `Filter ${type}s`; btnText.classList.remove('text-indigo-700', 'font-extrabold'); } 
-    else if (appliedBoxes.length === 1) { btnText.innerText = appliedBoxes[0].value; btnText.classList.add('text-indigo-700', 'font-extrabold'); } 
-    else { btnText.innerText = `${appliedBoxes.length} Selected`; btnText.classList.add('text-indigo-700', 'font-extrabold'); }
+    if(btnText) {
+        if (appliedBoxes.length === 0) { btnText.innerText = `Filter ${type}s`; btnText.classList.remove('text-indigo-700', 'font-extrabold'); } 
+        else if (appliedBoxes.length === 1) { btnText.innerText = appliedBoxes[0].value; btnText.classList.add('text-indigo-700', 'font-extrabold'); } 
+        else { btnText.innerText = `${appliedBoxes.length} Selected`; btnText.classList.add('text-indigo-700', 'font-extrabold'); }
+    }
     toggleDropdown(containerId, true); applyFilters();
 }
 
 const applyFilters = debounce(function() {
-  const idQuery = document.getElementById('filterId').value.toLowerCase();
+  const filterInput = document.getElementById('filterId');
+  if(!filterInput) return;
+  const idQuery = filterInput.value.toLowerCase();
   const checkedLabels = Array.from(document.querySelectorAll('.flabel[data-applied="true"]')).map(cb => cb.value);
   const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => cb.value.toLowerCase());
   
@@ -663,42 +642,24 @@ function openSnoozeModal(btn) {
 
 async function confirmSnooze() {
     const dt = document.getElementById('snoozeDateTime').value;
-
-    if (!dt) {
-        return showCustomDialog("Notice", "Please select a date/time.", false);
-    }
-
+    if (!dt) { return showCustomDialog("Notice", "Please select a date/time.", false); }
     const timestamp = new Date(dt).getTime();
-    
-    if (isNaN(timestamp)) {
-        return showCustomDialog("Error", "Invalid date/time selected", false);
-    }
+    if (isNaN(timestamp)) { return showCustomDialog("Error", "Invalid date/time selected", false); }
 
     const id = document.getElementById('snoozeConvId').value;
-
     let btn = document.activeElement;
-    if (!btn || btn.tagName !== 'BUTTON') {
-        btn = document.querySelector('#snoozeModal button:last-of-type'); 
-    }
+    if (!btn || btn.tagName !== 'BUTTON') { btn = document.querySelector('#snoozeModal button:last-of-type'); }
     const origText = btn ? btn.innerText : 'Snooze Now';
     if(btn) { btn.innerText = "Snoozing..."; btn.disabled = true; }
 
     try {
         const res = await apiCall('snoozeCase', { id: id, time: timestamp });
-
-        console.log("Snooze API Response:", res);
-
         document.getElementById('snoozeModal').classList.add('hidden');
-
         showCustomDialog("Success ✅", "Case Snoozed Successfully", false);
-
         setTimeout(() => {
             loadConversations();
-            if(!document.getElementById('caseDetailView').classList.contains('hidden')) {
-                closeCaseDetail();
-            }
+            if(!document.getElementById('caseDetailView').classList.contains('hidden')) { closeCaseDetail(); }
         }, 500);
-
     } catch (e) {
         console.error("Snooze Error:", e);
         showCustomDialog("Error", "Failed to snooze.\n" + e.message, false);
@@ -833,7 +794,7 @@ function handleReplyTyping(e) {
 
       const match = text.match(/(?:^|\s|\n|\u00A0)@([^\s]*)$/);
       if (match) { 
-          mentionSearchQuery = match[1].toLowerCase();
+          mentionSearchQuery = match[1].toLowerCase(); 
           replySavedRange = range.cloneRange(); 
           showReplyUserList();
       } else { 
@@ -1079,7 +1040,7 @@ function closeCaseDetail() {
     document.getElementById('detail-thread-container').innerHTML = '';
     document.getElementById('reply_mention_dropdown').classList.add('hidden');
     document.querySelectorAll('.inline-mention-dropdown').forEach(d => d.classList.add('hidden'));
-    ['Live', 'Snooze', 'Archive'].forEach(t => { document.getElementById(`tab-${t}`).style.display = ''; });
+    ['Live', 'Snooze', 'Archive'].forEach(t => { if(document.getElementById(`tab-${t}`)) document.getElementById(`tab-${t}`).style.display = ''; });
     loadConversations();
 }
 
@@ -1205,8 +1166,10 @@ async function fetchNewMessages() {
                     method: "POST",
                     body: JSON.stringify({
                         action: "markSeen",
-                        notificationId: msg.uniqueId,
-                        userEmail: currentUser.email
+                        params: {
+                            notificationId: msg.uniqueId,
+                            userEmail: currentUser.email
+                        }
                     })
                 });
 
@@ -1458,12 +1421,16 @@ function handleInlineTyping(e) {
             const filtered = getFilteredUsersForMention(inlineMentionSearchQuery);
             dropdown.innerHTML = filtered.map(u => 
                 `<div onclick="selectInlineMentionUser('${u.name.replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}')" class="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-left">
-                    <div class="text-xs font-bold text-slate-800">${u.name}</div>
-                    <div class="text-[9px] text-slate-500 truncate">${u.email}</div>
+                    <div class="text-xs font-bold text-slate-800 leading-tight">${u.name}</div>
+                    <div class="text-[9px] text-slate-500 truncate mt-0.5">${u.email}</div>
                  </div>`
             ).join('');
-            if(filtered.length === 0) dropdown.innerHTML = `<div class="p-2 text-[10px] text-slate-400 font-bold uppercase text-center">No match</div>`;
-        } else { dropdown.classList.add('hidden'); }
+            if(filtered.length === 0) {
+                dropdown.innerHTML = `<div class="p-2 text-[10px] text-slate-400 font-bold uppercase text-center">No match</div>`;
+            }
+        } else { 
+            dropdown.classList.add('hidden');
+        }
     }
     
     checkComposerRestrictions(editor, 'inline');
@@ -1483,10 +1450,14 @@ function selectInlineMentionUser(name, email) {
     });
     const isCreator = (document.getElementById('detail-author').innerText || '').toLowerCase().includes(nameLower);
     
-    if (isAdmin || isCreator) finalizeInlineMention(name, email, 'Admin');
-    else if (isUser) finalizeInlineMention(name, email, 'User');
+    if (isAdmin || isCreator) { finalizeInlineMention(name, email, 'Admin'); }
+    else if (isUser) { finalizeInlineMention(name, email, 'User'); }
     else {
-        if (!window.currentCaseHasAdminRights) { showCustomDialog("Action Blocked", "Only Case Admins can add new members to this thread.", false); dropdown.classList.add('hidden'); return; }
+        if (!window.currentCaseHasAdminRights) {
+            showCustomDialog("Action Blocked", "Only Case Admins can add new members to this thread.", false);
+            dropdown.classList.add('hidden');
+            return;
+        }
         dropdown.innerHTML = `
           <div class="bg-slate-800 px-2 py-1 text-[10px] font-bold text-white uppercase tracking-wider">Role for ${name}</div>
           <div onclick="finalizeInlineMention('${name}', '${email}', 'Admin')" class="p-2 hover:bg-blue-50 cursor-pointer border-b text-xs font-bold text-blue-700">👑 Admin</div>
@@ -1496,15 +1467,21 @@ function selectInlineMentionUser(name, email) {
 
 function finalizeInlineMention(name, email, role) {
     if(!activeInlineBox) return;
-    const emailLower = email.toLowerCase(); const nameLower = name.toLowerCase();
+
+    const emailLower = email.toLowerCase();
+    const nameLower = name.toLowerCase();
     const isAdmin = currentCaseAdmins.some(a => a.toLowerCase() === emailLower || a.toLowerCase() === nameLower);
     const isUser = currentCaseUsers.some(u => u.toLowerCase() === emailLower || u.toLowerCase() === nameLower);
     const isCreator = (document.getElementById('detail-author').innerText || '').toLowerCase().includes(nameLower);
     if (!isAdmin && !isUser && !isCreator) {
-        if (role === 'Admin') currentCaseAdmins.push(email); else currentCaseUsers.push(email);
+        if (role === 'Admin') currentCaseAdmins.push(email);
+        else currentCaseUsers.push(email);
+
         if (!window.currentCaseAllMembers) window.currentCaseAllMembers = [];
         window.currentCaseAllMembers.push(email);
-        const detAdm = document.getElementById('detail-admins'); const detUsr = document.getElementById('detail-users');
+
+        const detAdm = document.getElementById('detail-admins');
+        const detUsr = document.getElementById('detail-users');
         const shortName = email.split('@')[0];
         const badgeHtml = `<span class="px-2 py-0.5 ${role === 'Admin' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-600 border-slate-200'} border text-[10px] rounded font-bold shadow-sm">${role === 'Admin' ? '👑' : '👤'} ${shortName}</span>`;
 
@@ -1512,18 +1489,23 @@ function finalizeInlineMention(name, email, role) {
         else detUsr.insertAdjacentHTML('afterbegin', badgeHtml);
 
         const convId = document.getElementById('detail-conv-id').value;
-        apiCall('updateCaseMembers', { id: convId, admins: currentCaseAdmins, users: currentCaseUsers }).catch(e=>{});
+        apiCall('updateCaseMembers', { id: convId, admins: currentCaseAdmins, users: currentCaseUsers }).catch(e => console.error("Error updating members:", e));
     }
 
     const sel = window.getSelection();
     sel.removeAllRanges(); sel.addRange(inlineSavedRange);
     const textNode = inlineSavedRange.startContainer;
-    inlineSavedRange.setStart(textNode, textNode.textContent.lastIndexOf('@', inlineSavedRange.startOffset - 1)); inlineSavedRange.deleteContents(); 
+    inlineSavedRange.setStart(textNode, textNode.textContent.lastIndexOf('@', inlineSavedRange.startOffset - 1)); 
+    inlineSavedRange.deleteContents(); 
+    
     const badge = document.createElement('span'); badge.contentEditable = "false";
     badge.className = `mention-badge mx-1 shadow-sm px-1.5 py-0.5 rounded text-[10px] font-bold ${role === 'Admin' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-800'}`;
     badge.dataset.email = email; badge.innerHTML = `@${name}`;
+    
     inlineSavedRange.insertNode(badge); inlineSavedRange.setStartAfter(badge); 
-    inlineSavedRange.insertNode(document.createTextNode('\u00A0')); inlineSavedRange.setStartAfter(badge.nextSibling);
+    inlineSavedRange.insertNode(document.createTextNode('\u00A0')); 
+    inlineSavedRange.setStartAfter(badge.nextSibling);
+    
     activeInlineBox.querySelector('.inline-mention-dropdown').classList.add('hidden');
     
     checkComposerRestrictions(activeInlineBox.querySelector('.inline-reply-input'), 'inline');
@@ -1534,16 +1516,22 @@ async function submitInlineReply(btn) {
     const container = btn.closest('[data-id="reply-container"]'); const replyBox = container.querySelector('[data-id="inline-reply-box"]');
     const inputDiv = replyBox.querySelector('.inline-reply-input');
     const msgHTML = inputDiv.innerHTML.trim();
-    if (!inputDiv.querySelector('.mention-badge')) return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
-    if(!msgHTML && inlinePendingFiles.length === 0) return showCustomDialog("Notice", "Please write a message or attach a file.", false);
+
+    if (!inputDiv.querySelector('.mention-badge')) {
+        return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
+    }
     
+    if(!msgHTML && inlinePendingFiles.length === 0) return showCustomDialog("Notice", "Please write a message or attach a file.", false);
     const caseId = document.getElementById('detail-conv-id').value;
+    
     const toggleBtn = container.querySelector('.inline-reply-toggle-btn');
     const typeVal = replyBox.querySelector('.inline-type-val').value;
-    btn.disabled = true; const originalText = btn.innerText; btn.innerText = '...';
-    
+    btn.disabled = true;
+    const originalText = btn.innerText;
+    btn.innerText = '...';
     try {
-        let fileUrl = ''; let fileName = '';
+        let fileUrl = '';
+        let fileName = '';
         if(inlinePendingFiles.length > 0) { 
             const file = inlinePendingFiles[0];
             const base64 = await new Promise(res => { const reader = new FileReader(); reader.onload = e => res(e.target.result); reader.readAsDataURL(file); });
@@ -1631,6 +1619,7 @@ async function handleFormSubmit(e) {
 // ==========================================
 async function loadConversations() {
   const feed = document.getElementById('conversationFeed');
+  if(!feed) return;
   try {
     allCasesData = await apiCall('getConversations', currentUser); feed.innerHTML = '';
     if(allCasesData.length === 0) { feed.innerHTML = `<p class="text-center py-10 text-slate-500 font-medium">No cases found.</p>`; return; }
@@ -1638,10 +1627,11 @@ async function loadConversations() {
     const fragment = document.createDocumentFragment();
     
     allCasesData.forEach(conv => {
-      const card = document.getElementById('cardTemplate').content.cloneNode(true); const cardDiv = card.querySelector('div');
+      const cardTemp = document.getElementById('cardTemplate');
+      if(!cardTemp) return;
+      const card = cardTemp.content.cloneNode(true); const cardDiv = card.querySelector('div');
       const hasAdminRights = conv.createdBy.toLowerCase().includes(uEmail) || conv.createdBy.toLowerCase().includes(uName) || conv.admins.some(a => a.toLowerCase().includes(uEmail) || a.toLowerCase().includes(uName));
       
-      // 🔥 FIX: Normalize backend snooze string/number into strict milliseconds
       let safeSnoozeMs = 0;
       if (conv.snoozeTime) {
           safeSnoozeMs = (typeof conv.snoozeTime === 'string' && conv.snoozeTime.includes('T')) 
@@ -1651,11 +1641,9 @@ async function loadConversations() {
 
       cardDiv._cachedLabels = conv.labels; cardDiv._cachedMembers = [...conv.admins, ...conv.users, conv.createdBy];
       
-      // 👇 Swapped out conv.snoozeTime for safeSnoozeMs in the dataset
       cardDiv.dataset.convId = conv.id; cardDiv.dataset.status = conv.status; cardDiv.dataset.snooze = safeSnoozeMs; cardDiv.dataset.hasAdminRights = hasAdminRights; cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments); cardDiv.dataset.labels = JSON.stringify(conv.labels); cardDiv.dataset.members = JSON.stringify([...conv.admins, ...conv.users, conv.createdBy]); cardDiv.dataset.caseAdmins = JSON.stringify(conv.admins); cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
       card.querySelector('[data-id="conv-id"]').textContent = conv.id; card.querySelector('[data-id="subject"]').textContent = conv.subject; card.querySelector('[data-id="details"]').textContent = conv.details; card.querySelector('[data-id="message"]').innerHTML = conv.message; card.querySelector('[data-id="author"]').textContent = conv.createdBy; card.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString(); card.querySelector('[data-id="display-case-id"]').textContent = conv.id;
       
-      // 👇 Updated the isSnoozed check calculation here
       const isSnoozed = safeSnoozeMs > Date.now(); 
       const badge = card.querySelector('[data-id="status-badge"]');
       badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm";
@@ -1686,7 +1674,6 @@ function isMobileDevice() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
-// Show button for all mobile users on load
 if (installBtn && isMobileDevice()) {
     installBtn.classList.remove('hidden');
 }
@@ -1719,7 +1706,6 @@ window.addEventListener('appinstalled', () => {
     console.log('CaseSys has been installed!');
 });
 
-// Auto Sync when internet comes back
 window.addEventListener('online', async () => {
     const requests = await getOfflineRequests();
     if (requests.length > 0) {
