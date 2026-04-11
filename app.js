@@ -322,10 +322,10 @@ function checkComposerRestrictions(editor, type = 'main') {
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
 
-  // 🚀 BONUS (PRO LEVEL): Apps Script cold start fix (Dummy Ping on Load)
+  // 🔥 WARMUP PING (login fast karega)
   fetch(API_URL, {
     method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "ping" })
   }).catch(e => console.log("Cold start ping skipped."));
 
@@ -446,7 +446,7 @@ function showCustomDialog(title, message, isConfirm, onConfirmCallback) {
 function closeDialog() { document.getElementById('customDialog').classList.add('hidden'); }
 
 // ==========================================
-// 🔥 LOGIN LOGIC (UPDATED WITH UX + RETRY HANDLER)
+// 🔥 LOGIN LOGIC (UPDATED FOR SPA & FAST LOAD)
 // ==========================================
 function checkAuthStatus() {
   const localUser = localStorage.getItem("user");
@@ -455,7 +455,6 @@ function checkAuthStatus() {
 
 function showLoading(isLoading) {
   const btn = document.querySelector("#loginBtn");
-
   if (isLoading) {
     btn.disabled = true;
     btn.innerText = "Signing in...";
@@ -471,7 +470,6 @@ function showError(msg) {
 }
 
 async function loginUserHandler() {
-
   const email = document.querySelector("#email").value;
   const password = document.querySelector("#password").value;
 
@@ -479,42 +477,29 @@ async function loginUserHandler() {
   showLoading(true);
 
   try {
-
     const res = await fetch(API_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        action: "loginUser",
-        mobileOrEmail: email,
-        password: password
-      })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "loginUser", mobileOrEmail: email, password: password })
     });
 
     const text = await res.text();
     let data;
-
-    try {
-      data = JSON.parse(text);
-    } catch {
-      throw new Error("Invalid server response");
-    }
+    try { data = JSON.parse(text); } catch { throw new Error("Invalid server response"); }
 
     if (data.success) {
-
-      // 🔥 IMPORTANT: ERROR CLEAR AGAIN
       showError("");
-
-      // 🔥 REDIRECT FAST
-      window.location.href = "dashboard.html";
-
-      return; // 🛑 STOP HERE
-
+      
+      // Save basic user info internally
+      let userData = data.user || { email: email, name: email.split('@')[0] };
+      localStorage.setItem("user", JSON.stringify(userData));
+      
+      // ⚡ INSTANT SPA REDIRECT (No dashboard.html needed, just switch views)
+      showAppScreen(userData);
+      return; 
     } else {
       showError(data.error || "Login failed");
     }
-
   } catch (err) {
     console.error("Login Error:", err);
     showError("Server slow hai, please try again...");
@@ -542,22 +527,34 @@ function logoutUser() {
 function showAppScreen(userObj) {
   currentUser = userObj;
   document.getElementById("loggedInUserEmail").innerText = userObj.name || userObj.email;
+  
+  // ⚡ INSTANT UI SWITCH 
   document.getElementById("loginView").classList.add("hidden");
   document.getElementById("appView").classList.remove("hidden");
-  fetchUsersForMentions(); 
-  loadConversations();
-  loadLabelsForForm();
-// 🔥 ensure token always sent
-setTimeout(() => {
-  try {
-    if (window.Android && userObj.email) {
-      Android.sendUserEmail(userObj.email);
-      console.log("📲 Auto sent email:", userObj.email);
+  
+  // 🔥 LAZY LOAD BACKGROUND DATA (30 sec delay)
+  setTimeout(() => {
+    console.log("🔥 30 sec over: Loading background data...");
+    fetchUsersForMentions(); 
+    loadConversations();
+    loadLabelsForForm();
+    
+    if (typeof initNotifications === "function") {
+        initNotifications(userObj);
     }
-  } catch (e) {
-    console.error(e);
-  }
-}, 2000);
+  }, 30000); 
+
+  // 🔥 ensure token always sent to Android bridge
+  setTimeout(() => {
+    try {
+      if (window.Android && userObj.email) {
+        Android.sendUserEmail(userObj.email);
+        console.log("📲 Auto sent email:", userObj.email);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, 2000);
 }
 
 // ==========================================
