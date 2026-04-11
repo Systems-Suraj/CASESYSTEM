@@ -24,79 +24,101 @@ let messaging = null;
 if (firebase.messaging.isSupported()) {
   messaging = firebase.messaging();
 
-  // ===============================
-  // 🔥 FOREGROUND NOTIFICATION
-  // ===============================
-  messaging.onMessage((payload) => {
-    
-    if (payload.data?.type !== "web") return;
-    addNotification(payload.data);
+// ===============================
+// 🔥 FOREGROUND NOTIFICATION (FINAL)
+// ===============================
+messaging.onMessage((payload) => {
 
-    try {
-      console.log("🔥 Foreground message:", payload);
+  try {
+    console.log("🔥 Foreground message:", payload);
 
-      const data = payload?.data || {};
+    const data = payload?.data || {};
 
-      let title = data.title || "";
-      let body = data.body || "";
-      const caseId = data.caseId || "";
+    let title = data.title || "Case Update";
+    let body = data.body || "";
+    const caseId = data.caseId || "";
 
-      // ❌ empty → skip
-      if (!body || body.trim() === "") return;
+    // ❌ empty body → skip
+    if (!body || body.trim() === "") return;
 
-      if (!title) title = "Case Update";
+    // 🔥 ADD TO NOTIFICATION LIST (if exists)
+    if (typeof addNotification === "function") {
+      addNotification(data);
+    }
 
-      // 🔥 DO NOT AUTO OPEN
-      // ✅ only UI feedback
+    // 🔥 TOAST UI
+    if (typeof showToast === "function") {
+      showToast(title, body, caseId);
+    } else {
       console.log("🔔 " + title + " - " + body);
-
-      if (typeof showToast === "function") {
-        showToast(title, body);
-      }
-
-    } catch (err) {
-      console.error("❌ Foreground notification error:", err);
     }
 
-  });
+  } catch (err) {
+    console.error("❌ Foreground notification error:", err);
+  }
 
-  async function initNotifications(user) {
-    try {
-      console.log("🔥 Starting notification init...");
+});
 
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") return;
 
-      const registration = await navigator.serviceWorker.register('service-worker.js');
+// ===============================
+// 🔥 INIT NOTIFICATIONS (FINAL)
+// ===============================
+async function initNotifications(user) {
+  try {
+    console.log("🔥 Starting notification init...");
 
-      const token = await messaging.getToken({
-        vapidKey: "BGF23YCUEVWA9ZKDyD0NduAyLU_Cijhc_ZsO2UMAb8kQTThWSEBMJjnE3Qq3Ad1ys4ms1vETk3KyBeffAx9lHEw",
-        serviceWorkerRegistration: registration
-      });
-
-      console.log("🔥 WEB TOKEN:", token);
-
-      if (!token) return;
-
-      await fetch(API_URL, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "saveToken",
-          person: user.name,
-          email: user.email,
-          token: token,
-          platform: "web"
-        })
-      });
-
-      console.log("✅ Token saved");
-
-    } catch (err) {
-      console.error("❌ Notification Error:", err);
+    // ✅ 1. Permission
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      console.log("❌ Permission denied");
+      return;
     }
+
+    // ✅ 2. Service Worker (single)
+    const registration = await navigator.serviceWorker.register('service-worker.js');
+
+    // ✅ 3. Get Token
+    const token = await messaging.getToken({
+      vapidKey: "BGF23YCUEVWA9ZKDyD0NduAyLU_Cijhc_ZsO2UMAb8kQTThWSEBMJjnE3Qq3Ad1ys4ms1vETk3KyBeffAx9lHEw",
+      serviceWorkerRegistration: registration
+    });
+
+    console.log("🔥 WEB TOKEN:", token);
+
+    if (!token) {
+      console.log("❌ Token not generated");
+      return;
+    }
+
+    // ✅ 4. Avoid duplicate save (LOCAL CACHE)
+    const savedToken = localStorage.getItem("fcm_token");
+
+    if (savedToken === token) {
+      console.log("⚡ Token already saved");
+      return;
+    }
+
+    // ✅ 5. Save to backend
+    await fetch(API_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "saveToken",
+        person: user.name || user.email,
+        email: user.email,
+        token: token,
+        platform: "web"
+      })
+    });
+
+    // ✅ save locally
+    localStorage.setItem("fcm_token", token);
+
+    console.log("✅ Token saved");
+
+  } catch (err) {
+    console.error("❌ Notification Error FULL:", err);
   }
 }
-
 // ==========================================
 // CONFIGURATION: REPLACE THIS URL!
 // ==========================================
