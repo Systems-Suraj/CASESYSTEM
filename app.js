@@ -446,7 +446,7 @@ function showCustomDialog(title, message, isConfirm, onConfirmCallback) {
 function closeDialog() { document.getElementById('customDialog').classList.add('hidden'); }
 
 // ==========================================
-// 🔥 LOGIN LOGIC (UPDATED FOR SPA, CORS & FAST LOAD)
+// 🔥 ORIGINAL LOGIN LOGIC (WITH SPINNER & CORS FIX)
 // ==========================================
 function checkAuthStatus() {
   const localUser = localStorage.getItem("user");
@@ -459,7 +459,7 @@ function showLoading(isLoading) {
 
   if (isLoading) {
     btn.disabled = true;
-    // 🔥 Awesome SVG Spinner added directly inside the button
+    // 🔥 Awesome SVG Spinner added directly inside the button (Your request)
     btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Please wait...`;
     btn.classList.add("opacity-75", "cursor-not-allowed");
   } else {
@@ -473,7 +473,6 @@ function showError(msg) {
   const el = document.getElementById("errorText");
   if (el) {
     el.innerText = msg;
-    // 🔥 Error text hide/show logic
     if (msg === "") {
         el.style.display = "none";
     } else {
@@ -490,21 +489,15 @@ async function loginUserHandler() {
   showLoading(true);
 
   try {
-    // 🔥 BIG FIX: "text/plain;charset=utf-8" use karna hai "application/json" nahi.
-    // Isse Google Apps Script CORS error nahi dega aur turant fail nahi hoga.
     const res = await fetch(API_URL, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" }, 
+      headers: { "Content-Type": "text/plain;charset=utf-8" }, // Keep CORS fix so it doesn't fail!
       body: JSON.stringify({ action: "loginUser", mobileOrEmail: email, password: password })
     });
 
     const text = await res.text();
     let data;
-    try { 
-        data = JSON.parse(text); 
-    } catch { 
-        throw new Error("Invalid server response"); 
-    }
+    try { data = JSON.parse(text); } catch { throw new Error("Invalid server response"); }
 
     if (data.success) {
       showError("");
@@ -512,24 +505,18 @@ async function loginUserHandler() {
       let userData = data.user || { email: email, name: email.split('@')[0] };
       localStorage.setItem("user", JSON.stringify(userData));
       
-      // ⚡ Loader chalta rahega jab tak screen change nahi hoti (Smooth UX)
-      showAppScreen(userData);
-      
-      // Form reset and button normal karne ke liye (agar user log out karke wapas aaye)
-      document.querySelector("#email").value = "";
-      document.querySelector("#password").value = "";
-      showLoading(false);
-      return; 
+      // 🔥 IMPORTANT: DIRECT REDIRECT (TUMHARA ORIGINAL FLOW)
+      window.location.href = "dashboard.html";
+      return; // 🛑 yahin stop
 
     } else {
       showError(data.error || "Login failed. Incorrect credentials.");
-      showLoading(false); // Loading roko kyunki error aaya hai
+      showLoading(false); // Stop loader only if error occurs
     }
-
   } catch (err) {
     console.error("Login Error:", err);
     showError("Server is taking time. Please try again.");
-    showLoading(false); // Loading roko
+    showLoading(false);
   }
 }
 
@@ -551,36 +538,45 @@ function logoutUser() {
 
 function showAppScreen(userObj) {
   currentUser = userObj;
-  document.getElementById("loggedInUserEmail").innerText = userObj.name || userObj.email;
   
-  // ⚡ INSTANT UI SWITCH 
-  document.getElementById("loginView").classList.add("hidden");
-  document.getElementById("appView").classList.remove("hidden");
+  if (document.getElementById("loggedInUserEmail")) {
+      document.getElementById("loggedInUserEmail").innerText = userObj.name || userObj.email;
+  }
   
-  // 🔥 LAZY LOAD BACKGROUND DATA (30 sec delay)
-  setTimeout(() => {
-    console.log("🔥 30 sec over: Loading background data...");
-    fetchUsersForMentions(); 
-    loadConversations();
-    loadLabelsForForm();
-    
-    if (typeof initNotifications === "function") {
-        initNotifications(userObj);
-    }
-  }, 30000); 
+  if (document.getElementById("loginView")) document.getElementById("loginView").classList.add("hidden");
+  if (document.getElementById("appView")) document.getElementById("appView").classList.remove("hidden");
 
-  // 🔥 ensure token always sent to Android bridge
+  // Android bridge auto sync
   setTimeout(() => {
     try {
       if (window.Android && userObj.email) {
         Android.sendUserEmail(userObj.email);
-        console.log("📲 Auto sent email:", userObj.email);
       }
     } catch (e) {
       console.error(e);
     }
   }, 2000);
 }
+
+// ==========================================
+// 🔥 WINDOW ONLOAD: 45 SEC BACKGROUND TASKS
+// ==========================================
+window.onload = function() {
+  // Wait 45 Seconds BEFORE loading heavy tasks in background
+  setTimeout(() => {
+    if (currentUser) {
+        console.log("🔥 45 sec over: Loading background data...");
+        fetchUsersForMentions(); 
+        loadConversations();
+        loadLabelsForForm();
+        
+        if (typeof initNotifications === "function") {
+            initNotifications(currentUser);
+        }
+    }
+  }, 45000); // Exactly 45 seconds focused delay
+};
+
 
 // ==========================================
 // HELPERS
