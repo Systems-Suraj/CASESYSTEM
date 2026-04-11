@@ -23,6 +23,7 @@ let messaging = null;
 
 if (firebase.messaging.isSupported()) {
   messaging = firebase.messaging();
+} // 🔥 FIX: MISSING BRACKET ADDED HERE
 
 // ===============================
 // 🔥 FOREGROUND NOTIFICATION (FINAL)
@@ -504,47 +505,71 @@ function showError(msg) {
   }
 }
 
-function loginUserHandler() {
+// 🔥 FIX: Rewritten login logic to update UI properly
+async function loginUserHandler() {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value.trim();
 
-  const input = document.querySelector("input").value;
-  const password = document.getElementById("password").value;
+  showError("");
 
-  fetch(API_URL, {
-    method: "POST",
-    body: JSON.stringify({
-      action: "loginUser",
-      params: {
-        mobileOrEmail: input,
-        password: password,
-        isAutoLogin: false
-      }
-    })
-  })
-  .then(res => res.json())
-  .then(res => {
-    console.log(res);
+  if (!email || !password) {
+    showError("Please enter your details and password.");
+    return;
+  }
 
-    if (res.data.status === "success") {
-      alert("Login Success");
+  showLoading(true);
+
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action: "loginUser",
+        params: {
+          mobileOrEmail: email,
+          password: password,
+          isAutoLogin: false
+        }
+      })
+    });
+
+    const data = await res.json();
+    console.log("Login API Response:", data);
+
+    if (data.success && data.data && data.data.status === "success") {
+      let userData = data.data.user;
+
+      // ✅ SAVE USER & SHOW APP
+      localStorage.setItem("user", JSON.stringify(userData));
+      showAppScreen(userData);
+      
+      // ✅ Call Android Bridge
+      afterLoginSuccess(userData); 
+      showLoading(false);
+
     } else {
-      alert("Invalid Password");
+      showError((data.data && data.data.message) ? data.data.message : "Login failed. Incorrect Password.");
+      showLoading(false);
     }
-  });
 
+  } catch (err) {
+    console.error("Login Error:", err);
+    showError("Server is taking time. Please try again.");
+    showLoading(false);
+  }
 }
+
 function logoutUser() { 
   localStorage.removeItem("user");
   currentUser = null;
   document.getElementById("appView").classList.add("hidden"); 
   document.getElementById("loginView").classList.remove("hidden");
   loginStep = 1;
-  document.getElementById("login_id").value = "";
-  document.getElementById("login_id").disabled = false;
+  document.getElementById("email").value = "";
+  document.getElementById("email").disabled = false;
   document.getElementById("nameField").classList.add("hidden");
-  document.getElementById("pwdField").classList.add("hidden");
-  document.getElementById("login_password").value = "";
-  document.getElementById("btnText").innerText = "Continue";
-  document.getElementById("login_status").innerText = "";
+  document.getElementById("password").value = "";
+  document.getElementById("errorText").style.display = "none";
   checkAuthStatus();
 }
 
@@ -749,7 +774,6 @@ async function confirmSnooze() {
 
     const timestamp = new Date(dt).getTime();
     
-    // 🔥 BONUS BUG FIX: Catching invalid date formats immediately
     if (isNaN(timestamp)) {
         return showCustomDialog("Error", "Invalid date/time selected", false);
     }
