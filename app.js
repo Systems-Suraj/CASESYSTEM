@@ -28,6 +28,9 @@ if (firebase.messaging.isSupported()) {
   // 🔥 FOREGROUND NOTIFICATION
   // ===============================
   messaging.onMessage((payload) => {
+    
+    if (payload.data?.type !== "web") return;
+    addNotification(payload.data);
 
     try {
       console.log("🔥 Foreground message:", payload);
@@ -186,7 +189,7 @@ async function apiCall(action, params = {}) {
 }
 
 // ==========================================
-// STATE VARIABLES
+// STATE VARIABLES & NOTIFICATIONS
 // ==========================================
 let currentUser = null; 
 let loginStep = 1;      
@@ -227,6 +230,32 @@ let hasMore = true;
 let lastTimestamp = 0;
 let seenMessages = new Set();
 let realtimeInterval = null;
+
+let notifications = [];
+
+function addNotification(data) {
+  notifications.unshift(data);
+
+  document.getElementById("notifCount").innerText = notifications.length;
+  document.getElementById("notifCount").classList.remove("hidden");
+
+  renderNotifications();
+}
+
+function renderNotifications() {
+  const panel = document.getElementById("notifPanel");
+  panel.innerHTML = notifications.map(n => `
+    <div class="p-3 border-b cursor-pointer hover:bg-gray-50"
+         onclick="openCase('${n.caseId}')">
+      <div class="font-bold">${n.title}</div>
+      <div class="text-sm text-gray-500">${n.body}</div>
+    </div>
+  `).join("");
+}
+
+function toggleNotifications() {
+  document.getElementById("notifPanel").classList.toggle("hidden");
+}
 
 function debounce(func, wait) {
   let timeout;
