@@ -506,57 +506,57 @@ function showError(msg) {
 }
 
 // 🔥 FIX: Rewritten login logic to update UI properly
-async function loginUserHandler() {
-  const email = document.getElementById("email").value.trim();
+function loginUserHandler() {
+  const input = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value.trim();
 
   showError("");
+  showLoading(true);
 
-  if (!email || !password) {
-    showError("Please enter your details and password.");
+  if (!input || !password) {
+    showError("Please enter email and password.");
+    showLoading(false);
     return;
   }
 
-  showLoading(true);
+  // Aapka original method bina kisi change ke
+  fetch(API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      action: "loginUser",
+      params: {
+        mobileOrEmail: input,
+        password: password,
+        isAutoLogin: false
+      }
+    })
+  })
+  .then(res => res.json())
+  .then(res => {
+    console.log("Login Response:", res);
 
-  try {
-    const res = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        action: "loginUser",
-        params: {
-          mobileOrEmail: email,
-          password: password,
-          isAutoLogin: false
-        }
-      })
-    });
-
-    const data = await res.json();
-    console.log("Login API Response:", data);
-
-    if (data.success && data.data && data.data.status === "success") {
-      let userData = data.data.user;
-
-      // ✅ SAVE USER & SHOW APP
+    if (res.data && res.data.status === "success") {
+      // Login successful hone par dashboard open karein
+      let userData = res.data.user;
       localStorage.setItem("user", JSON.stringify(userData));
+      
       showAppScreen(userData);
       
-      // ✅ Call Android Bridge
-      afterLoginSuccess(userData); 
+      if (typeof afterLoginSuccess === 'function') {
+          afterLoginSuccess(userData);
+      }
       showLoading(false);
-
     } else {
-      showError((data.data && data.data.message) ? data.data.message : "Login failed. Incorrect Password.");
+      // Invalid password aane par
+      showError("Invalid Password");
       showLoading(false);
     }
-
-  } catch (err) {
+  })
+  .catch(err => {
     console.error("Login Error:", err);
     showError("Server is taking time. Please try again.");
     showLoading(false);
-  }
+  });
 }
 
 function logoutUser() { 
