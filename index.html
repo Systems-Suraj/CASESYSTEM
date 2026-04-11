@@ -38,14 +38,14 @@
                 <label class="block text-sm font-bold text-slate-700 mb-1.5">User Name</label>
                 <input id="login_name" type="text" disabled class="w-full border border-slate-200 px-4 py-3 rounded-xl bg-slate-100 text-slate-500 font-bold cursor-not-allowed">
             </div>
-            <div id="pwdField" class="hidden">
+            <div id="pwdField" class="mt-2">
                 <label class="block text-sm font-bold text-slate-700 mb-1.5">Password</label>
                 <input id="password" type="password" placeholder="••••••••" class="w-full border border-slate-300 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 focus:bg-white text-slate-900 transition-shadow">
             </div>
             <button type="button" onclick="loginUserHandler()" id="loginBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold shadow-md hover:shadow-lg transition-all mt-4 flex justify-center items-center">
                 Sign In
             </button>
-            <p id="errorText" style="color:red;" class="text-center mt-4 text-sm font-bold h-5 text-slate-500"></p>
+            <p id="errorText" style="color:red; display:none;" class="text-center mt-4 text-sm font-bold h-5 text-slate-500"></p>
           </div>
         </div>
       </div>
