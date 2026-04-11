@@ -23,13 +23,12 @@ let messaging = null;
 
 if (firebase.messaging.isSupported()) {
   messaging = firebase.messaging();
-} // 🔥 FIX: MISSING BRACKET ADDED HERE
+}
 
 // ===============================
 // 🔥 FOREGROUND NOTIFICATION (FINAL)
 // ===============================
 messaging.onMessage((payload) => {
-
   try {
     console.log("🔥 Foreground message:", payload);
 
@@ -57,7 +56,6 @@ messaging.onMessage((payload) => {
   } catch (err) {
     console.error("❌ Foreground notification error:", err);
   }
-
 });
 
 
@@ -483,7 +481,7 @@ function showLoading(isLoading) {
 
   if (isLoading) {
     btn.disabled = true;
-    // 🔥 Awesome SVG Spinner added directly inside the button (Your request)
+    // 🔥 Awesome SVG Spinner added directly inside the button
     btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Please wait...`;
     btn.classList.add("opacity-75", "cursor-not-allowed");
   } else {
@@ -519,9 +517,13 @@ function loginUserHandler() {
     return;
   }
 
-  // Aapka original method bina kisi change ke
+  console.log("🔥 Login started...");
+
   fetch(API_URL, {
     method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
     body: JSON.stringify({
       action: "loginUser",
       params: {
@@ -531,30 +533,41 @@ function loginUserHandler() {
       }
     })
   })
-  .then(res => res.json())
-  .then(res => {
-    console.log("Login Response:", res);
+  .then(res => res.text()) // 🔥 IMPORTANT CHANGE
+  .then(text => {
+    console.log("RAW RESPONSE:", text);
+
+    let res;
+    try {
+      res = JSON.parse(text);
+    } catch (e) {
+      throw new Error("Invalid JSON response");
+    }
+
+    console.log("Parsed:", res);
 
     if (res.data && res.data.status === "success") {
-      // Login successful hone par dashboard open karein
+
       let userData = res.data.user;
+
       localStorage.setItem("user", JSON.stringify(userData));
-      
+
       showAppScreen(userData);
-      
+
       if (typeof afterLoginSuccess === 'function') {
-          afterLoginSuccess(userData);
+        afterLoginSuccess(userData);
       }
-      showLoading(false);
+
     } else {
-      // Invalid password aane par
-      showError("Invalid Password");
-      showLoading(false);
+      showError(res.data?.message || "Invalid Login");
     }
+
   })
   .catch(err => {
-    console.error("Login Error:", err);
-    showError("Server is taking time. Please try again.");
+    console.error("❌ Login Error:", err);
+    showError("Server slow / error. Try again.");
+  })
+  .finally(() => {
     showLoading(false);
   });
 }
@@ -1720,7 +1733,7 @@ async function handleFormSubmit(e) {
         let fileUrls = [];
         if(pendingFiles.length > 0) { 
             for(let file of pendingFiles) { 
-                const base64 = await new Promise(res => { const reader = new FileReader(); reader.onload = ev => res(e.target.result); reader.readAsDataURL(file); });
+                const base64 = await new Promise(res => { const reader = new FileReader(); reader.onload = ev => res(ev.target.result); reader.readAsDataURL(file); });
                 const result = await apiCall('uploadFile', { base64: base64, filename: file.name });
                 if(result && result.url) fileUrls.push(result.url);
             } 
