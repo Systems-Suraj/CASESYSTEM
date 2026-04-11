@@ -504,58 +504,34 @@ function showError(msg) {
   }
 }
 
-async function loginUserHandler() {
-  const email = document.querySelector("#email").value;
-  const password = document.querySelector("#password").value;
+function loginUserHandler() {
 
-  showError("");
-  showLoading(true);
+  const input = document.querySelector("input").value;
+  const password = document.getElementById("password").value;
 
-  try {
-    const res = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        action: "loginUser",
-        mobileOrEmail: email,
-        password: password
-      })
-    });
+  fetch(API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      action: "loginUser",
+      params: {
+        mobileOrEmail: input,
+        password: password,
+        isAutoLogin: false
+      }
+    })
+  })
+  .then(res => res.json())
+  .then(res => {
+    console.log(res);
 
-    const text = await res.text();
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      throw new Error("Invalid server response");
-    }
-
-    if (data.success) {
-
-      let userData = data.user || {
-        email: email,
-        name: email.split('@')[0]
-      };
-
-      // ✅ SAVE USER
-      localStorage.setItem("user", JSON.stringify(userData));
-
-      // 🔥 REDIRECT
-      window.location.href = "dashboard.html";
-
+    if (res.data.status === "success") {
+      alert("Login Success");
     } else {
-      showError(data.error || "Login failed. Incorrect credentials.");
-      showLoading(false);
+      alert("Invalid Password");
     }
+  });
 
-  } catch (err) {
-    console.error("Login Error:", err);
-    showError("Server is taking time. Please try again.");
-    showLoading(false);
-  }
 }
-
 function logoutUser() { 
   localStorage.removeItem("user");
   currentUser = null;
