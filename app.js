@@ -156,9 +156,9 @@ async function deleteOfflineRequest(id) {
 }
 
 // ==========================================
-// API COMMUNICATION (With Offline Support)
+// 🔥 API COMMUNICATION (WITH RETRY + OFFLINE)
 // ==========================================
-async function apiCall(action, params = {}) {
+async function apiCall(action, params = {}, retries = 2) {
     if (currentUser && currentUser.email) {
         params.reqUserEmail = currentUser.email; 
     }
@@ -176,13 +176,24 @@ async function apiCall(action, params = {}) {
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Safe for Apps Script CORS
             body: JSON.stringify({ action: action, params: params })
         });
-        const result = await response.json();
+        
+        const text = await response.text();
+        const result = JSON.parse(text);
+        
         if (!result.success) throw new Error(result.error || result.message);
         return result.data !== undefined ? result.data : result;
+
     } catch (err) {
+        // 🔥 RETRY LOGIC INJECTED HERE
+        if (retries > 0 && navigator.onLine) {
+            console.log(`🔁 Retrying [${action}]...`, retries);
+            await new Promise(r => setTimeout(r, 1000));
+            return apiCall(action, params, retries - 1);
+        }
+
         console.error(`API Error [${action}]:`, err);
         throw err;
     }
@@ -310,6 +321,14 @@ function checkComposerRestrictions(editor, type = 'main') {
 // DOM READY AND EVENT LISTENERS
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
+
+  // 🚀 BONUS (PRO LEVEL): Apps Script cold start fix (Dummy Ping on Load)
+  fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ action: "ping" })
+  }).catch(e => console.log("Cold start ping skipped."));
+
   checkAuthStatus();
   const tzoffset = (new Date()).getTimezoneOffset() * 60000;
   const localISOTime = (new Date(Date.now() - tzoffset)).toISOString().slice(0, 16);
@@ -427,7 +446,7 @@ function showCustomDialog(title, message, isConfirm, onConfirmCallback) {
 function closeDialog() { document.getElementById('customDialog').classList.add('hidden'); }
 
 // ==========================================
-// AUTHENTICATION LOGIC & NOTIFICATION PERMISSION
+// 🔥 LOGIN LOGIC (UPDATED WITH UX + RETRY HANDLER)
 // ==========================================
 function checkAuthStatus() {
   const localUser = localStorage.getItem("user");
@@ -445,23 +464,36 @@ function handleNextOrLogin() {
   if (loginStep === 1) {
     if(!idVal) return;
     loginBtn.disabled = true;
+    loginBtn.innerText = "Checking...";
+    
     apiCall('verifyUserId', { id: idVal })
       .then(res => {
         loginBtn.disabled = false;
+        loginBtn.innerText = "Sign In";
         if(res.success) {
           loginStep = 2; detectedUser = res;
           document.getElementById('login_id').disabled = true;
           document.getElementById('nameField').classList.remove('hidden'); 
           document.getElementById('login_name').value = res.name;
           document.getElementById('pwdField').classList.remove('hidden'); 
-          document.getElementById('btnText').innerText = "Sign In";
         } else { statusEl.innerText = res.message || "User not found."; }
       })
-      .catch(err => { loginBtn.disabled = false; statusEl.innerText = "Error connecting to server."; });
+      .catch(err => { 
+        loginBtn.disabled = false; 
+        loginBtn.innerText = "Continue";
+        statusEl.innerText = "Server slow hai, please wait..."; 
+      });
+      
   } else if (loginStep === 2) {
     const pwd = document.getElementById("login_password").value.trim();
     if(!pwd) return;
+    
+    const originalText = loginBtn.innerText;
+    
+    // 🎯 UX FIX (VERY IMPORTANT)
     loginBtn.disabled = true;
+    loginBtn.innerText = "Signing in...";
+    statusEl.innerText = "";
 
     apiCall('loginUser', { 
       mobileOrEmail: detectedUser.mobile || detectedUser.email, 
@@ -469,12 +501,13 @@ function handleNextOrLogin() {
       isAutoLogin: false 
     })
     .then(res => {
-      // 🔥 Only call handleLoginResponse here, it will handle the initNotifications internally
+      // Login Success / Failure handle here
       handleLoginResponse(res);
     })
     .catch(err => { 
       loginBtn.disabled = false; 
-      statusEl.innerText = "Error connecting to server."; 
+      loginBtn.innerText = originalText;
+      statusEl.innerText = "Server slow hai, please wait..."; 
     });
   }
 }
@@ -499,7 +532,11 @@ function handleLoginResponse(res) {
     requestNotificationPermission(); 
   } else { 
       document.getElementById("login_status").innerText = res.message || "Login failed.";
-      document.getElementById("loginBtn").disabled = false;
+      
+      // Reset Button on Failure
+      const loginBtn = document.getElementById("loginBtn");
+      loginBtn.disabled = false;
+      loginBtn.innerText = "Sign In";
   }
 }
 
