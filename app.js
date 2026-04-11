@@ -46,7 +46,7 @@ messaging.onMessage((payload) => {
 // CONFIGURATION: REPLACE THIS URL!
 // ==========================================
 // 🔥 IMPORTANT: After you deploy Google Apps Script as "New Deployment", paste the new link below.
-const API_URL = "https://script.google.com/macros/s/AKfycbwA-8jgesrDV2Sw5a_DzisHaKFEjljQ8PoJ43if50C4kuFamM37HEIESAnPx_oG3C5s/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbxXQKRXvgVI-ryItvnhOm0SzJzh03I72QlOMGCRA4GDPMV2f6t6xevUeMfGrMkz_OtS/exec"; 
 
 // ==========================================
 // OFFLINE DATABASE (IndexedDB Setup)
