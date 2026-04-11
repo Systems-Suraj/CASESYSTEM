@@ -58,67 +58,6 @@ messaging.onMessage((payload) => {
   }
 });
 
-
-// ===============================
-// 🔥 INIT NOTIFICATIONS (FINAL)
-// ===============================
-async function initNotifications(user) {
-  try {
-    console.log("🔥 Starting notification init...");
-
-    // ✅ 1. Permission
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") {
-      console.log("❌ Permission denied");
-      return;
-    }
-
-    // ✅ 2. Service Worker (single)
-    const registration = await navigator.serviceWorker.getRegistration() 
-  || await navigator.serviceWorker.register('service-worker.js');
-
-    // ✅ 3. Get Token
-    const token = await messaging.getToken({
-      vapidKey: "BGF23YCUEVWA9ZKDyD0NduAyLU_Cijhc_ZsO2UMAb8kQTThWSEBMJjnE3Qq3Ad1ys4ms1vETk3KyBeffAx9lHEw",
-      serviceWorkerRegistration: registration
-    });
-
-    console.log("🔥 WEB TOKEN:", token);
-
-    if (!token) {
-      console.log("❌ Token not generated");
-      return;
-    }
-
-    // ✅ 4. Avoid duplicate save (LOCAL CACHE)
-    const savedToken = localStorage.getItem("fcm_token");
-
-    if (savedToken === token) {
-      console.log("⚡ Token already saved");
-      return;
-    }
-
-    // ✅ 5. Save to backend
-    await fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify({
-        action: "saveToken",
-        person: user.name || user.email,
-        email: user.email,
-        token: token,
-        platform: "web"
-      })
-    });
-
-    // ✅ save locally
-    localStorage.setItem("fcm_token", token);
-
-    console.log("✅ Token saved");
-
-  } catch (err) {
-    console.error("❌ Notification Error FULL:", err);
-  }
-}
 // ==========================================
 // CONFIGURATION: REPLACE THIS URL!
 // ==========================================
@@ -225,8 +164,6 @@ async function apiCall(action, params = {}, retries = 2) {
 // STATE VARIABLES & NOTIFICATIONS
 // ==========================================
 let currentUser = null; 
-let loginStep = 1;      
-let detectedUser = null;
 let availableLabels = [];
 let selectedLabels = new Set();
 let allUsersList = []; 
@@ -468,108 +405,61 @@ function showCustomDialog(title, message, isConfirm, onConfirmCallback) {
 function closeDialog() { document.getElementById('customDialog').classList.add('hidden'); }
 
 // ==========================================
-// 🔥 ORIGINAL LOGIN LOGIC (WITH SPINNER & CORS FIX)
+// 🔥 SIMPLE DIRECT LOGIN LOGIC (RESTORED)
 // ==========================================
-function checkAuthStatus() {
-  const localUser = localStorage.getItem("user");
-  if (localUser) { showAppScreen(JSON.parse(localUser)); return; }
-}
 
-function showLoading(isLoading) {
-  const btn = document.querySelector("#loginBtn");
-  if (!btn) return;
+function handleNextOrLogin() {
+  const idVal = document.getElementById("email").value.trim();
+  const pwd = document.getElementById("password").value.trim();
+  const statusEl = document.getElementById("errorText");
+  const loginBtn = document.getElementById("loginBtn");
 
-  if (isLoading) {
-    btn.disabled = true;
-    // 🔥 Awesome SVG Spinner added directly inside the button
-    btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Please wait...`;
-    btn.classList.add("opacity-75", "cursor-not-allowed");
-  } else {
-    btn.disabled = false;
-    btn.innerHTML = "Sign In";
-    btn.classList.remove("opacity-75", "cursor-not-allowed");
-  }
-}
-
-function showError(msg) {
-  const el = document.getElementById("errorText");
-  if (el) {
-    el.innerText = msg;
-    if (msg === "") {
-        el.style.display = "none";
-    } else {
-        el.style.display = "block";
-    }
-  }
-}
-
-// 🔥 FIX: Rewritten login logic to update UI properly
-function loginUserHandler() {
-  const input = document.getElementById("email").value.trim();
-  const password = document.getElementById("password").value.trim();
-
-  showError("");
-  showLoading(true);
-
-  if (!input || !password) {
-    showError("Please enter email and password.");
-    showLoading(false);
+  if (!idVal) {
+    statusEl.style.display = "block";
+    statusEl.innerText = "Enter ID first";
     return;
   }
 
-  console.log("🔥 Login started...");
+  if (!pwd) {
+    statusEl.style.display = "block";
+    statusEl.innerText = "Enter Password";
+    return;
+  }
 
-  fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify({
-      action: "loginUser",
-      params: {
-        mobileOrEmail: input,
-        password: password,
-        isAutoLogin: false
-      }
-    })
+  loginBtn.disabled = true;
+  statusEl.style.display = "block";
+  statusEl.innerText = "Checking...";
+
+  // 🔥 DIRECT LOGIN (OLD STYLE)
+  apiCall('loginUser', { 
+    mobileOrEmail: idVal,
+    password: pwd,
+    isAutoLogin: false 
   })
-  .then(res => res.text()) // 🔥 IMPORTANT CHANGE
-  .then(text => {
-    console.log("RAW RESPONSE:", text);
+  .then(res => {
+    loginBtn.disabled = false;
 
-    let res;
-    try {
-      res = JSON.parse(text);
-    } catch (e) {
-      throw new Error("Invalid JSON response");
-    }
+    if (res && res.status === "success") {
 
-    console.log("Parsed:", res);
+      // ✅ SAVE USER
+      localStorage.setItem("user", JSON.stringify(res.user));
 
-    if (res.data && res.data.status === "success") {
-
-      let userData = res.data.user;
-
-      localStorage.setItem("user", JSON.stringify(userData));
-
-      showAppScreen(userData);
-
-      if (typeof afterLoginSuccess === 'function') {
-        afterLoginSuccess(userData);
-      }
+      // ✅ DIRECT OPEN APP
+      showAppScreen(res.user);
 
     } else {
-      showError(res.data?.message || "Invalid Login");
+      statusEl.innerText = res.message || "Invalid Login";
     }
-
   })
   .catch(err => {
-    console.error("❌ Login Error:", err);
-    showError("Server slow / error. Try again.");
-  })
-  .finally(() => {
-    showLoading(false);
+    loginBtn.disabled = false;
+    statusEl.innerText = "Server Error";
   });
+}
+
+function checkAuthStatus() {
+  const localUser = localStorage.getItem("user");
+  if (localUser) { showAppScreen(JSON.parse(localUser)); return; }
 }
 
 function logoutUser() { 
@@ -577,10 +467,8 @@ function logoutUser() {
   currentUser = null;
   document.getElementById("appView").classList.add("hidden"); 
   document.getElementById("loginView").classList.remove("hidden");
-  loginStep = 1;
   document.getElementById("email").value = "";
   document.getElementById("email").disabled = false;
-  document.getElementById("nameField").classList.add("hidden");
   document.getElementById("password").value = "";
   document.getElementById("errorText").style.display = "none";
   checkAuthStatus();
@@ -618,14 +506,9 @@ window.onload = function() {
         fetchUsersForMentions(); 
         loadConversations();
         loadLabelsForForm();
-        
-        // ❌ REMOVE THIS LINE
-        // initNotifications(currentUser);
-
     }
   }, 45000);
 };
-
 
 // ==========================================
 // HELPERS
@@ -1827,50 +1710,14 @@ if (installBtn) {
         }
     }); 
 }
-// ✅ IMPORTANT: Trigger Permission when App is Installed Successfully
+
 window.addEventListener('appinstalled', () => { 
     if (installBtn) { 
         installBtn.classList.add('hidden'); 
         installBtn.classList.remove('flex'); 
     } 
     console.log('CaseSys has been installed!');
-    
-    // 🔔 Asking for permission right after installation
-    requestNotificationPermission();
 });
-
-// ==========================================
-// NOTIFICATIONS PERMISSION & AUTO SYNC
-// ==========================================
-function requestNotificationPermission() {
-    if (!("Notification" in window)) return;
-
-    if (Notification.permission !== "granted" && Notification.permission !== "denied") {
-        Notification.requestPermission().then(permission => {
-            if (permission === "granted") {
-                console.log("Notification Allowed!");
-                // तुरंत एक टेस्ट नोटिफिकेशन भेजें ताकि कन्फर्म हो जाए
-                showLocalNotification("CaseSys Activated 🔔", "Aapko ab updates milte rahenge.");
-            }
-        });
-    }
-}
-
-function showLocalNotification(title, body) { 
-    if ("Notification" in window && Notification.permission === "granted") { 
-        // PWA में नोटिफिकेशन हमेशा Service Worker के थ्रू भेजनी चाहिए
-        navigator.serviceWorker.ready.then(registration => {
-            registration.showNotification(title, { 
-                body: body, 
-                icon: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png', 
-                badge: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
-                vibrate: [200, 100, 200],
-                tag: 'casesys-alert',
-                renotify: true
-            }); 
-        });
-    } 
-}
 
 // Auto Sync when internet comes back
 window.addEventListener('online', async () => {
@@ -1890,7 +1737,6 @@ window.addEventListener('online', async () => {
         }
         if (successCount > 0) { 
             if(currentUser) loadConversations(); 
-            showLocalNotification("Sync Complete ✅", `${successCount} offline actions uploaded successfully.`); 
             showCustomDialog("Sync Complete", `${successCount} items synced!`, false); 
         }
     }
@@ -1899,20 +1745,3 @@ window.addEventListener('online', async () => {
 window.addEventListener('offline', () => {
     console.log("You are now offline. Actions will be queued.");
 });
-
-function afterLoginSuccess(user) {
-
-  console.log("✅ Login Success:", user);
-
-  // 🔥 ANDROID BRIDGE CALL
-  try {
-    if (window.Android && user.email) {
-      Android.sendUserEmail(user.email);
-      console.log("📲 Sent email to Android:", user.email);
-    } else {
-      console.log("⚠️ Android bridge not available");
-    }
-  } catch (e) {
-    console.error("❌ Android bridge error:", e);
-  }
-}
