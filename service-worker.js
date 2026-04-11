@@ -1,5 +1,5 @@
-// 🔥 CACHE VERSION BUMP (v1 se v2 kiya taaki phone naya code download kare)
-const CACHE_NAME = 'casesys-v6';
+// 🔥 CACHE VERSION
+const CACHE_NAME = 'casesys-v7';
 
 // 🔥 CACHE FILES
 const ASSETS_TO_CACHE = [
@@ -16,23 +16,25 @@ const ASSETS_TO_CACHE = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('Opened cache v2');
+      console.log('✅ Cache Opened');
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
-  self.skipWaiting(); // Naya SW turant active hoga
+  self.skipWaiting();
 });
 
 // ============================
-// 🔹 ACTIVATE (Purana Cache Delete Karega)
+// 🔹 ACTIVATE
 // ============================
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((name) => {
-          console.log("Deleting:", name);
-          return caches.delete(name); // 🔥 ALL delete
+          if (name !== CACHE_NAME) {
+            console.log("🧹 Deleting old cache:", name);
+            return caches.delete(name);
+          }
         })
       );
     })
@@ -41,7 +43,7 @@ self.addEventListener('activate', (event) => {
 });
 
 // ============================
-// 🔹 FETCH (PWA OFFLINE)
+// 🔹 FETCH (Offline)
 // ============================
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
@@ -75,70 +77,51 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 // =======================================================
-// 🔥 BACKGROUND NOTIFICATION HANDLER (FINAL)
+// 🔥 BACKGROUND NOTIFICATION (FINAL FIX)
 // =======================================================
 messaging.onBackgroundMessage(function(payload) {
-  console.log('🔥 FULL PAYLOAD:', JSON.stringify(payload));
 
-  let title = "";
-  let body = "";
+  console.log('🔥 FULL PAYLOAD:', payload);
 
-  // 🔥 DATA PAYLOAD (PRIMARY)
-  if (payload.data) {
-    title = payload.data.title || "";
-    body = payload.data.body || "";
+  // ❌ IMPORTANT: Android payload ignore karo
+  if (payload.data?.type && payload.data.type !== "web") {
+    console.log("⛔ Ignored (Not Web)");
+    return;
   }
 
-  // 🔥 FALLBACK (if needed)
-  if (!title && payload.notification) {
-    title = payload.notification.title || "";
-  }
-
-  if (!body && payload.notification) {
-    body = payload.notification.body || "";
-  }
-
-  // 🔥 FINAL SAFETY (no empty notification)
-  if (!body || body.trim() === "") {
-    body = "📩 New activity";
-  }
-
-  if (!title || title.trim() === "") {
-    title = "Case Update";
-  }
-
-  const caseId =
-    payload?.data?.caseId ||
-    payload?.notification?.caseId ||
-    "";
+  // ✅ DATA ONLY (NO notification override)
+  const title = payload.data?.title || "Case Update";
+  const body = payload.data?.body || "📩 New activity";
+  const caseId = payload.data?.caseId || "";
 
   self.registration.showNotification(title, {
     body: body,
     icon: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
-    data: { caseId }
+    badge: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
+    data: { caseId },
+    tag: caseId, // 🔥 prevents duplicate spam
+    renotify: true
   });
 });
 
 // =======================================================
-// 🔥 NOTIFICATION CLICK HANDLER (IMPORTANT)
+// 🔥 NOTIFICATION CLICK
 // =======================================================
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
 
   const caseId = event.notification?.data?.caseId || "";
 
-  // 🔥 open app (or focus if already open)
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
 
       for (let client of clientList) {
         if (client.url.includes('index.html') && 'focus' in client) {
-          client.postMessage({ caseId: caseId }); // send caseId to app
+          client.postMessage({ caseId: caseId });
           return client.focus();
         }
       }
 
-      // 🔥 अगर app बंद है → नया open करो
       return clients.openWindow('./index.html?caseId=' + caseId);
     })
   );
