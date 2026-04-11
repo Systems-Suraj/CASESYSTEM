@@ -471,6 +471,7 @@ function showError(msg) {
 }
 
 async function loginUserHandler() {
+
   const email = document.querySelector("#email").value;
   const password = document.querySelector("#password").value;
 
@@ -478,6 +479,7 @@ async function loginUserHandler() {
   showLoading(true);
 
   try {
+
     const res = await fetch(API_URL, {
       method: "POST",
       headers: {
@@ -500,17 +502,22 @@ async function loginUserHandler() {
     }
 
     if (data.success) {
-      // 🔥 IMPORTANT: delay before redirect
-      setTimeout(() => {
-        window.location.href = "dashboard.html";
-      }, 300);
+
+      // 🔥 IMPORTANT: ERROR CLEAR AGAIN
+      showError("");
+
+      // 🔥 REDIRECT FAST
+      window.location.href = "dashboard.html";
+
+      return; // 🛑 STOP HERE
+
     } else {
       showError(data.error || "Login failed");
     }
 
   } catch (err) {
-    console.error(err);
-    showError("Server slow hai, please wait...");
+    console.error("Login Error:", err);
+    showError("Server slow hai, please try again...");
   }
 
   showLoading(false);
