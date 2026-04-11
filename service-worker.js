@@ -1,5 +1,5 @@
-// 🔥 CACHE VERSION (UPDATED)
-const CACHE_NAME = 'casesys-v8';
+// 🔥 CACHE VERSION
+const CACHE_NAME = 'casesys-v9';
 
 // 🔥 CACHE FILES
 const ASSETS_TO_CACHE = [
@@ -43,18 +43,17 @@ self.addEventListener('activate', (event) => {
 });
 
 // ============================
-// 🔹 FETCH (FINAL FIX)
+// 🔹 FETCH
 // ============================
 self.addEventListener('fetch', (event) => {
 
   const url = event.request.url;
 
-  // 🔥 CRITICAL FIX: Google Apps Script bypass
+  // 🔥 IMPORTANT: Google Apps Script bypass
   if (url.includes('script.google.com')) {
-    return; // 🚀 SW ignore karega → direct network
+    return;
   }
 
-  // 🔥 Only cache GET requests
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
@@ -86,17 +85,11 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 // =======================================================
-// 🔥 BACKGROUND NOTIFICATION (FINAL)
+// 🔥 BACKGROUND NOTIFICATION (FINAL FIX)
 // =======================================================
 messaging.onBackgroundMessage(function(payload) {
 
   console.log('🔥 FULL PAYLOAD:', payload);
-
-  // 🔥 ONLY WEB HANDLE
-  if (payload.data?.type !== "web") {
-    console.log("⛔ Ignored (Not Web)");
-    return;
-  }
 
   const title = payload.data?.title || "Case Update";
   const body = payload.data?.body || "📩 New activity";
@@ -113,7 +106,7 @@ messaging.onBackgroundMessage(function(payload) {
 });
 
 // =======================================================
-// 🔥 NOTIFICATION CLICK
+// 🔥 NOTIFICATION CLICK (FINAL FIX)
 // =======================================================
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
@@ -124,12 +117,18 @@ self.addEventListener('notificationclick', function(event) {
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
 
       for (let client of clientList) {
-        if (client.url.includes('index.html') && 'focus' in client) {
+
+        // 👉 अगर app already open है
+        if (client.url.includes('CASESYSTEM') && 'focus' in client) {
+
+          // 🔥 send message to app
           client.postMessage({ caseId: caseId });
+
           return client.focus();
         }
       }
 
+      // 👉 अगर app बंद है
       return clients.openWindow('./index.html?caseId=' + caseId);
     })
   );
