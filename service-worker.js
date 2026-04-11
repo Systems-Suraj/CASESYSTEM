@@ -1,5 +1,5 @@
-// 🔥 CACHE VERSION
-const CACHE_NAME = 'casesys-v7';
+// 🔥 CACHE VERSION (UPDATED)
+const CACHE_NAME = 'casesys-v8';
 
 // 🔥 CACHE FILES
 const ASSETS_TO_CACHE = [
@@ -43,9 +43,18 @@ self.addEventListener('activate', (event) => {
 });
 
 // ============================
-// 🔹 FETCH (Offline)
+// 🔹 FETCH (FINAL FIX)
 // ============================
 self.addEventListener('fetch', (event) => {
+
+  const url = event.request.url;
+
+  // 🔥 CRITICAL FIX: Google Apps Script bypass
+  if (url.includes('script.google.com')) {
+    return; // 🚀 SW ignore karega → direct network
+  }
+
+  // 🔥 Only cache GET requests
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
@@ -77,19 +86,18 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 // =======================================================
-// 🔥 BACKGROUND NOTIFICATION (FINAL FIX)
+// 🔥 BACKGROUND NOTIFICATION (FINAL)
 // =======================================================
 messaging.onBackgroundMessage(function(payload) {
 
   console.log('🔥 FULL PAYLOAD:', payload);
 
-  // ❌ IMPORTANT: Android payload ignore karo
-  if (payload.data?.type && payload.data.type !== "web") {
+  // 🔥 ONLY WEB HANDLE
+  if (payload.data?.type !== "web") {
     console.log("⛔ Ignored (Not Web)");
     return;
   }
 
-  // ✅ DATA ONLY (NO notification override)
   const title = payload.data?.title || "Case Update";
   const body = payload.data?.body || "📩 New activity";
   const caseId = payload.data?.caseId || "";
@@ -99,7 +107,7 @@ messaging.onBackgroundMessage(function(payload) {
     icon: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
     badge: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
     data: { caseId },
-    tag: caseId, // 🔥 prevents duplicate spam
+    tag: caseId,
     renotify: true
   });
 });
