@@ -453,91 +453,67 @@ function checkAuthStatus() {
   if (localUser) { showAppScreen(JSON.parse(localUser)); return; }
 }
 
-function handleNextOrLogin() {
-  const idVal = document.getElementById("login_id").value.trim();
-  const statusEl = document.getElementById("login_status");
-  const loginBtn = document.getElementById("loginBtn");
-  
-  // ✅ लॉगिन प्रोसेस शुरू होते ही नोटिफिकेशन परमिशन मांगेगा (User Gesture)
-  requestNotificationPermission();
+function showLoading(isLoading) {
+  const btn = document.querySelector("#loginBtn");
 
-  if (loginStep === 1) {
-    if(!idVal) return;
-    loginBtn.disabled = true;
-    loginBtn.innerText = "Checking...";
-    
-    apiCall('verifyUserId', { id: idVal })
-      .then(res => {
-        loginBtn.disabled = false;
-        loginBtn.innerText = "Sign In";
-        if(res.success) {
-          loginStep = 2; detectedUser = res;
-          document.getElementById('login_id').disabled = true;
-          document.getElementById('nameField').classList.remove('hidden'); 
-          document.getElementById('login_name').value = res.name;
-          document.getElementById('pwdField').classList.remove('hidden'); 
-        } else { statusEl.innerText = res.message || "User not found."; }
-      })
-      .catch(err => { 
-        loginBtn.disabled = false; 
-        loginBtn.innerText = "Continue";
-        statusEl.innerText = "Server slow hai, please wait..."; 
-      });
-      
-  } else if (loginStep === 2) {
-    const pwd = document.getElementById("login_password").value.trim();
-    if(!pwd) return;
-    
-    const originalText = loginBtn.innerText;
-    
-    // 🎯 UX FIX (VERY IMPORTANT)
-    loginBtn.disabled = true;
-    loginBtn.innerText = "Signing in...";
-    statusEl.innerText = "";
-
-    apiCall('loginUser', { 
-      mobileOrEmail: detectedUser.mobile || detectedUser.email, 
-      password: pwd, 
-      isAutoLogin: false 
-    })
-    .then(res => {
-      // Login Success / Failure handle here
-      handleLoginResponse(res);
-    })
-    .catch(err => { 
-      loginBtn.disabled = false; 
-      loginBtn.innerText = originalText;
-      statusEl.innerText = "Server slow hai, please wait..."; 
-    });
+  if (isLoading) {
+    btn.disabled = true;
+    btn.innerText = "Signing in...";
+  } else {
+    btn.disabled = false;
+    btn.innerText = "Sign In";
   }
 }
 
-function handleLoginResponse(res) {
-  if (res && (res.status === "success" || res.success)) { 
-    localStorage.setItem("user", JSON.stringify(res.user));
+function showError(msg) {
+  const el = document.getElementById("errorText");
+  if (el) el.innerText = msg;
+}
 
-    const user = {
-      name: res.user.name || detectedUser.name || "",
-      email: res.user.email || detectedUser.email || detectedUser.mobile || ""
-    };
+async function loginUserHandler() {
+  const email = document.querySelector("#email").value;
+  const password = document.querySelector("#password").value;
 
-    // 🔥🔥🔥 IMPORTANT LINE: CALL ONCE ON SUCCESS
-    initNotifications(user);
+  showError("");
+  showLoading(true);
 
-    showAppScreen(res.user); 
-    
-    // 🔥 ANDROID TOKEN TRIGGER (FIXED)
-    afterLoginSuccess(res.user);
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        action: "loginUser",
+        mobileOrEmail: email,
+        password: password
+      })
+    });
 
-    requestNotificationPermission(); 
-  } else { 
-      document.getElementById("login_status").innerText = res.message || "Login failed.";
-      
-      // Reset Button on Failure
-      const loginBtn = document.getElementById("loginBtn");
-      loginBtn.disabled = false;
-      loginBtn.innerText = "Sign In";
+    const text = await res.text();
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("Invalid server response");
+    }
+
+    if (data.success) {
+      // 🔥 IMPORTANT: delay before redirect
+      setTimeout(() => {
+        window.location.href = "dashboard.html";
+      }, 300);
+    } else {
+      showError(data.error || "Login failed");
+    }
+
+  } catch (err) {
+    console.error(err);
+    showError("Server slow hai, please wait...");
   }
+
+  showLoading(false);
 }
 
 function logoutUser() { 
