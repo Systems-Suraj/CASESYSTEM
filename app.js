@@ -325,7 +325,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // 🔥 WARMUP PING (login fast karega)
   fetch(API_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify({ action: "ping" })
   }).catch(e => console.log("Cold start ping skipped."));
 
@@ -446,7 +446,7 @@ function showCustomDialog(title, message, isConfirm, onConfirmCallback) {
 function closeDialog() { document.getElementById('customDialog').classList.add('hidden'); }
 
 // ==========================================
-// 🔥 LOGIN LOGIC (UPDATED FOR SPA & FAST LOAD)
+// 🔥 LOGIN LOGIC (UPDATED FOR SPA, CORS & FAST LOAD)
 // ==========================================
 function checkAuthStatus() {
   const localUser = localStorage.getItem("user");
@@ -455,18 +455,31 @@ function checkAuthStatus() {
 
 function showLoading(isLoading) {
   const btn = document.querySelector("#loginBtn");
+  if (!btn) return;
+
   if (isLoading) {
     btn.disabled = true;
-    btn.innerText = "Signing in...";
+    // 🔥 Awesome SVG Spinner added directly inside the button
+    btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Please wait...`;
+    btn.classList.add("opacity-75", "cursor-not-allowed");
   } else {
     btn.disabled = false;
-    btn.innerText = "Sign In";
+    btn.innerHTML = "Sign In";
+    btn.classList.remove("opacity-75", "cursor-not-allowed");
   }
 }
 
 function showError(msg) {
   const el = document.getElementById("errorText");
-  if (el) el.innerText = msg;
+  if (el) {
+    el.innerText = msg;
+    // 🔥 Error text hide/show logic
+    if (msg === "") {
+        el.style.display = "none";
+    } else {
+        el.style.display = "block";
+    }
+  }
 }
 
 async function loginUserHandler() {
@@ -477,35 +490,47 @@ async function loginUserHandler() {
   showLoading(true);
 
   try {
+    // 🔥 BIG FIX: "text/plain;charset=utf-8" use karna hai "application/json" nahi.
+    // Isse Google Apps Script CORS error nahi dega aur turant fail nahi hoga.
     const res = await fetch(API_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain;charset=utf-8" }, 
       body: JSON.stringify({ action: "loginUser", mobileOrEmail: email, password: password })
     });
 
     const text = await res.text();
     let data;
-    try { data = JSON.parse(text); } catch { throw new Error("Invalid server response"); }
+    try { 
+        data = JSON.parse(text); 
+    } catch { 
+        throw new Error("Invalid server response"); 
+    }
 
     if (data.success) {
       showError("");
       
-      // Save basic user info internally
       let userData = data.user || { email: email, name: email.split('@')[0] };
       localStorage.setItem("user", JSON.stringify(userData));
       
-      // ⚡ INSTANT SPA REDIRECT (No dashboard.html needed, just switch views)
+      // ⚡ Loader chalta rahega jab tak screen change nahi hoti (Smooth UX)
       showAppScreen(userData);
+      
+      // Form reset and button normal karne ke liye (agar user log out karke wapas aaye)
+      document.querySelector("#email").value = "";
+      document.querySelector("#password").value = "";
+      showLoading(false);
       return; 
+
     } else {
-      showError(data.error || "Login failed");
+      showError(data.error || "Login failed. Incorrect credentials.");
+      showLoading(false); // Loading roko kyunki error aaya hai
     }
+
   } catch (err) {
     console.error("Login Error:", err);
-    showError("Server slow hai, please try again...");
+    showError("Server is taking time. Please try again.");
+    showLoading(false); // Loading roko
   }
-
-  showLoading(false);
 }
 
 function logoutUser() { 
@@ -724,7 +749,6 @@ async function confirmSnooze() {
 
     const id = document.getElementById('snoozeConvId').value;
 
-    // Optional: Add a loading state to the button while waiting
     let btn = document.activeElement;
     if (!btn || btn.tagName !== 'BUTTON') {
         btn = document.querySelector('#snoozeModal button:last-of-type'); 
@@ -737,15 +761,12 @@ async function confirmSnooze() {
 
         console.log("Snooze API Response:", res);
 
-        // 🔥 FORCE UI UPDATE
         document.getElementById('snoozeModal').classList.add('hidden');
 
         showCustomDialog("Success ✅", "Case Snoozed Successfully", false);
 
-        // 🔥 Delay so backend updates properly before reloading the feed
         setTimeout(() => {
             loadConversations();
-            // Close the detail view if it's currently open
             if(!document.getElementById('caseDetailView').classList.contains('hidden')) {
                 closeCaseDetail();
             }
@@ -755,7 +776,6 @@ async function confirmSnooze() {
         console.error("Snooze Error:", e);
         showCustomDialog("Error", "Failed to snooze.\n" + e.message, false);
     } finally {
-        // Reset button state
         if(btn) { btn.innerText = origText; btn.disabled = false; }
     }
 }
