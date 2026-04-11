@@ -67,8 +67,15 @@
          <button id="installAppBtn" class="hidden bg-indigo-600 text-white hover:bg-indigo-700 w-9 h-9 rounded-lg font-bold transition-all items-center justify-center border border-indigo-500 shadow-md mr-1 shrink-0 sm:hidden">
     <i class="fas fa-download"></i>
 </button>
-          
+         
           <div class="hidden sm:flex font-extrabold text-xl text-indigo-700 items-center tracking-tight mr-1 border-r border-slate-200 pr-4">CaseSys</div>
+
+          <button onclick="toggleNotifications()" class="relative">
+            🔔
+            <span id="notifCount" class="absolute top-0 right-0 bg-red-500 text-white text-xs px-1 rounded-full hidden">0</span>
+          </button>
+          <div id="notifPanel" class="hidden absolute right-2 top-12 bg-white shadow-xl rounded-xl w-72 max-h-80 overflow-y-auto z-50"></div>
+          
           <span id="loggedInUserEmail" class="text-xs sm:text-sm text-slate-600 font-bold hidden sm:block"></span>
           <button onclick="logoutUser()" class="hidden sm:flex text-red-600 hover:bg-red-50 px-4 py-1.5 rounded-lg font-bold transition-colors items-center justify-center border border-transparent" title="Logout">
             <i class="fas fa-sign-out-alt text-sm"></i>
