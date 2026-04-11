@@ -75,7 +75,8 @@ async function initNotifications(user) {
     }
 
     // ✅ 2. Service Worker (single)
-    const registration = await navigator.serviceWorker.register('service-worker.js');
+    const registration = await navigator.serviceWorker.getRegistration() 
+  || await navigator.serviceWorker.register('service-worker.js');
 
     // ✅ 3. Get Token
     const token = await messaging.getToken({
@@ -597,7 +598,6 @@ function showAppScreen(userObj) {
 // 🔥 WINDOW ONLOAD: 45 SEC BACKGROUND TASKS
 // ==========================================
 window.onload = function() {
-  // Wait 45 Seconds BEFORE loading heavy tasks in background
   setTimeout(() => {
     if (currentUser) {
         console.log("🔥 45 sec over: Loading background data...");
@@ -605,11 +605,11 @@ window.onload = function() {
         loadConversations();
         loadLabelsForForm();
         
-        if (typeof initNotifications === "function") {
-            initNotifications(currentUser);
-        }
+        // ❌ REMOVE THIS LINE
+        // initNotifications(currentUser);
+
     }
-  }, 45000); // Exactly 45 seconds focused delay
+  }, 45000);
 };
 
 
