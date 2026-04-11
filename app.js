@@ -513,28 +513,41 @@ async function loginUserHandler() {
   try {
     const res = await fetch(API_URL, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" }, // Keep CORS fix so it doesn't fail!
-      body: JSON.stringify({ action: "loginUser", mobileOrEmail: email, password: password })
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action: "loginUser",
+        mobileOrEmail: email,
+        password: password
+      })
     });
 
     const text = await res.text();
+
     let data;
-    try { data = JSON.parse(text); } catch { throw new Error("Invalid server response"); }
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("Invalid server response");
+    }
 
     if (data.success) {
-      showError("");
-      
-      let userData = data.user || { email: email, name: email.split('@')[0] };
+
+      let userData = data.user || {
+        email: email,
+        name: email.split('@')[0]
+      };
+
+      // ✅ SAVE USER
       localStorage.setItem("user", JSON.stringify(userData));
-      
-      // 🔥 IMPORTANT: DIRECT REDIRECT (TUMHARA ORIGINAL FLOW)
+
+      // 🔥 REDIRECT
       window.location.href = "dashboard.html";
-      return; // 🛑 yahin stop
 
     } else {
       showError(data.error || "Login failed. Incorrect credentials.");
-      showLoading(false); // Stop loader only if error occurs
+      showLoading(false);
     }
+
   } catch (err) {
     console.error("Login Error:", err);
     showError("Server is taking time. Please try again.");
