@@ -23,7 +23,6 @@ function checkAppUpdate() {
   }
 }
 
-// Optional: Manual force update button function for debugging
 window.forceUpdate = function() {
   caches.keys().then(keys => {
     keys.forEach(k => caches.delete(k));
@@ -43,7 +42,6 @@ const firebaseConfig = {
   appId: "1:399513476851:web:668ec94543bbe3c1186186"
 };
 
-// Initialize Firebase only once
 if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
@@ -159,7 +157,6 @@ async function apiCall(action, params = {}, retries = 2) {
     }
 
     try {
-        // 🔥 FIXED: CORS Bypass using text/plain
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
@@ -228,6 +225,10 @@ let hasMore = true;
 let lastTimestamp = 0;
 let seenMessages = new Set();
 let realtimeInterval = null;
+
+// ==========================================
+// 🔥 NOTIFICATIONS SYSTEM (UPDATED V11)
+// ==========================================
 let notifications = [];
 let unreadCount = 0;
 
@@ -258,10 +259,8 @@ function updateNotificationUI() {
   
   if (countEl) {
       if (unreadCount > 0) {
-        // Maximum 99+ show karega
         countEl.innerText = unreadCount > 99 ? '99+' : unreadCount;
         countEl.classList.remove("hidden");
-        // Pop animation
         countEl.classList.add("scale-110");
         setTimeout(() => countEl.classList.remove("scale-110"), 200);
       } else {
@@ -296,13 +295,11 @@ function updateNotificationUI() {
   }
 }
 
-// 🔥 FIXED: Event pass kiya taaki click karte hi bahar click ka conflict na ho
 function toggleNotifications(event) {
   if(event) event.stopPropagation();
   const panel = document.getElementById("notifPanel");
   if (panel) {
       panel.classList.toggle("hidden");
-      // Panel khulte hi count 0 kar do aur hide kar do
       if (!panel.classList.contains("hidden")) {
           unreadCount = 0;
           updateNotificationUI();
@@ -310,7 +307,6 @@ function toggleNotifications(event) {
   }
 }
 
-// 🔥 FIXED: Direct case open karega
 function openFromNotification(caseId) {
   const panel = document.getElementById("notifPanel");
   if (panel) panel.classList.add("hidden");
@@ -319,7 +315,14 @@ function openFromNotification(caseId) {
       showCustomDialog("Notice", "This notification is not linked to a specific case.", false);
       return;
   }
-  openCaseById(caseId); 
+  
+  // existing function to open case
+  const card = document.querySelector(`.card-main[data-conv-id="${caseId}"]`);
+  if (card) {
+      openCaseDetail(card);
+  } else {
+      showCustomDialog("Notice", "Case " + caseId + " is not currently visible in your feed. Please use the search bar.", false);
+  }
 }
 
 function clearAllNotifications() {
@@ -328,7 +331,6 @@ function clearAllNotifications() {
     updateNotificationUI();
 }
 
-// 🔥 FIXED: Jab screen pe kahin aur click ho toh dropdown band ho jaye
 document.addEventListener('click', function(e) {
     const panel = document.getElementById('notifPanel');
     const wrapper = document.getElementById('notifWrapper');
@@ -338,6 +340,7 @@ document.addEventListener('click', function(e) {
         }
     }
 });
+
 function debounce(func, wait) {
   let timeout;
   return function(...args) {
@@ -391,7 +394,6 @@ function checkComposerRestrictions(editor, type = 'main') {
 // DOM READY AND EVENT LISTENERS
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
-  // 🔥 AUTO UPDATE TRIGGER
   checkAppUpdate();
 
   fetch(API_URL, {
@@ -520,7 +522,6 @@ function closeDialog() { document.getElementById('customDialog').classList.add('
 // ==========================================
 // 🔥 SIMPLE DIRECT LOGIN LOGIC
 // ==========================================
-
 window.handleNextOrLogin = function() {
   const idVal = document.getElementById("email").value.trim();
   const pwd = document.getElementById("password").value.trim();
@@ -551,18 +552,14 @@ window.handleNextOrLogin = function() {
   .then(res => {
     loginBtn.disabled = false;
 
-    // 🔥 FIXED: Checking res.user directly
     if (res && res.user) {
-
       try {
         localStorage.setItem("user", JSON.stringify(res.user));
         sessionStorage.setItem("user", JSON.stringify(res.user));
       } catch(e) {
         console.log("Storage failed:", e);
       }
-
       showAppScreen(res.user);
-
     } else {
       statusEl.innerText = res.message || "Invalid Login";
     }
@@ -575,17 +572,14 @@ window.handleNextOrLogin = function() {
 
 function checkAuthStatus() {
   let user = null;
-
   try {
     user = JSON.parse(localStorage.getItem("user"));
   } catch(e) {}
-
   if (!user) {
     try {
       user = JSON.parse(sessionStorage.getItem("user"));
     } catch(e) {}
   }
-
   if (user) {
     showAppScreen(user);
     return;
@@ -1280,8 +1274,7 @@ function loadCommentsPaginated(caseId, reset = false) {
         }).catch(err => { isLoading = false; console.error(err); });
 }
 
-
-  // 🔥 REALTIME FETCH (OPTIMIZED & CLEAN)
+// 🔥 REALTIME FETCH (OPTIMIZED & CLEAN)
 async function fetchNewMessages() {
     const caseId = document.getElementById('detail-conv-id')?.value;
     
@@ -1348,7 +1341,7 @@ async function fetchNewMessages() {
     }
 }
   
-  window.setInlineType = function(btn, type) {
+window.setInlineType = function(btn, type) {
       const container = btn.closest('.flex.items-center');
       const valInput = container.querySelector('.inline-type-val');
       valInput.value = type;
@@ -1362,7 +1355,7 @@ async function fetchNewMessages() {
           askBtn.className = "inline-type-btn inline-ask-btn px-3 py-1 text-[10px] font-bold rounded-md bg-red-600 text-white shadow-sm transition-colors";
           replyBtn.className = "inline-type-btn inline-reply-btn px-3 py-1 text-[10px] font-bold rounded-md bg-white/60 text-slate-700 hover:bg-white shadow-sm transition-colors";
       }
-  };
+};
 
 function renderThreadHTML(list, level = 0) {
     return list.map(c => {
