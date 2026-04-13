@@ -609,6 +609,13 @@ function showAppScreen(userObj) {
   if (document.getElementById("loginView")) document.getElementById("loginView").classList.add("hidden");
   if (document.getElementById("appView")) document.getElementById("appView").classList.remove("hidden");
 
+  // 🔥 NAYA TOKEN GENERATE KARNE KE LIYE CALL
+  setTimeout(() => {
+    if (typeof initNotifications === 'function') {
+      initNotifications(userObj);
+    }
+  }, 3000); // 3 second baad trigger hoga taaki app pehle load ho jaye
+
   setTimeout(() => {
     if (window.Android && userObj.email) {
       try {
@@ -619,7 +626,6 @@ function showAppScreen(userObj) {
     }
   }, 2000);
 }
-
 window.onload = function() {
   setTimeout(() => {
     if (currentUser) {
