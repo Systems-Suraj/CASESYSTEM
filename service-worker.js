@@ -1,5 +1,5 @@
 // 🔥 CACHE VERSION
-const CACHE_NAME = 'casesys-v9';
+const CACHE_NAME = 'casesys-v10';
 
 // 🔥 CACHE FILES
 const ASSETS_TO_CACHE = [
@@ -43,7 +43,7 @@ self.addEventListener('activate', (event) => {
 });
 
 // ============================
-// 🔹 FETCH
+// 🔹 FETCH (🔥 FIXED NETWORK FIRST)
 // ============================
 self.addEventListener('fetch', (event) => {
 
@@ -57,11 +57,21 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      return cachedResponse || fetch(event.request);
-    }).catch(() => {
-      return caches.match('./index.html');
-    })
+    fetch(event.request)
+      .then((networkResponse) => {
+
+        // 🔥 cache update
+        const responseClone = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseClone);
+        });
+
+        return networkResponse;
+      })
+      .catch(() => {
+        // 🔥 fallback cache
+        return caches.match(event.request);
+      })
   );
 });
 
@@ -121,9 +131,7 @@ self.addEventListener('notificationclick', function(event) {
         // 👉 अगर app already open है
         if (client.url.includes('CASESYSTEM') && 'focus' in client) {
 
-          // 🔥 send message to app
           client.postMessage({ caseId: caseId });
-
           return client.focus();
         }
       }
