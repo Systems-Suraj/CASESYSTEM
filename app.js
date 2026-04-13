@@ -227,10 +227,11 @@ let seenMessages = new Set();
 let realtimeInterval = null;
 
 // ==========================================
-// 🔥 NOTIFICATIONS SYSTEM (UPDATED V11)
+// 🔥 GLOBAL UNREAD FETCHER & NOTIFICATIONS (V12)
 // ==========================================
 let notifications = [];
 let unreadCount = 0;
+let globalNotifInterval = null;
 
 function addNotification(msg) {
   // ❌ Apna khud ka message skip karo
@@ -316,7 +317,6 @@ function openFromNotification(caseId) {
       return;
   }
   
-  // existing function to open case
   const card = document.querySelector(`.card-main[data-conv-id="${caseId}"]`);
   if (card) {
       openCaseDetail(card);
@@ -329,6 +329,16 @@ function clearAllNotifications() {
     notifications = [];
     unreadCount = 0;
     updateNotificationUI();
+}
+
+async function fetchGlobalNotifications() {
+    if(!currentUser || !currentUser.email) return;
+    try {
+        const unread = await apiCall('getUnreadNotifications', { reqUserEmail: currentUser.email });
+        if(unread && unread.length > 0) {
+            unread.reverse().forEach(msg => addNotification(msg));
+        }
+    } catch(e) { console.log("Global fetch skipped", e); }
 }
 
 document.addEventListener('click', function(e) {
@@ -609,12 +619,19 @@ function showAppScreen(userObj) {
   if (document.getElementById("loginView")) document.getElementById("loginView").classList.add("hidden");
   if (document.getElementById("appView")) document.getElementById("appView").classList.remove("hidden");
 
-  // 🔥 NAYA TOKEN GENERATE KARNE KE LIYE CALL
+  // Fetch missed notifications for bell icon instantly on login
+  fetchGlobalNotifications();
+  
+  // Start background fetcher for missed updates (every 15s)
+  if(globalNotifInterval) clearInterval(globalNotifInterval);
+  globalNotifInterval = setInterval(fetchGlobalNotifications, 15000);
+
+  // Aggressive Token Initialization
   setTimeout(() => {
     if (typeof initNotifications === 'function') {
       initNotifications(userObj);
     }
-  }, 3000); // 3 second baad trigger hoga taaki app pehle load ho jaye
+  }, 2000); 
 
   setTimeout(() => {
     if (window.Android && userObj.email) {
@@ -626,6 +643,65 @@ function showAppScreen(userObj) {
     }
   }, 2000);
 }
+
+// ==========================================
+// 🔥 FIREBASE TOKEN GENERATOR & MULTI-DEVICE SYNC
+// ==========================================
+async function initNotifications(user) {
+  try {
+    console.log("🔥 Initializing Firebase for Web Push...");
+
+    // 1. Get explicitly granted permission
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      console.warn("❌ Web Push Permission Denied/Blocked by User.");
+      return;
+    }
+
+    // 2. Ensure Service Worker is fully registered and active
+    let registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) {
+      registration = await navigator.serviceWorker.register('service-worker.js');
+      console.log("✅ New SW Registered!");
+    }
+    
+    await navigator.serviceWorker.ready;
+    console.log("✅ SW Ready for Push!");
+
+    // 3. Generate Token Safely
+    const token = await messaging.getToken({
+      vapidKey: "BGF23YCUEVWA9ZKDyD0NduAyLU_Cijhc_ZsO2UMAb8kQTThWSEBMJjnE3Qq3Ad1ys4ms1vETk3KyBeffAx9lHEw",
+      serviceWorkerRegistration: registration
+    });
+
+    if (token) {
+      console.log("✅ WEB TOKEN OBTAINED:", token);
+      
+      // Determine actual platform logic
+      let currentPlatform = "web";
+      if (window.Android) {
+          currentPlatform = "android";
+      } else if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+          currentPlatform = "ios";
+      }
+
+      // 4. Send directly to database via apiCall
+      await apiCall('saveToken', {
+        person: user.name || user.email,
+        email: user.email,
+        token: token,
+        platform: currentPlatform
+      });
+
+      console.log(`✅ Token successfully synced for platform: ${currentPlatform}`);
+    } else {
+      console.warn("❌ Token generation returned null.");
+    }
+  } catch (err) {
+    console.error("❌ Notification Initialization Crash:", err);
+  }
+}
+
 window.onload = function() {
   setTimeout(() => {
     if (currentUser) {
