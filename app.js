@@ -1,4 +1,38 @@
 // ==========================================
+// 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
+// ==========================================
+const APP_VERSION = "v10";
+
+function checkAppUpdate() {
+  const storedVersion = localStorage.getItem("app_version");
+
+  if (!storedVersion) {
+    localStorage.setItem("app_version", APP_VERSION);
+    return;
+  }
+
+  if (storedVersion !== APP_VERSION) {
+    console.log("🔄 New version detected");
+
+    localStorage.setItem("app_version", APP_VERSION);
+
+    // 🔥 FORCE CLEAN RELOAD
+    setTimeout(() => {
+      window.location.reload(true);
+    }, 500);
+  }
+}
+
+// Optional: Manual force update button function for debugging
+window.forceUpdate = function() {
+  caches.keys().then(keys => {
+    keys.forEach(k => caches.delete(k));
+  }).then(() => {
+    window.location.reload(true);
+  });
+};
+
+// ==========================================
 // 🔥 FIREBASE INIT (TOP - ONE TIME ONLY)
 // ==========================================
 const firebaseConfig = {
@@ -51,7 +85,6 @@ if (firebase.messaging && firebase.messaging.isSupported && firebase.messaging.i
 // ==========================================
 // CONFIGURATION: REPLACE THIS URL!
 // ==========================================
-// 🔥 IMPORTANT: After you deploy Google Apps Script as "New Deployment", paste the new link below.
 const API_URL = "https://script.google.com/macros/s/AKfycbxXQKRXvgVI-ryItvnhOm0SzJzh03I72QlOMGCRA4GDPMV2f6t6xevUeMfGrMkz_OtS/exec"; 
 
 // ==========================================
@@ -126,17 +159,19 @@ async function apiCall(action, params = {}, retries = 2) {
     }
 
     try {
-     const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-        action: action,
-        params: params
-    }),
-    credentials: 'omit' // 🔥 IMPORTANT (Apps Script safe)
-});
+        // 🔥 FIXED: CORS Bypass using text/plain
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8' 
+            },
+            body: JSON.stringify({
+                action: action,
+                params: params
+            }),
+            credentials: 'omit' 
+        });
+        
         const text = await response.text();
         const result = JSON.parse(text);
         
@@ -274,6 +309,9 @@ function checkComposerRestrictions(editor, type = 'main') {
 // DOM READY AND EVENT LISTENERS
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
+  // 🔥 AUTO UPDATE TRIGGER
+  checkAppUpdate();
+
   fetch(API_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -398,10 +436,10 @@ function showCustomDialog(title, message, isConfirm, onConfirmCallback) {
 function closeDialog() { document.getElementById('customDialog').classList.add('hidden'); }
 
 // ==========================================
-// 🔥 SIMPLE DIRECT LOGIN LOGIC
+// 🔥 SIMPLE DIRECT LOGIN LOGIC (FIXED GLOBALLY)
 // ==========================================
 
-function handleNextOrLogin() {
+window.handleNextOrLogin = function() {
   const idVal = document.getElementById("email").value.trim();
   const pwd = document.getElementById("password").value.trim();
   const statusEl = document.getElementById("errorText");
@@ -431,6 +469,7 @@ function handleNextOrLogin() {
   .then(res => {
     loginBtn.disabled = false;
 
+    // 🔥 FIXED: Checking res.user directly
     if (res && res.user) {
 
       try {
@@ -450,7 +489,7 @@ function handleNextOrLogin() {
     loginBtn.disabled = false;
     statusEl.innerText = "Server Error: Make sure API_URL is correct.";
   });
-}
+};
 
 function checkAuthStatus() {
   let user = null;
@@ -471,7 +510,7 @@ function checkAuthStatus() {
   }
 }
 
-function logoutUser() { 
+window.logoutUser = function() { 
   localStorage.removeItem("user");
   sessionStorage.removeItem("user");
   currentUser = null;
@@ -482,7 +521,7 @@ function logoutUser() {
   document.getElementById("password").value = "";
   document.getElementById("errorText").style.display = "none";
   checkAuthStatus();
-}
+};
 
 function showAppScreen(userObj) {
   currentUser = userObj;
@@ -527,7 +566,7 @@ function escapeHTML(str) {
 // ==========================================
 // FILTERS & DROPDOWNS
 // ==========================================
-function switchTab(tab) {
+window.switchTab = function(tab) {
   currentTab = tab;
   ['Live', 'Snooze', 'Archive'].forEach(t => { 
     if(document.getElementById(`tab-${t}`)) {
@@ -546,7 +585,7 @@ function switchTab(tab) {
   document.querySelectorAll('.inline-mention-dropdown').forEach(d => d.classList.add('hidden'));
 
   applyFilters();
-}
+};
 
 function populateFilterDropdowns() {
     renderLookerDropdown('labelsDropdown', availableLabels, 'Label');
@@ -581,7 +620,7 @@ function renderLookerDropdown(containerId, items, type) {
     container.innerHTML = html;
 }
 
-function toggleDropdown(id, forceClose = false) {
+window.toggleDropdown = function(id, forceClose = false) {
     const drop = document.getElementById(id);
     if(!drop) return;
     if (forceClose) { drop.classList.add('hidden'); } else {
@@ -594,22 +633,22 @@ function toggleDropdown(id, forceClose = false) {
             if(search) { search.value = ''; searchInDropdown(search, id); }
         }
     }
-}
+};
 
 let dropdownSearchTimeout;
-function searchInDropdown(input, containerId) {
+window.searchInDropdown = function(input, containerId) {
     clearTimeout(dropdownSearchTimeout);
     const term = input.value.toLowerCase();
     dropdownSearchTimeout = setTimeout(() => {
         const items = document.getElementById(containerId).querySelectorAll('.dropdown-item');
         items.forEach(item => { item.style.display = item.dataset.search.includes(term) ? 'flex' : 'none'; });
     }, 150);
-}
+};
 
-function selectAllInDropdown(containerId) { document.getElementById(containerId).querySelectorAll('.dropdown-item').forEach(item => { if (item.style.display !== 'none') item.querySelector('input[type="checkbox"]').checked = true; }); }
-function clearAllInDropdown(containerId) { document.getElementById(containerId).querySelectorAll('.dropdown-item').forEach(item => { if (item.style.display !== 'none') item.querySelector('input[type="checkbox"]').checked = false; }); }
+window.selectAllInDropdown = function(containerId) { document.getElementById(containerId).querySelectorAll('.dropdown-item').forEach(item => { if (item.style.display !== 'none') item.querySelector('input[type="checkbox"]').checked = true; }); };
+window.clearAllInDropdown = function(containerId) { document.getElementById(containerId).querySelectorAll('.dropdown-item').forEach(item => { if (item.style.display !== 'none') item.querySelector('input[type="checkbox"]').checked = false; }); };
 
-function applyLookerFilters(containerId, type) {
+window.applyLookerFilters = function(containerId, type) {
     const allBoxes = document.getElementById(containerId).querySelectorAll('input[type="checkbox"]');
     allBoxes.forEach(cb => { if (cb.checked) cb.setAttribute('data-applied', 'true'); else cb.removeAttribute('data-applied'); });
     const appliedBoxes = Array.from(document.getElementById(containerId).querySelectorAll('input[type="checkbox"][data-applied="true"]'));
@@ -620,7 +659,7 @@ function applyLookerFilters(containerId, type) {
         else { btnText.innerText = `${appliedBoxes.length} Selected`; btnText.classList.add('text-indigo-700', 'font-extrabold'); }
     }
     toggleDropdown(containerId, true); applyFilters();
-}
+};
 
 const applyFilters = debounce(function() {
   const filterInput = document.getElementById('filterId');
@@ -652,7 +691,7 @@ const applyFilters = debounce(function() {
 // ==========================================
 // ACTIONS: ARCHIVE, SNOOZE
 // ==========================================
-function processBulkArchive() {
+window.processBulkArchive = function() {
   const selectedIds = Array.from(document.querySelectorAll('.bulk-archive-cb:checked')).map(cb => cb.closest('.card-main').dataset.convId);
   if(selectedIds.length === 0) return showCustomDialog("Notice", "Please select at least one case to archive.", false);
   showCustomDialog("Confirm Archive", `Are you sure you want to archive ${selectedIds.length} selected case(s)?\n\nCase IDs: \n${selectedIds.join('\n')}`, true, async () => {
@@ -660,22 +699,22 @@ function processBulkArchive() {
       try { await apiCall('bulkArchive', { ids: selectedIds, user: currentUser.email || currentUser.name }); loadConversations(); } catch(e) { showCustomDialog("Error", "Failed to archive.", false); }
       btn.innerText = "Archive Selected";
   });
-}
+};
 
-async function processUnarchive(btn) {
+window.processUnarchive = async function(btn) {
   const convId = btn.dataset.convId || btn.closest('.card-main').dataset.convId; 
   btn.innerText = "Unarchiving..."; btn.disabled = true;
   try { await apiCall('unarchiveCaseServer', { id: convId, user: currentUser.email || currentUser.name }); loadConversations();
   if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
   } catch(e) { showCustomDialog("Error", "Failed to unarchive.", false); btn.innerText = "📂 Un-Archive"; btn.disabled = false; }
-}
+};
 
-function openSnoozeModal(btn) { 
+window.openSnoozeModal = function(btn) { 
     document.getElementById('snoozeConvId').value = btn.dataset.convId || btn.closest('.card-main').dataset.convId;
     document.getElementById('snoozeModal').classList.remove('hidden');
-}
+};
 
-async function confirmSnooze() {
+window.confirmSnooze = async function() {
     const dt = document.getElementById('snoozeDateTime').value;
     if (!dt) { return showCustomDialog("Notice", "Please select a date/time.", false); }
     const timestamp = new Date(dt).getTime();
@@ -701,19 +740,19 @@ async function confirmSnooze() {
     } finally {
         if(btn) { btn.innerText = origText; btn.disabled = false; }
     }
-}
+};
 
-async function processUnsnooze(btn) {
+window.processUnsnooze = async function(btn) {
     const convId = btn.dataset.convId || btn.closest('.card-main').dataset.convId; 
     btn.innerText = "Un-snoozing..."; btn.disabled = true;
     try { await apiCall('unsnoozeCaseServer', { id: convId }); loadConversations(); if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
     } catch(e) { showCustomDialog("Error", "Failed to un-snooze.", false); btn.innerText = "🔔 Un-Snooze"; btn.disabled = false; }
-}
+};
 
-function openSnoozeModalFromCard(btn) {
+window.openSnoozeModalFromCard = function(btn) {
   document.getElementById('snoozeConvId').value = btn.closest('.card-main').dataset.convId;
   document.getElementById('snoozeModal').classList.remove('hidden');
-}
+};
 
 // ==========================================
 // MEMBER MANAGEMENT
@@ -735,7 +774,7 @@ function getFilteredUsersForMention(query) {
     return result.filter((u, index, self) => index === self.findIndex((t) => t.email === u.email));
 }
 
-const searchNewMember = debounce(function(q) {
+window.searchNewMember = debounce(function(q) {
    const dropdown = document.getElementById('member_search_dropdown');
    if(!q) { dropdown.classList.add('hidden'); return; }
    const filtered = allUsersList.filter(u => (u.name.toLowerCase().includes(q.toLowerCase()) || u.email.toLowerCase().includes(q.toLowerCase())) && !tempAdmins.includes(u.name) && !tempUsers.includes(u.name));
@@ -753,11 +792,11 @@ const searchNewMember = debounce(function(q) {
    dropdown.classList.remove('hidden');
 }, 200);
 
-function openManageMembers() {
+window.openManageMembers = function() {
    tempAdmins = [...currentCaseAdmins].filter(String); tempUsers = [...currentCaseUsers].filter(String);
    document.getElementById('manageMembersModal').classList.remove('hidden'); renderManageMembersList();
-}
-function closeManageMembers() { document.getElementById('manageMembersModal').classList.add('hidden'); document.getElementById('member_search_input').value = ''; document.getElementById('member_search_dropdown').classList.add('hidden'); }
+};
+window.closeManageMembers = function() { document.getElementById('manageMembersModal').classList.add('hidden'); document.getElementById('member_search_input').value = ''; document.getElementById('member_search_dropdown').classList.add('hidden'); };
 
 function renderManageMembersList() {
    let allMems = [];
@@ -779,11 +818,11 @@ function renderManageMembersList() {
    `).join('');
 }
 
-function updateTempRole(name, newRole) { tempAdmins = tempAdmins.filter(n => n !== name); tempUsers = tempUsers.filter(n => n !== name); if(newRole === 'Admin') tempAdmins.push(name); if(newRole === 'User') tempUsers.push(name); renderManageMembersList(); }
-function removeTempMember(name) { tempAdmins = tempAdmins.filter(n => n !== name); tempUsers = tempUsers.filter(n => n !== name); renderManageMembersList(); }
-function addNewTempMember(name, role) { tempAdmins = tempAdmins.filter(n => n !== name); tempUsers = tempUsers.filter(n => n !== name); if(role === 'Admin') tempAdmins.push(name); else tempUsers.push(name); document.getElementById('member_search_input').value = ''; document.getElementById('member_search_dropdown').classList.add('hidden'); renderManageMembersList(); }
+window.updateTempRole = function(name, newRole) { tempAdmins = tempAdmins.filter(n => n !== name); tempUsers = tempUsers.filter(n => n !== name); if(newRole === 'Admin') tempAdmins.push(name); if(newRole === 'User') tempUsers.push(name); renderManageMembersList(); };
+window.removeTempMember = function(name) { tempAdmins = tempAdmins.filter(n => n !== name); tempUsers = tempUsers.filter(n => n !== name); renderManageMembersList(); };
+window.addNewTempMember = function(name, role) { tempAdmins = tempAdmins.filter(n => n !== name); tempUsers = tempUsers.filter(n => n !== name); if(role === 'Admin') tempAdmins.push(name); else tempUsers.push(name); document.getElementById('member_search_input').value = ''; document.getElementById('member_search_dropdown').classList.add('hidden'); renderManageMembersList(); };
 
-async function saveManagedMembers() {
+window.saveManagedMembers = async function() {
    const btn = document.getElementById('saveMembersBtn'); btn.innerText = "Saving..."; btn.disabled = true;
    const convId = document.getElementById('detail-conv-id').value;
    try {
@@ -796,12 +835,12 @@ async function saveManagedMembers() {
        detAdm.innerHTML += `<button onclick="openManageMembers()" class="ml-1 text-blue-600 hover:text-blue-800 p-0.5 rounded-full hover:bg-blue-50 transition-colors" title="Manage Members"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>`;
        closeManageMembers(); loadConversations();
    } catch(e) { showCustomDialog("Error", "Failed to update members", false); } finally { btn.innerText = "Save Changes"; btn.disabled = false; }
-}
+};
 
 // ==========================================
 // MENTIONS & COMPOSER LOGIC
 // ==========================================
-function triggerMention() {
+window.triggerMention = function() {
   const editor = document.getElementById('detail-reply-input');
   editor.focus();
   const sel = window.getSelection(); let range;
@@ -809,10 +848,10 @@ function triggerMention() {
   const textNode = document.createTextNode(' @');
   range.insertNode(textNode); range.setStartAfter(textNode); range.setEndAfter(textNode);
   sel.removeAllRanges(); sel.addRange(range);
-  handleReplyTyping({target: editor});
-}
+  window.handleReplyTyping({target: editor});
+};
 
-function handleReplyTyping(e) {
+window.handleReplyTyping = function(e) {
   const editor = document.getElementById('detail-reply-input');
   const bubbles = editor.querySelectorAll('.mention-badge');
   const currentEmails = Array.from(bubbles).map(b => b.dataset.email);
@@ -837,7 +876,7 @@ function handleReplyTyping(e) {
       }
   }
   checkComposerRestrictions(editor, 'main');
-}
+};
 
 function showReplyUserList() {
     const dropdown = document.getElementById('reply_mention_dropdown');
@@ -852,15 +891,15 @@ function showReplyUserList() {
     if(filtered.length === 0) dropdown.innerHTML = `<div class="p-3 text-[11px] text-slate-400 font-bold uppercase tracking-widest text-center">No match found</div>`;
 }
 
-function selectReplyMentionUser(name, email) {
+window.selectReplyMentionUser = function(name, email) {
   const dropdown = document.getElementById('reply_mention_dropdown');
   const emailLower = email.toLowerCase(); const nameLower = name.toLowerCase();
   const isAdmin = currentCaseAdmins.some(a => a.toLowerCase().includes(emailLower) || a.toLowerCase().includes(nameLower));
   const isUser = currentCaseUsers.some(u => u.toLowerCase().includes(emailLower) || u.toLowerCase().includes(nameLower));
   const isCreator = (document.getElementById('detail-author').innerText || '').toLowerCase().includes(nameLower);
   
-  if (isAdmin || isCreator) finalizeReplyMention(name, email, 'Admin');
-  else if (isUser) finalizeReplyMention(name, email, 'User');
+  if (isAdmin || isCreator) window.finalizeReplyMention(name, email, 'Admin');
+  else if (isUser) window.finalizeReplyMention(name, email, 'User');
   else {
       if (!window.currentCaseHasAdminRights) {
           showCustomDialog("Action Blocked", "Only Case Admins can add new members.", false);
@@ -871,9 +910,9 @@ function selectReplyMentionUser(name, email) {
         <div onclick="finalizeReplyMention('${name}', '${email}', 'Admin')" class="p-2 hover:bg-blue-50 cursor-pointer border-b text-sm font-bold text-blue-700">👑 Admin</div>
         <div onclick="finalizeReplyMention('${name}', '${email}', 'User')" class="p-2 hover:bg-slate-50 cursor-pointer text-sm font-medium text-slate-700">👤 User</div>`;
   }
-}
+};
 
-function finalizeReplyMention(name, email, role) {
+window.finalizeReplyMention = function(name, email, role) {
   const emailLower = email.toLowerCase(); const nameLower = name.toLowerCase();
   const isAdmin = currentCaseAdmins.some(a => a.toLowerCase() === emailLower || a.toLowerCase() === nameLower);
   const isUser = currentCaseUsers.some(u => u.toLowerCase() === emailLower || u.toLowerCase() === nameLower);
@@ -902,9 +941,9 @@ function finalizeReplyMention(name, email, role) {
   document.getElementById('reply_mention_dropdown').classList.add('hidden'); renderReplyDynamicUI();
   
   checkComposerRestrictions(document.getElementById('detail-reply-input'), 'main');
-}
+};
 
-function setReplyGlobalType(type) { 
+window.setReplyGlobalType = function(type) { 
     replyComposerState.globalType = type; replyComposerState.recipients.forEach(r => r.type = type);
     const btnReply = document.getElementById('btn_global_reply'); const btnAsk = document.getElementById('btn_global_ask');
     if(type === 'Message') { 
@@ -915,7 +954,7 @@ function setReplyGlobalType(type) {
         btnReply.className = "px-2 sm:px-4 py-1 sm:py-1.5 rounded-md text-[10px] sm:text-xs font-extrabold transition-all text-slate-500 hover:text-slate-700";
     }
     renderReplyDynamicUI();
-}
+};
 
 function renderReplyDynamicUI() {
   const container = document.getElementById('reply_dynamic_type_area'); const globalSelector = document.getElementById('global_type_selector');
@@ -940,14 +979,14 @@ function renderReplyDynamicUI() {
   container.innerHTML = html;
 }
 
-function setReplyComposerMode(mode) { replyComposerState.mode = mode; renderReplyDynamicUI(); }
-function setReplyUserType(idx, type) { replyComposerState.recipients[idx].type = type; renderReplyDynamicUI(); }
-function setReplyUserText(idx, text) { replyComposerState.recipients[idx].customText = text; }
+window.setReplyComposerMode = function(mode) { replyComposerState.mode = mode; renderReplyDynamicUI(); };
+window.setReplyUserType = function(idx, type) { replyComposerState.recipients[idx].type = type; renderReplyDynamicUI(); };
+window.setReplyUserText = function(idx, text) { replyComposerState.recipients[idx].customText = text; };
 
 // ==========================================
 // EDIT CASE MODAL LOGIC
 // ==========================================
-function openEditCaseModal() {
+window.openEditCaseModal = function() {
     document.getElementById('edit_subject').value = document.getElementById('detail-subject').innerText;
     document.getElementById('edit_details').value = document.getElementById('detail-details').innerText;
     currentEditLabels = new Set(Array.from(document.getElementById('detail-labels').children).map(span => span.innerText));
@@ -958,24 +997,24 @@ function openEditCaseModal() {
     if(card) currentEditAttachments = JSON.parse(card.dataset.attachmentsData || '[]').filter(String);
     newEditPendingFiles = []; renderEditAttachments();
     document.getElementById('editCaseModal').classList.remove('hidden');
-}
+};
 
 function renderEditLabels() {
     document.getElementById('edit_labels_container').innerHTML = availableLabels.map(label => `<span onclick="toggleEditLabel('${label}')" class="cursor-pointer px-3 py-1.5 rounded-full text-[10px] font-bold transition-all shadow-sm border ${currentEditLabels.has(label) ? 'bg-green-800 text-white border-green-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">${label}</span>`).join('');
 }
 
-function toggleEditLabel(label) { currentEditLabels.has(label) ? currentEditLabels.delete(label) : currentEditLabels.add(label); renderEditLabels(); }
+window.toggleEditLabel = function(label) { currentEditLabels.has(label) ? currentEditLabels.delete(label) : currentEditLabels.add(label); renderEditLabels(); };
 
 function renderEditAttachments() {
     document.getElementById('edit_current_attachments').innerHTML = currentEditAttachments.map((url, i) => `<span class="bg-blue-50 text-blue-700 border border-blue-100 text-[10px] px-2 py-1 rounded flex gap-1 items-center font-bold shadow-sm">🔗 File ${i+1} <button type="button" onclick="removeCurrentEditAttachment(${i})" class="text-blue-400 hover:text-blue-700 ml-1 leading-none">&times;</button></span>`).join('');
     document.getElementById('edit_new_file_list').innerHTML = newEditPendingFiles.map((f, i) => `<span class="bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] px-2 py-1 rounded flex gap-1 items-center font-bold shadow-sm">${f.name} <button type="button" onclick="removeNewEditFile(${i})" class="text-indigo-400 hover:text-indigo-700 ml-1 leading-none">&times;</button></span>`).join('');
 }
 
-function removeCurrentEditAttachment(index) { currentEditAttachments.splice(index, 1); renderEditAttachments(); }
-function handleEditFileSelect(e) { Array.from(e.target.files).forEach(f => { if(newEditPendingFiles.length < 10) newEditPendingFiles.push(f); }); renderEditAttachments(); }
-function removeNewEditFile(index) { newEditPendingFiles.splice(index, 1); renderEditAttachments(); }
+window.removeCurrentEditAttachment = function(index) { currentEditAttachments.splice(index, 1); renderEditAttachments(); };
+window.handleEditFileSelect = function(e) { Array.from(e.target.files).forEach(f => { if(newEditPendingFiles.length < 10) newEditPendingFiles.push(f); }); renderEditAttachments(); };
+window.removeNewEditFile = function(index) { newEditPendingFiles.splice(index, 1); renderEditAttachments(); };
 
-async function saveCaseEdits() {
+window.saveCaseEdits = async function() {
     const btn = document.getElementById('saveEditBtn'); btn.innerText = "Saving..."; btn.disabled = true;
     try {
         let finalUrls = [...currentEditAttachments];
@@ -990,17 +1029,17 @@ async function saveCaseEdits() {
         document.getElementById('editCaseModal').classList.add('hidden');
         loadConversations(); closeCaseDetail(); 
     } catch(e) { showCustomDialog("Error", "Failed to save edits.", false); } finally { btn.innerText = "Save Changes"; btn.disabled = false; }
-}
+};
 
 // ==========================================
 // DETAIL VIEW & REPLIES
 // ==========================================
-function handleCardClick(event, cardEl) {
+window.handleCardClick = function(event, cardEl) {
    if (event.target.closest('button') || event.target.closest('label') || event.target.closest('.archive-cb-container') || event.target.closest('a')) return;
-   openCaseDetail(cardEl);
-}
+   window.openCaseDetail(cardEl);
+};
 
-function openCaseDetail(cardEl) {
+window.openCaseDetail = function(cardEl) {
   try {
       const card = cardEl.closest('.card-main'); const dataset = card.dataset; const convId = dataset.convId;
       document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]').innerText; 
@@ -1046,7 +1085,7 @@ function openCaseDetail(cardEl) {
       
       replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' };
       document.getElementById('detail-reply-input').innerHTML = ''; 
-      setReplyGlobalType('Message');
+      window.setReplyGlobalType('Message');
       
       checkComposerRestrictions(document.getElementById('detail-reply-input'), 'main');
 
@@ -1062,9 +1101,9 @@ function openCaseDetail(cardEl) {
 
       loadCommentsPaginated(convId, true);
   } catch(e) { console.error("Open Case Error:", e); }
-}
+};
 
-function closeCaseDetail() { 
+window.closeCaseDetail = function() { 
     if (realtimeInterval) {
         clearInterval(realtimeInterval);
         realtimeInterval = null;
@@ -1077,9 +1116,9 @@ function closeCaseDetail() {
     document.querySelectorAll('.inline-mention-dropdown').forEach(d => d.classList.add('hidden'));
     ['Live', 'Snooze', 'Archive'].forEach(t => { if(document.getElementById(`tab-${t}`)) document.getElementById(`tab-${t}`).style.display = ''; });
     loadConversations();
-}
+};
 
-function handleReplyFileSelect(e) {
+window.handleReplyFileSelect = function(e) {
     if (!document.getElementById('detail-reply-input').querySelector('.mention-badge')) {
         e.target.value = '';
         return showCustomDialog("Notice ⚠️", "Pehle kisi ko @mention karein tabhi attachment use kar sakte hain.", false);
@@ -1089,13 +1128,13 @@ function handleReplyFileSelect(e) {
         if(!pendingReplyFiles.some(pf => pf.name === file.name)) pendingReplyFiles.push(file); 
     });
     renderReplyFileList();
-}
+};
 
 function renderReplyFileList() { 
     const fileListEl = document.getElementById('reply_file_list');
     if(fileListEl) fileListEl.innerHTML = pendingReplyFiles.map((f, i) => `<span class="bg-indigo-50 text-indigo-700 border border-indigo-100 text-[11px] px-2 py-1 rounded-md flex gap-1 items-center font-bold shadow-sm">${f.name} <button type="button" onclick="removeReplyFile(${i})" class="text-indigo-400 hover:text-indigo-700 ml-1 font-extrabold">&times;</button></span>`).join('');
 }
-function removeReplyFile(index) { pendingReplyFiles.splice(index, 1); renderReplyFileList(); }
+window.removeReplyFile = function(index) { pendingReplyFiles.splice(index, 1); renderReplyFileList(); };
 
 // ==========================================
 // ⚡ OPTIMISTIC UI: THREAD & COMMENT SYSTEM
@@ -1228,7 +1267,7 @@ async function fetchNewMessages() {
     }
 }
 
-function setInlineType(btn, type) {
+window.setInlineType = function(btn, type) {
     const container = btn.closest('.flex.items-center');
     const valInput = container.querySelector('.inline-type-val');
     valInput.value = type;
@@ -1242,7 +1281,7 @@ function setInlineType(btn, type) {
         askBtn.className = "inline-type-btn inline-ask-btn px-3 py-1 text-[10px] font-bold rounded-md bg-red-600 text-white shadow-sm transition-colors";
         replyBtn.className = "inline-type-btn inline-reply-btn px-3 py-1 text-[10px] font-bold rounded-md bg-white/60 text-slate-700 hover:bg-white shadow-sm transition-colors";
     }
-}
+};
 
 function renderThreadHTML(list, level = 0) {
     return list.map(c => {
@@ -1305,7 +1344,7 @@ function renderThreadHTML(list, level = 0) {
 }
 
 // ⚡ COMPLETELY OPTIMISTIC: Updates UI instantly BEFORE waiting for server
-async function submitDetailReply() {
+window.submitDetailReply = async function() {
     const inputDiv = document.getElementById('detail-reply-input');
     const msgHTML = inputDiv.innerHTML.trim();
     if (!inputDiv.querySelector('.mention-badge')) {
@@ -1366,7 +1405,7 @@ async function submitDetailReply() {
         // 2. Clear Composer UI Instantly
         inputDiv.innerHTML = ''; pendingReplyFiles = []; 
         if(document.getElementById('reply_file_list')) renderReplyFileList();
-        replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' }; setReplyGlobalType('Message');
+        replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' }; window.setReplyGlobalType('Message');
         checkComposerRestrictions(document.getElementById('detail-reply-input'), 'main');
         
         // 3. Re-render the chat feed and scroll to bottom
@@ -1384,9 +1423,9 @@ async function submitDetailReply() {
     } finally { 
         submitBtn.disabled = false; submitBtn.innerText = originalText; 
     }
-}
+};
 
-function toggleInlineReply(btn) {
+window.toggleInlineReply = function(btn) {
     const container = btn.closest('[data-id="reply-container"]');
     const replyBox = container.querySelector('[data-id="inline-reply-box"]');
     if (replyBox.classList.contains('hidden')) {
@@ -1403,9 +1442,9 @@ function toggleInlineReply(btn) {
     } else {
         replyBox.classList.add('hidden');
     }
-}
+};
 
-function handleInlineFileSelect(e, inputEl) {
+window.handleInlineFileSelect = function(e, inputEl) {
     activeInlineBox = inputEl.closest('[data-id="inline-reply-box"]');
     if (!activeInlineBox.querySelector('.inline-reply-input').querySelector('.mention-badge')) {
         e.target.value = '';
@@ -1416,15 +1455,15 @@ function handleInlineFileSelect(e, inputEl) {
         if(!inlinePendingFiles.some(pf => pf.name === file.name)) inlinePendingFiles.push(file); 
     });
     renderInlineFileList(); inputEl.value = ''; 
-}
+};
 
 function renderInlineFileList() {
     if(!activeInlineBox) return;
     activeInlineBox.querySelector('.inline-file-list').innerHTML = inlinePendingFiles.map((f, i) => `<span class="bg-indigo-50 text-indigo-700 border border-indigo-100 text-[9px] px-1.5 py-0.5 rounded flex gap-1 items-center font-bold shadow-sm">${f.name} <button type="button" onclick="removeInlineFile(${i})" class="text-indigo-400 hover:text-indigo-700 ml-1">&times;</button></span>`).join('');
 }
-function removeInlineFile(index) { inlinePendingFiles.splice(index, 1); renderInlineFileList(); }
+window.removeInlineFile = function(index) { inlinePendingFiles.splice(index, 1); renderInlineFileList(); };
 
-function triggerInlineMention(btn) {
+window.triggerInlineMention = function(btn) {
     activeInlineBox = btn.closest('[data-id="inline-reply-box"]');
     const editor = activeInlineBox.querySelector('.inline-reply-input');
     editor.focus();
@@ -1433,10 +1472,10 @@ function triggerInlineMention(btn) {
     const textNode = document.createTextNode(' @');
     range.insertNode(textNode); range.setStartAfter(textNode); range.setEndAfter(textNode);
     sel.removeAllRanges(); sel.addRange(range);
-    handleInlineTyping({target: editor}); 
-}
+    window.handleInlineTyping({target: editor}); 
+};
 
-function handleInlineTyping(e) {
+window.handleInlineTyping = function(e) {
     activeInlineBox = e.target.closest('[data-id="inline-reply-box"]');
     const dropdown = activeInlineBox.querySelector('.inline-mention-dropdown');
     const editor = e.target;
@@ -1469,9 +1508,9 @@ function handleInlineTyping(e) {
     }
     
     checkComposerRestrictions(editor, 'inline');
-}
+};
 
-function selectInlineMentionUser(name, email) {
+window.selectInlineMentionUser = function(name, email) {
     if(!activeInlineBox) return;
     const dropdown = activeInlineBox.querySelector('.inline-mention-dropdown');
     const emailLower = email.toLowerCase(); const nameLower = name.toLowerCase();
@@ -1485,8 +1524,8 @@ function selectInlineMentionUser(name, email) {
     });
     const isCreator = (document.getElementById('detail-author').innerText || '').toLowerCase().includes(nameLower);
     
-    if (isAdmin || isCreator) { finalizeInlineMention(name, email, 'Admin'); }
-    else if (isUser) { finalizeInlineMention(name, email, 'User'); }
+    if (isAdmin || isCreator) { window.finalizeInlineMention(name, email, 'Admin'); }
+    else if (isUser) { window.finalizeInlineMention(name, email, 'User'); }
     else {
         if (!window.currentCaseHasAdminRights) {
             showCustomDialog("Action Blocked", "Only Case Admins can add new members to this thread.", false);
@@ -1498,9 +1537,9 @@ function selectInlineMentionUser(name, email) {
           <div onclick="finalizeInlineMention('${name}', '${email}', 'Admin')" class="p-2 hover:bg-blue-50 cursor-pointer border-b text-xs font-bold text-blue-700">👑 Admin</div>
           <div onclick="finalizeInlineMention('${name}', '${email}', 'User')" class="p-2 hover:bg-slate-50 cursor-pointer text-xs font-medium text-slate-700">👤 User</div>`;
     }
-}
+};
 
-function finalizeInlineMention(name, email, role) {
+window.finalizeInlineMention = function(name, email, role) {
     if(!activeInlineBox) return;
 
     const emailLower = email.toLowerCase();
@@ -1544,10 +1583,10 @@ function finalizeInlineMention(name, email, role) {
     activeInlineBox.querySelector('.inline-mention-dropdown').classList.add('hidden');
     
     checkComposerRestrictions(activeInlineBox.querySelector('.inline-reply-input'), 'inline');
-}
+};
 
 // ⚡ COMPLETELY OPTIMISTIC INLINE SUBMIT
-async function submitInlineReply(btn) {
+window.submitInlineReply = async function(btn) {
     const container = btn.closest('[data-id="reply-container"]'); const replyBox = container.querySelector('[data-id="inline-reply-box"]');
     const inputDiv = replyBox.querySelector('.inline-reply-input');
     const msgHTML = inputDiv.innerHTML.trim();
@@ -1613,27 +1652,27 @@ async function submitInlineReply(btn) {
     } finally {
         btn.disabled = false; btn.innerText = originalText;
     }
-}
+};
 
 // ==========================================
 // CREATE NEW CASE MODAL & UPLOADS
 // ==========================================
 async function fetchUsersForMentions() { try { allUsersList = await apiCall('getUsers'); populateFilterDropdowns(); } catch(e) {} }
-function handleFileSelect(e) { addFiles(e.target.files); } 
-function handleDrop(e) { e.preventDefault(); addFiles(e.dataTransfer.files); } 
+window.handleFileSelect = function(e) { addFiles(e.target.files); }; 
+window.handleDrop = function(e) { e.preventDefault(); addFiles(e.dataTransfer.files); }; 
 function addFiles(files) { Array.from(files).forEach(file => { if(pendingFiles.length >= 10) return; if(!pendingFiles.some(pf => pf.name === file.name)) pendingFiles.push(file); }); renderFileList(); } 
 function renderFileList() { document.getElementById('file_list').innerHTML = pendingFiles.map((f, i) => `<span class="bg-slate-200 text-xs px-2 py-1 rounded flex gap-1 items-center font-medium">${f.name} <button type="button" onclick="removeFile(${i})" class="text-red-500 hover:text-red-700 font-bold ml-1">&times;</button></span>`).join(''); } 
-function removeFile(index) { pendingFiles.splice(index, 1); renderFileList(); }
+window.removeFile = function(index) { pendingFiles.splice(index, 1); renderFileList(); };
 
 async function loadLabelsForForm() { availableLabels = await apiCall('getLabels'); renderLabels(); populateFilterDropdowns(); } 
 function renderLabels() { document.getElementById('labels_container').innerHTML = availableLabels.map(label => `<span onclick="toggleLabel('${label}')" class="cursor-pointer px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm border ${selectedLabels.has(label) ? 'bg-green-800 text-white border-green-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">${label}</span>`).join(''); } 
-function toggleLabel(label) { selectedLabels.has(label) ? selectedLabels.delete(label) : selectedLabels.add(label); renderLabels(); } 
-async function createNewLabel() { const val = document.getElementById('new_label_input').value.trim(); if(!val) return; await apiCall('addLabel', {label: val}); availableLabels.push(val); selectedLabels.add(val); document.getElementById('new_label_input').value = ''; renderLabels(); populateFilterDropdowns(); }
+window.toggleLabel = function(label) { selectedLabels.has(label) ? selectedLabels.delete(label) : selectedLabels.add(label); renderLabels(); }; 
+window.createNewLabel = async function() { const val = document.getElementById('new_label_input').value.trim(); if(!val) return; await apiCall('addLabel', {label: val}); availableLabels.push(val); selectedLabels.add(val); document.getElementById('new_label_input').value = ''; renderLabels(); populateFilterDropdowns(); };
 
-function openModal() { document.getElementById('appModal').classList.remove('hidden'); pendingFiles = []; renderFileList(); document.getElementById('f_message_plain').value = ''; document.getElementById('new_case_member_search').value = ''; composerRecipients = []; composerRecipients.push({ name: currentUser.name || currentUser.email, email: currentUser.email, role: 'Admin' }); renderNewCaseMembers(); } 
-function closeModal() { document.getElementById('appModal').classList.add('hidden'); document.getElementById('convForm').reset(); }
+window.openModal = function() { document.getElementById('appModal').classList.remove('hidden'); pendingFiles = []; renderFileList(); document.getElementById('f_message_plain').value = ''; document.getElementById('new_case_member_search').value = ''; composerRecipients = []; composerRecipients.push({ name: currentUser.name || currentUser.email, email: currentUser.email, role: 'Admin' }); window.renderNewCaseMembers(); }; 
+window.closeModal = function() { document.getElementById('appModal').classList.add('hidden'); document.getElementById('convForm').reset(); };
 
-async function handleFormSubmit(e) { 
+window.handleFormSubmit = async function(e) { 
     e.preventDefault(); const btn = document.getElementById('submitBtn'); btn.disabled = true; btn.innerText = 'Uploading...';
     try {
         let fileUrls = [];
@@ -1645,9 +1684,9 @@ async function handleFormSubmit(e) {
             } 
         } 
         const payload = { createdBy: currentUser.email || currentUser.name, subject: document.getElementById('f_subject').value, details: document.getElementById('f_details').value, message: document.getElementById('f_message_plain').value || '', labels: Array.from(selectedLabels), adminEmails: composerRecipients.filter(r => r.role === 'Admin').map(r => r.email), userEmails: composerRecipients.filter(r => r.role === 'User').map(r => r.email), attachments: fileUrls };
-        await apiCall('createCase', payload); closeModal(); loadConversations(); 
+        await apiCall('createCase', payload); window.closeModal(); loadConversations(); 
     } catch(err) { showCustomDialog("Error", "Failed to create case.\n" + err.toString(), false); } finally { btn.disabled = false; btn.innerText = 'Post Case'; } 
-}
+};
 
 // ==========================================
 // LOAD CONVERSATIONS (DASHBOARD FEED)
@@ -1698,7 +1737,7 @@ async function loadConversations() {
       fragment.appendChild(card);
     });
     
-    feed.appendChild(fragment); switchTab(currentTab); 
+    feed.appendChild(fragment); window.switchTab(currentTab); 
   } catch(e) { console.error(e); }
 }
 
