@@ -190,7 +190,7 @@ async function apiCall(action, params = {}, retries = 2) {
 }
 
 // ==========================================
-// STATE VARIABLES & NOTIFICATIONS
+// STATE VARIABLES
 // ==========================================
 let currentUser = null; 
 let availableLabels = [];
@@ -229,23 +229,52 @@ let lastTimestamp = 0;
 let seenMessages = new Set();
 let realtimeInterval = null;
 
+// ==========================================
+// 🔥 NOTIFICATIONS SYSTEM (UPDATED)
+// ==========================================
 let notifications = [];
+let unreadCount = 0;
 
-function addNotification(data) {
-  notifications.unshift(data);
-  document.getElementById("notifCount").innerText = notifications.length;
-  document.getElementById("notifCount").classList.remove("hidden");
-  renderNotifications();
+function addNotification(msg) {
+  // ❌ apna message skip (Added fallback handling for FCM payload differences)
+  if (currentUser && (msg.sender === currentUser.email || msg.sender === currentUser.name)) return;
+
+  const notif = {
+    id: msg.uniqueId || Date.now() + Math.random().toString(),
+    text: msg.text || msg.body || "New update",
+    caseId: msg.caseId || "",
+    sender: msg.sender || msg.title || "System",
+    time: msg.timestamp || Date.now()
+  };
+
+  // duplicate avoid
+  if (notifications.some(n => n.id === notif.id)) return;
+
+  notifications.unshift(notif);
+  unreadCount++;
+
+  updateNotificationUI();
 }
 
-function renderNotifications() {
+function updateNotificationUI() {
+  const countEl = document.getElementById("notifCount");
+
+  if (countEl) {
+      if (unreadCount > 0) {
+        countEl.innerText = unreadCount;
+        countEl.classList.remove("hidden");
+      } else {
+        countEl.classList.add("hidden");
+      }
+  }
+
   const panel = document.getElementById("notifPanel");
-  if(panel) {
+  if (panel) {
       panel.innerHTML = notifications.map(n => `
-        <div class="p-3 border-b cursor-pointer hover:bg-gray-50"
-             onclick="openCase('${n.caseId}')">
-          <div class="font-bold">${n.title}</div>
-          <div class="text-sm text-gray-500">${n.body}</div>
+        <div class="p-3 border-b cursor-pointer hover:bg-gray-100"
+             onclick="openFromNotification('${n.caseId}')">
+          <div class="text-sm font-bold">${n.sender}</div>
+          <div class="text-xs text-gray-600 line-clamp-2">${n.text}</div>
         </div>
       `).join("");
   }
@@ -253,7 +282,29 @@ function renderNotifications() {
 
 function toggleNotifications() {
   const panel = document.getElementById("notifPanel");
-  if(panel) panel.classList.toggle("hidden");
+  if (panel) panel.classList.toggle("hidden");
+
+  // open karte hi read mark
+  unreadCount = 0;
+  updateNotificationUI();
+}
+
+function openFromNotification(caseId) {
+  const panel = document.getElementById("notifPanel");
+  if (panel) panel.classList.add("hidden");
+
+  openCaseById(caseId); // 👈 existing function
+}
+
+// Helper to open case natively
+function openCaseById(caseId) {
+    if(!caseId) return;
+    const card = document.querySelector(`.card-main[data-conv-id="${caseId}"]`);
+    if (card) {
+        openCaseDetail(card);
+    } else {
+        showCustomDialog("Notice", "Case " + caseId + " is not currently visible in your feed. Please use the search bar.", false);
+    }
 }
 
 function debounce(func, wait) {
@@ -436,7 +487,7 @@ function showCustomDialog(title, message, isConfirm, onConfirmCallback) {
 function closeDialog() { document.getElementById('customDialog').classList.add('hidden'); }
 
 // ==========================================
-// 🔥 SIMPLE DIRECT LOGIN LOGIC (FIXED GLOBALLY)
+// 🔥 SIMPLE DIRECT LOGIN LOGIC
 // ==========================================
 
 window.handleNextOrLogin = function() {
@@ -1230,6 +1281,11 @@ async function fetchNewMessages() {
             if (msg.timestamp > lastTimestamp) {
                 lastTimestamp = msg.timestamp;
             }
+
+            // ==========================================
+            // 🔥 NEW NOTIFICATION TRIGGER INTEGRATION
+            // ==========================================
+            addNotification(msg);
 
             // ===================================
             // 🔥 OPTION 2 → MARK SEEN (ONLY IF NOT)
