@@ -619,86 +619,66 @@ function showAppScreen(userObj) {
   if (document.getElementById("loginView")) document.getElementById("loginView").classList.add("hidden");
   if (document.getElementById("appView")) document.getElementById("appView").classList.remove("hidden");
 
-  // Fetch missed notifications for bell icon instantly on login
+  // 🔥 Fetch missed notifications for bell icon instantly
   fetchGlobalNotifications();
-  
-  // Start background fetcher for missed updates (every 15s)
   if(globalNotifInterval) clearInterval(globalNotifInterval);
   globalNotifInterval = setInterval(fetchGlobalNotifications, 15000);
 
-  // Aggressive Token Initialization
-  setTimeout(() => {
-    if (typeof initNotifications === 'function') {
-      initNotifications(userObj);
-    }
-  }, 2000); 
+  // 🔥 REMOVED DELAY: Chrome ko spam na lage isliye instantly call hoga
+  if (typeof initNotifications === 'function') {
+     initNotifications(userObj);
+  }
 
   setTimeout(() => {
     if (window.Android && userObj.email) {
-      try {
-        Android.sendUserEmail(userObj.email);
-      } catch(e) {
-        console.log("Android bridge error", e);
-      }
+      try { Android.sendUserEmail(userObj.email); } catch(e) {}
     }
   }, 2000);
 }
-
 // ==========================================
 // 🔥 FIREBASE TOKEN GENERATOR & MULTI-DEVICE SYNC
 // ==========================================
 async function initNotifications(user) {
   try {
-    console.log("🔥 Initializing Firebase for Web Push...");
+    console.log("🔥 Checking Web Token for:", user.email);
 
-    // 1. Get explicitly granted permission
+    if (!('Notification' in window)) {
+        console.log("❌ This browser does not support desktop notification");
+        return;
+    }
+
+    // Request permission explicitly
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {
-      console.warn("❌ Web Push Permission Denied/Blocked by User.");
+      console.warn("❌ Web Push Permission Denied by User!");
+      // 🔥 ALERT TO USER: Agar token nahi banega toh yahan reason pata chal jayega
+      alert("⚠️ Web Notifications Blocked: Please click the Lock 🔒 icon in the URL bar and ALLOW Notifications!");
       return;
     }
 
-    // 2. Ensure Service Worker is fully registered and active
-    let registration = await navigator.serviceWorker.getRegistration();
-    if (!registration) {
-      registration = await navigator.serviceWorker.register('service-worker.js');
-      console.log("✅ New SW Registered!");
-    }
-    
+    const registration = await navigator.serviceWorker.register('service-worker.js');
     await navigator.serviceWorker.ready;
-    console.log("✅ SW Ready for Push!");
+    console.log("✅ Service Worker Ready!");
 
-    // 3. Generate Token Safely
     const token = await messaging.getToken({
       vapidKey: "BGF23YCUEVWA9ZKDyD0NduAyLU_Cijhc_ZsO2UMAb8kQTThWSEBMJjnE3Qq3Ad1ys4ms1vETk3KyBeffAx9lHEw",
       serviceWorkerRegistration: registration
     });
 
     if (token) {
-      console.log("✅ WEB TOKEN OBTAINED:", token);
-      
-      // Determine actual platform logic
-      let currentPlatform = "web";
-      if (window.Android) {
-          currentPlatform = "android";
-      } else if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
-          currentPlatform = "ios";
-      }
-
-      // 4. Send directly to database via apiCall
+      console.log("✅ WEB TOKEN GENERATED:", token);
       await apiCall('saveToken', {
         person: user.name || user.email,
         email: user.email,
         token: token,
-        platform: currentPlatform
+        platform: "web" // explicitly 'web'
       });
-
-      console.log(`✅ Token successfully synced for platform: ${currentPlatform}`);
+      console.log("✅ Web Token Saved to Database!");
     } else {
-      console.warn("❌ Token generation returned null.");
+      console.log("❌ No web token could be generated.");
     }
   } catch (err) {
-    console.error("❌ Notification Initialization Crash:", err);
+    console.error("❌ Notification Error in app.js:", err);
   }
 }
 
