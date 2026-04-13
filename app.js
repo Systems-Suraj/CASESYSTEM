@@ -236,8 +236,17 @@ let notifications = [];
 let unreadCount = 0;
 
 function addNotification(msg) {
-  // ❌ apna message skip (Added fallback handling for FCM payload differences)
-  if (currentUser && (msg.sender === currentUser.email || msg.sender === currentUser.name)) return;
+  // ❌ apna message skip (🔥 FIXED: Case Insensitive & Trimmed)
+  if (msg.sender && currentUser?.email &&
+      msg.sender.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) {
+    return;
+  }
+
+  // Fallback check for name as well, just in case sender is passing a name
+  if (msg.sender && currentUser?.name && 
+      msg.sender.toLowerCase().trim() === currentUser.name.toLowerCase().trim()) {
+    return;
+  }
 
   const notif = {
     id: msg.uniqueId || Date.now() + Math.random().toString(),
@@ -255,7 +264,6 @@ function addNotification(msg) {
 
   updateNotificationUI();
 }
-
 function updateNotificationUI() {
   const countEl = document.getElementById("notifCount");
 
@@ -1250,6 +1258,7 @@ function loadCommentsPaginated(caseId, reset = false) {
 }
 
 // 🔥 REALTIME FETCH (MATCHING YOUR API)
+// 🔥 REALTIME FETCH (MATCHING YOUR API)
 async function fetchNewMessages() {
 
     const caseId = document.getElementById('detail-conv-id').value;
@@ -1285,6 +1294,8 @@ async function fetchNewMessages() {
             // ==========================================
             // 🔥 NEW NOTIFICATION TRIGGER INTEGRATION
             // ==========================================
+            console.log("📩 Incoming:", msg.sender, msg.text); // 👉 DEBUG LOG 1
+            console.log("🔔 Calling notification");            // 👉 DEBUG LOG 2
             addNotification(msg);
 
             // ===================================
