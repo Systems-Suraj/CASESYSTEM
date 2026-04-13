@@ -229,48 +229,62 @@ let lastTimestamp = 0;
 let seenMessages = new Set();
 let realtimeInterval = null;
 
+<div id="notifWrapper" class="relative flex items-center">
+            <button onclick="toggleNotifications(event)" class="relative p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-full transition-colors flex items-center justify-center">
+              <i class="fas fa-bell text-xl"></i>
+              <span id="notifCount" class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full hidden border-2 border-white transform translate-x-1/4 -translate-y-1/4 shadow-sm">0</span>
+            </button>
+            <div id="notifPanel" class="hidden absolute right-0 top-full mt-2 w-[320px] bg-white border border-slate-200 shadow-2xl rounded-xl max-h-[400px] overflow-y-auto z-[100] origin-top-right"></div>
+          </div>
+          ```
+
+---
+
+### 🔥 STEP 2: `app.js` Logic Fix (Engine Upgrade)
+Ab `app.js` open kar aur apna **🔥 NOTIFICATIONS SYSTEM** wala poora block is naye block se replace kar de. Isme maine click issues, duplicate counts, aur panel closing bugs fix kar diye hain.
+
+**Replace the entire Notification System block with this:**
+
+```javascript
 // ==========================================
-// 🔥 NOTIFICATIONS SYSTEM (UPDATED)
+// 🔥 NOTIFICATIONS SYSTEM (UPDATED V11)
 // ==========================================
 let notifications = [];
 let unreadCount = 0;
 
 function addNotification(msg) {
-  // ❌ apna message skip (🔥 FIXED: Case Insensitive & Trimmed)
-  if (msg.sender && currentUser?.email &&
-      msg.sender.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) {
-    return;
-  }
-
-  // Fallback check for name as well, just in case sender is passing a name
-  if (msg.sender && currentUser?.name && 
-      msg.sender.toLowerCase().trim() === currentUser.name.toLowerCase().trim()) {
-    return;
-  }
+  // ❌ Apna khud ka message skip karo
+  if (msg.sender && currentUser?.email && msg.sender.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return;
+  if (msg.sender && currentUser?.name && msg.sender.toLowerCase().trim() === currentUser.name.toLowerCase().trim()) return;
 
   const notif = {
     id: msg.uniqueId || Date.now() + Math.random().toString(),
-    text: msg.text || msg.body || "New update",
+    text: msg.text || msg.body || "New activity on your case",
     caseId: msg.caseId || "",
     sender: msg.sender || msg.title || "System",
     time: msg.timestamp || Date.now()
   };
 
-  // duplicate avoid
+  // Duplicate rokne ke liye
   if (notifications.some(n => n.id === notif.id)) return;
 
   notifications.unshift(notif);
   unreadCount++;
-
+  
   updateNotificationUI();
 }
+
 function updateNotificationUI() {
   const countEl = document.getElementById("notifCount");
-
+  
   if (countEl) {
       if (unreadCount > 0) {
-        countEl.innerText = unreadCount;
+        // Maximum 99+ show karega
+        countEl.innerText = unreadCount > 99 ? '99+' : unreadCount;
         countEl.classList.remove("hidden");
+        // Pop animation
+        countEl.classList.add("scale-110");
+        setTimeout(() => countEl.classList.remove("scale-110"), 200);
       } else {
         countEl.classList.add("hidden");
       }
@@ -278,43 +292,73 @@ function updateNotificationUI() {
 
   const panel = document.getElementById("notifPanel");
   if (panel) {
-      panel.innerHTML = notifications.map(n => `
-        <div class="p-3 border-b cursor-pointer hover:bg-gray-100"
-             onclick="openFromNotification('${n.caseId}')">
-          <div class="text-sm font-bold">${n.sender}</div>
-          <div class="text-xs text-gray-600 line-clamp-2">${n.text}</div>
-        </div>
-      `).join("");
+      if (notifications.length === 0) {
+          panel.innerHTML = `<div class="p-5 text-center text-sm text-slate-500 font-medium">No new notifications</div>`;
+      } else {
+          panel.innerHTML = `
+            <div class="px-4 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
+                <span class="font-extrabold text-sm text-slate-800">Notifications</span>
+                <button onclick="clearAllNotifications()" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2 py-1 rounded-md">Clear All</button>
+            </div>
+            <div class="divide-y divide-slate-100">
+                ${notifications.map(n => `
+                  <div class="p-4 cursor-pointer hover:bg-indigo-50 transition-colors flex flex-col gap-1.5"
+                       onclick="openFromNotification('${n.caseId}')">
+                    <div class="flex justify-between items-start">
+                        <span class="text-sm font-bold text-slate-800">${escapeHTML(n.sender.split('@')[0])}</span>
+                        <span class="text-[9px] text-slate-400 font-bold tracking-wider">${new Date(n.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    </div>
+                    <div class="text-xs text-slate-600 line-clamp-2 leading-relaxed">${escapeHTML(n.text)}</div>
+                  </div>
+                `).join("")}
+            </div>
+          `;
+      }
   }
 }
 
-function toggleNotifications() {
+// 🔥 FIXED: Event pass kiya taaki click karte hi bahar click ka conflict na ho
+function toggleNotifications(event) {
+  if(event) event.stopPropagation();
   const panel = document.getElementById("notifPanel");
-  if (panel) panel.classList.toggle("hidden");
-
-  // open karte hi read mark
-  unreadCount = 0;
-  updateNotificationUI();
+  if (panel) {
+      panel.classList.toggle("hidden");
+      // Panel khulte hi count 0 kar do aur hide kar do
+      if (!panel.classList.contains("hidden")) {
+          unreadCount = 0;
+          updateNotificationUI();
+      }
+  }
 }
 
+// 🔥 FIXED: Direct case open karega
 function openFromNotification(caseId) {
   const panel = document.getElementById("notifPanel");
   if (panel) panel.classList.add("hidden");
 
-  openCaseById(caseId); // 👈 existing function
+  if(!caseId) {
+      showCustomDialog("Notice", "This notification is not linked to a specific case.", false);
+      return;
+  }
+  openCaseById(caseId); 
 }
 
-// Helper to open case natively
-function openCaseById(caseId) {
-    if(!caseId) return;
-    const card = document.querySelector(`.card-main[data-conv-id="${caseId}"]`);
-    if (card) {
-        openCaseDetail(card);
-    } else {
-        showCustomDialog("Notice", "Case " + caseId + " is not currently visible in your feed. Please use the search bar.", false);
+function clearAllNotifications() {
+    notifications = [];
+    unreadCount = 0;
+    updateNotificationUI();
+}
+
+// 🔥 FIXED: Jab screen pe kahin aur click ho toh dropdown band ho jaye
+document.addEventListener('click', function(e) {
+    const panel = document.getElementById('notifPanel');
+    const wrapper = document.getElementById('notifWrapper');
+    if (panel && !panel.classList.contains('hidden')) {
+        if (wrapper && !wrapper.contains(e.target)) {
+            panel.classList.add('hidden');
+        }
     }
-}
-
+});
 function debounce(func, wait) {
   let timeout;
   return function(...args) {
