@@ -1370,19 +1370,24 @@ window.submitDetailReply = async function() {
 
         let payloadToSend;
         if (replyComposerState.mode === 'DIFFERENT' && replyComposerState.recipients.length > 0) {
-            payloadToSend = replyComposerState.recipients.map(r => ({
-                caseId: caseId, text: (r.customText && r.customText.trim() !== '') ? r.customText.trim() : msgHTML, mentionType: r.type || 'Message', sender: currentUser.email, receiver: r.email, parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName
-            }));
+            payloadToSend = replyComposerState.recipients.map(r => {
+                const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); // 🔥 FIX 1
+                return {
+                    caseId: caseId, text: (r.customText && r.customText.trim() !== '') ? r.customText.trim() : msgHTML, mentionType: r.type || 'Message', sender: currentUser.email, receiver: r.email, parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName,
+                    uniqueId: tempId // 🔥 FIX 2
+                };
+            });
         } else {
-            payloadToSend = { caseId: caseId, text: msgHTML, mentionType: replyComposerState.globalType || 'Message', sender: currentUser.email, receiver: replyComposerState.recipients.map(r => r.email).join(','), parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName };
+            const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); // 🔥 FIX 1
+            payloadToSend = { caseId: caseId, text: msgHTML, mentionType: replyComposerState.globalType || 'Message', sender: currentUser.email, receiver: replyComposerState.recipients.map(r => r.email).join(','), parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId }; // 🔥 FIX 2
         }
 
         // ⚡ 1. INSTANT LOCAL UI UPDATE (0ms lag)
         const localSenderName = currentUser.name || currentUser.email;
         const payloads = Array.isArray(payloadToSend) ? payloadToSend : [payloadToSend];
         payloads.forEach(p => {
-             const tempId = "temp_" + Date.now() + "_" + Math.random();
-             seenMessages.add(tempId); // 🔥 Track to avoid duplication
+             const tempId = p.uniqueId; // 🔥 FIX 3
+             seenMessages.add(tempId); // 🔥 BONUS: Track to avoid duplication
              
              allLoadedComments.push({
                  caseId: p.caseId,
@@ -1396,7 +1401,7 @@ window.submitDetailReply = async function() {
                  askId: '', 
                  status: '',
                  parentAskId: p.parentAskId || '',
-                 uniqueId: tempId,
+                 uniqueId: tempId, // 🔥 FIX 3
                  threadId: p.threadId || 'LOCAL-T-' + Math.random(),
                  threadColor: p.threadColor || '#f8fafc'
              });
@@ -1614,12 +1619,12 @@ window.submitInlineReply = async function(btn) {
             if(result && result.url) { fileUrl = result.url; fileName = result.name || file.name; }
         }
 
-        const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName };
+        const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); // 🔥 FIX 1
+        const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId }; // 🔥 FIX 2
 
         // ⚡ 1. INSTANT LOCAL UI RENDER
         const localSenderName = currentUser.name || currentUser.email;
-        const tempId = "temp_" + Date.now() + "_" + Math.random();
-        seenMessages.add(tempId); // 🔥 Track to avoid duplication
+        seenMessages.add(tempId); // 🔥 BONUS: Track to avoid duplication
         
         allLoadedComments.push({
              caseId: caseId,
@@ -1633,7 +1638,7 @@ window.submitInlineReply = async function(btn) {
              askId: '', 
              status: '',
              parentAskId: payload.parentAskId,
-             uniqueId: tempId,
+             uniqueId: tempId, // 🔥 FIX 3
              threadId: payload.threadId || 'LOCAL-T-' + Math.random(),
              threadColor: payload.threadColor || '#f8fafc'
          });
