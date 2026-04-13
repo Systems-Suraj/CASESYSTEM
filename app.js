@@ -228,27 +228,6 @@ let hasMore = true;
 let lastTimestamp = 0;
 let seenMessages = new Set();
 let realtimeInterval = null;
-
-<div id="notifWrapper" class="relative flex items-center">
-            <button onclick="toggleNotifications(event)" class="relative p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-full transition-colors flex items-center justify-center">
-              <i class="fas fa-bell text-xl"></i>
-              <span id="notifCount" class="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full hidden border-2 border-white transform translate-x-1/4 -translate-y-1/4 shadow-sm">0</span>
-            </button>
-            <div id="notifPanel" class="hidden absolute right-0 top-full mt-2 w-[320px] bg-white border border-slate-200 shadow-2xl rounded-xl max-h-[400px] overflow-y-auto z-[100] origin-top-right"></div>
-          </div>
-          ```
-
----
-
-### 🔥 STEP 2: `app.js` Logic Fix (Engine Upgrade)
-Ab `app.js` open kar aur apna **🔥 NOTIFICATIONS SYSTEM** wala poora block is naye block se replace kar de. Isme maine click issues, duplicate counts, aur panel closing bugs fix kar diye hain.
-
-**Replace the entire Notification System block with this:**
-
-```javascript
-// ==========================================
-// 🔥 NOTIFICATIONS SYSTEM (UPDATED V11)
-// ==========================================
 let notifications = [];
 let unreadCount = 0;
 
