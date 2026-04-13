@@ -285,23 +285,23 @@ function updateNotificationUI() {
           panel.innerHTML = `<div class="p-5 text-center text-sm text-slate-500 font-medium">No new notifications</div>`;
       } else {
           panel.innerHTML = `
-            <div class="px-4 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
-                <span class="font-extrabold text-sm text-slate-800">Notifications</span>
-                <button onclick="clearAllNotifications()" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2 py-1 rounded-md">Clear All</button>
-            </div>
-            <div class="divide-y divide-slate-100">
-                ${notifications.map(n => `
-  <div class="p-4 cursor-pointer hover:bg-indigo-50 transition-colors flex flex-col gap-1.5 border-b border-slate-50 last:border-0"
-       onclick="openFromNotification('${n.caseId}', '${n.id}')">
-    <div class="flex justify-between items-start">
-        <span class="text-sm font-bold text-slate-800">${escapeHTML(n.sender.split('@')[0])}</span>
-        <span class="text-[9px] text-slate-400 font-bold tracking-wider">${new Date(n.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+    <div class="px-4 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
+        <span class="font-extrabold text-sm text-slate-800">Notifications</span>
+        <button onclick="clearAllNotifications()" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2 py-1 rounded-md">Clear All</button>
     </div>
-    <div class="text-xs text-slate-600 line-clamp-2 leading-relaxed">${escapeHTML(n.text)}</div>
-  </div>
-`).join("")}
+    <div class="divide-y divide-slate-100">
+        ${notifications.map(n => `
+          <div class="p-4 cursor-pointer hover:bg-indigo-50 transition-colors flex flex-col gap-1.5"
+               onclick="openFromNotification('${n.caseId}', '${n.id}')">
+            <div class="flex justify-between items-start">
+                <span class="text-sm font-bold text-slate-800">${escapeHTML(n.sender.split('@')[0])}</span>
+                <span class="text-[9px] text-slate-400 font-bold tracking-wider">${new Date(n.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
             </div>
-          `;
+            <div class="text-xs text-slate-600 line-clamp-2 leading-relaxed">${escapeHTML(n.text)}</div>
+          </div>
+        `).join("")}
+    </div>
+`;
       }
   }
 }
@@ -318,36 +318,36 @@ function toggleNotifications(event) {
   }
 }
 
+// 🔥 UPDATED: Pehle Case khulega, phir Col P mein entry hogi
 async function openFromNotification(caseId, uniqueId) {
   const panel = document.getElementById("notifPanel");
   if (panel) panel.classList.add("hidden");
 
-  if(!caseId) {
-      showCustomDialog("Notice", "This notification is not linked to a specific case.", false);
-      return;
-  }
+  if(!caseId) return;
 
-  // 1. Backend ko batao ki user ne dekh liya (Silent update)
-  if (uniqueId && currentUser?.email) {
-      console.log("Marking as seen:", uniqueId);
-      apiCall('markSeen', { 
-          notificationId: uniqueId, 
-          userEmail: currentUser.email 
-      }).catch(e => console.log("Seen update failed", e));
-  }
-
-  // 2. Local array se bhi hata do taaki instantly bell count kam ho jaye
-  notifications = notifications.filter(n => n.id !== uniqueId);
-  unreadCount = notifications.length;
-  updateNotificationUI();
-
-  // 3. Case Open karo
+  // 1. Pehle DOM mein card dhoondo aur Case Open karo
   const card = document.querySelector(`.card-main[data-conv-id="${caseId}"]`);
+  
   if (card) {
-      openCaseDetail(card);
+      // Case open function call (UI transition)
+      window.openCaseDetail(card); 
+
+      // 2. Case successfully khulne ke BAAD hi Backend ko Seen mark karo
+      if (uniqueId && currentUser?.email) {
+          console.log("Opening case first, then marking seen:", uniqueId);
+          
+          apiCall('markSeen', { 
+              notificationId: uniqueId, 
+              userEmail: currentUser.email 
+          }).then(() => {
+              // 3. Seen hone ke baad bell list se hata do taaki count kam ho jaye
+              notifications = notifications.filter(n => n.id !== uniqueId);
+              unreadCount = notifications.length;
+              updateNotificationUI();
+          }).catch(e => console.log("Col P update failed", e));
+      }
   } else {
-      // Agar card feed mein nahi hai toh search ka option do
-      showCustomDialog("Notice", `Case ${caseId} is currently not in your live feed. Please search for it.`, false);
+      showCustomDialog("Notice", "Case " + caseId + " is not in your current list. Please use search.", false);
   }
 }
 function clearAllNotifications() {
