@@ -15,32 +15,38 @@ if (!firebase.apps.length) {
 }
 
 let messaging = null;
-if (firebase.messaging.isSupported()) {
+
+if (firebase.messaging && firebase.messaging.isSupported && firebase.messaging.isSupported()) {
   messaging = firebase.messaging();
+
+  messaging.onMessage((payload) => {
+    try {
+      console.log("🔥 Foreground message:", payload);
+      const data = payload?.data || {};
+      let title = data.title || "Case Update";
+      let body = data.body || "";
+      const caseId = data.caseId || "";
+
+      if (!body || body.trim() === "") return;
+
+      if (typeof addNotification === "function") {
+        addNotification(data);
+      }
+
+      if (typeof showToast === "function") {
+        showToast(title, body, caseId);
+      } else {
+        console.log("🔔 " + title + " - " + body);
+      }
+
+    } catch (err) {
+      console.error("❌ Foreground notification error:", err);
+    }
+  });
+
+} else {
+  console.log("⚠️ Firebase messaging not supported on this device");
 }
-
-messaging.onMessage((payload) => {
-  try {
-    console.log("🔥 Foreground message:", payload);
-    const data = payload?.data || {};
-    let title = data.title || "Case Update";
-    let body = data.body || "";
-    const caseId = data.caseId || "";
-
-    if (!body || body.trim() === "") return;
-
-    if (typeof addNotification === "function") {
-      addNotification(data);
-    }
-    if (typeof showToast === "function") {
-      showToast(title, body, caseId);
-    } else {
-      console.log("🔔 " + title + " - " + body);
-    }
-  } catch (err) {
-    console.error("❌ Foreground notification error:", err);
-  }
-});
 
 // ==========================================
 // CONFIGURATION: REPLACE THIS URL!
@@ -424,17 +430,18 @@ function handleNextOrLogin() {
   })
   .then(res => {
     loginBtn.disabled = false;
-    if (res && res.status === "success") {
 
-   try {
-  localStorage.setItem("user", JSON.stringify(res.user));
-  sessionStorage.setItem("user", JSON.stringify(res.user)); // 🔥 backup
-} catch(e) {
-  console.log("Storage failed:", e);
-     }
+    if (res && res.user) {
 
-    showAppScreen(res.user);
-}
+      try {
+        localStorage.setItem("user", JSON.stringify(res.user));
+        sessionStorage.setItem("user", JSON.stringify(res.user));
+      } catch(e) {
+        console.log("Storage failed:", e);
+      }
+
+      showAppScreen(res.user);
+
     } else {
       statusEl.innerText = res.message || "Invalid Login";
     }
