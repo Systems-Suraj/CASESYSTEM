@@ -120,12 +120,17 @@ async function apiCall(action, params = {}, retries = 2) {
     }
 
     try {
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ action: action, params: params })
-        });
-        
+     const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+        action: action,
+        params: params
+    }),
+    credentials: 'omit' // 🔥 IMPORTANT (Apps Script safe)
+});
         const text = await response.text();
         const result = JSON.parse(text);
         
@@ -420,8 +425,16 @@ function handleNextOrLogin() {
   .then(res => {
     loginBtn.disabled = false;
     if (res && res.status === "success") {
-      localStorage.setItem("user", JSON.stringify(res.user));
-      showAppScreen(res.user);
+
+   try {
+  localStorage.setItem("user", JSON.stringify(res.user));
+  sessionStorage.setItem("user", JSON.stringify(res.user)); // 🔥 backup
+} catch(e) {
+  console.log("Storage failed:", e);
+     }
+
+    showAppScreen(res.user);
+}
     } else {
       statusEl.innerText = res.message || "Invalid Login";
     }
@@ -433,12 +446,27 @@ function handleNextOrLogin() {
 }
 
 function checkAuthStatus() {
-  const localUser = localStorage.getItem("user");
-  if (localUser) { showAppScreen(JSON.parse(localUser)); return; }
+  let user = null;
+
+  try {
+    user = JSON.parse(localStorage.getItem("user"));
+  } catch(e) {}
+
+  if (!user) {
+    try {
+      user = JSON.parse(sessionStorage.getItem("user"));
+    } catch(e) {}
+  }
+
+  if (user) {
+    showAppScreen(user);
+    return;
+  }
 }
 
 function logoutUser() { 
   localStorage.removeItem("user");
+  sessionStorage.removeItem("user");
   currentUser = null;
   document.getElementById("appView").classList.add("hidden"); 
   document.getElementById("loginView").classList.remove("hidden");
@@ -460,12 +488,12 @@ function showAppScreen(userObj) {
   if (document.getElementById("appView")) document.getElementById("appView").classList.remove("hidden");
 
   setTimeout(() => {
-    try {
-      if (window.Android && userObj.email) {
+    if (window.Android && userObj.email) {
+      try {
         Android.sendUserEmail(userObj.email);
+      } catch(e) {
+        console.log("Android bridge error", e);
       }
-    } catch (e) {
-      console.error(e);
     }
   }, 2000);
 }
