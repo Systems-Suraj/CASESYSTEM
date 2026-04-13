@@ -233,14 +233,21 @@ let notifications = [];
 let unreadCount = 0;
 let globalNotifInterval = null;
 
+// 🔥 Ting Sound ka link
+const tingSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+
 function addNotification(msg) {
   // ❌ Apna khud ka message skip karo
   if (msg.sender && currentUser?.email && msg.sender.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return;
   if (msg.sender && currentUser?.name && msg.sender.toLowerCase().trim() === currentUser.name.toLowerCase().trim()) return;
 
+  // 🔥 HTML Tags (jaise <span...>) ko hatane ke liye Regex
+  let cleanText = msg.text || msg.body || "New activity on your case";
+  cleanText = cleanText.replace(/<[^>]*>?/gm, ''); // Sirf plain text bachega
+
   const notif = {
     id: msg.uniqueId || Date.now() + Math.random().toString(),
-    text: msg.text || msg.body || "New activity on your case",
+    text: cleanText, // Cleaned text use kar rahe hain
     caseId: msg.caseId || "",
     sender: msg.sender || msg.title || "System",
     time: msg.timestamp || Date.now()
@@ -252,6 +259,9 @@ function addNotification(msg) {
   notifications.unshift(notif);
   unreadCount++;
   
+  // 🔥 Play Ting Sound (Agar browser allow kare)
+  tingSound.play().catch(e => console.log("Sound blocked by browser interaction policy"));
+
   updateNotificationUI();
 }
 
