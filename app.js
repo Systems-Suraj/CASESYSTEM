@@ -1,7 +1,7 @@
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v10";
+const APP_VERSION = "v11";
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -1257,15 +1257,15 @@ function loadCommentsPaginated(caseId, reset = false) {
         }).catch(err => { isLoading = false; console.error(err); });
 }
 
-// 🔥 REALTIME FETCH (MATCHING YOUR API)
-// 🔥 REALTIME FETCH (MATCHING YOUR API)
-async function fetchNewMessages() {
 
-    const caseId = document.getElementById('detail-conv-id').value;
+  // 🔥 REALTIME FETCH (OPTIMIZED & CLEAN)
+async function fetchNewMessages() {
+    const caseId = document.getElementById('detail-conv-id')?.value;
+    
+    // Agar case view open nahi hai, toh API call mat karo
     if (!caseId || document.getElementById("caseDetailView").classList.contains("hidden")) return;
 
     try {
-
         const messages = await apiCall('getNewComments', {
             caseId: caseId,
             lastTimestamp: lastTimestamp
@@ -1276,35 +1276,29 @@ async function fetchNewMessages() {
         let hasNew = false;
 
         messages.forEach(msg => {
-
             const id = msg.uniqueId || (msg.timestamp + msg.sender);
 
-            // 🔥 duplicate stop
+            // 🔥 Duplicate stop
             if (seenMessages.has(id)) return;
 
             seenMessages.add(id);
             allLoadedComments.push(msg);
             hasNew = true;
 
-            // 🔥 update timestamp
+            // 🔥 Update timestamp
             if (msg.timestamp > lastTimestamp) {
                 lastTimestamp = msg.timestamp;
             }
 
-            // ==========================================
-            // 🔥 NEW NOTIFICATION TRIGGER INTEGRATION
-            // ==========================================
-            console.log("📩 Incoming:", msg.sender, msg.text); // 👉 DEBUG LOG 1
-            console.log("🔔 Calling notification");            // 👉 DEBUG LOG 2
+            // 🔥 Call Notification (apna khud ka message addNotification function andar filter kar dega)
             addNotification(msg);
 
-            // ===================================
-            // 🔥 OPTION 2 → MARK SEEN (ONLY IF NOT)
-            // ===================================
+            // 🔥 Mark as seen on backend if not already seen by this user
             if (!msg.seen || !msg.seen.includes(currentUser.email)) {
-
+                // Async background hit (no need to wait for response)
                 fetch(API_URL, {
                     method: "POST",
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({
                         action: "markSeen",
                         params: {
@@ -1312,43 +1306,40 @@ async function fetchNewMessages() {
                             userEmail: currentUser.email
                         }
                     })
-                });
-
+                }).catch(() => console.log("Silent background update failed."));
             }
-
         });
 
         if (hasNew) {
-
             renderAllCommentsLocally();
-
+            
+            // Auto scroll down for new messages
             setTimeout(() => {
                 const scrollArea = document.getElementById("detail-thread-container").parentElement;
                 if (scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
             }, 50);
-
         }
 
     } catch (err) {
-        console.error("Realtime error:", err);
+        console.error("Realtime fetch skipped due to network or sync:", err);
     }
 }
-
-window.setInlineType = function(btn, type) {
-    const container = btn.closest('.flex.items-center');
-    const valInput = container.querySelector('.inline-type-val');
-    valInput.value = type;
-    
-    const replyBtn = container.querySelector('.inline-reply-btn');
-    const askBtn = container.querySelector('.inline-ask-btn');
-    if (type === 'Reply') {
-        replyBtn.className = "inline-type-btn inline-reply-btn px-3 py-1 text-[10px] font-bold rounded-md bg-indigo-600 text-white shadow-sm transition-colors";
-        askBtn.className = "inline-type-btn inline-ask-btn px-3 py-1 text-[10px] font-bold rounded-md bg-white/60 text-slate-700 hover:bg-white shadow-sm transition-colors";
-    } else {
-        askBtn.className = "inline-type-btn inline-ask-btn px-3 py-1 text-[10px] font-bold rounded-md bg-red-600 text-white shadow-sm transition-colors";
-        replyBtn.className = "inline-type-btn inline-reply-btn px-3 py-1 text-[10px] font-bold rounded-md bg-white/60 text-slate-700 hover:bg-white shadow-sm transition-colors";
-    }
-};
+  
+  window.setInlineType = function(btn, type) {
+      const container = btn.closest('.flex.items-center');
+      const valInput = container.querySelector('.inline-type-val');
+      valInput.value = type;
+      
+      const replyBtn = container.querySelector('.inline-reply-btn');
+      const askBtn = container.querySelector('.inline-ask-btn');
+      if (type === 'Reply') {
+          replyBtn.className = "inline-type-btn inline-reply-btn px-3 py-1 text-[10px] font-bold rounded-md bg-indigo-600 text-white shadow-sm transition-colors";
+          askBtn.className = "inline-type-btn inline-ask-btn px-3 py-1 text-[10px] font-bold rounded-md bg-white/60 text-slate-700 hover:bg-white shadow-sm transition-colors";
+      } else {
+          askBtn.className = "inline-type-btn inline-ask-btn px-3 py-1 text-[10px] font-bold rounded-md bg-red-600 text-white shadow-sm transition-colors";
+          replyBtn.className = "inline-type-btn inline-reply-btn px-3 py-1 text-[10px] font-bold rounded-md bg-white/60 text-slate-700 hover:bg-white shadow-sm transition-colors";
+      }
+  };
 
 function renderThreadHTML(list, level = 0) {
     return list.map(c => {
