@@ -233,7 +233,6 @@ let notifications = [];
 let unreadCount = 0;
 let globalNotifInterval = null;
 
-// 🔥 Ting Sound ka link
 const tingSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
 
 function addNotification(msg) {
@@ -243,7 +242,6 @@ function addNotification(msg) {
   let cleanText = msg.text || msg.body || "New activity on your case";
   cleanText = cleanText.replace(/<[^>]*>?/gm, '');
 
-  // 🔥 Stable ID prevents duplicates even if uniqueId is missing
   const notifId = msg.uniqueId || (msg.caseId + "_" + msg.timestamp + "_" + msg.sender);
 
   const notif = {
@@ -252,7 +250,7 @@ function addNotification(msg) {
     caseId: msg.caseId || "",
     sender: msg.sender || msg.title || "System",
     time: msg.timestamp || Date.now(),
-    type: msg.type || 'Message', // Capture Ask/Reply type
+    type: msg.type || 'Message', 
     askId: msg.askId || msg.parentAskId || ''
   };
 
@@ -329,12 +327,10 @@ async function openFromNotification(caseId, uniqueId) {
   if (card) {
       window.openCaseDetail(card); 
 
-      // 🔥 Check if it's an Ask. If yes, KEEP it in the notifications list
       const notif = notifications.find(n => n.id === uniqueId);
       if (notif && notif.type === 'Ask') {
           console.log("Opened an Ask. It will remain in notifications until replied.");
       } else {
-          // Normal message: Mark seen and remove
           if (uniqueId && currentUser?.email) {
               apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email }).then(() => {
                   notifications = notifications.filter(n => n.id !== uniqueId);
@@ -642,12 +638,10 @@ function showAppScreen(userObj) {
   if (document.getElementById("loginView")) document.getElementById("loginView").classList.add("hidden");
   if (document.getElementById("appView")) document.getElementById("appView").classList.remove("hidden");
 
-  // 🔥 Fetch missed notifications for bell icon instantly
   fetchGlobalNotifications();
   if(globalNotifInterval) clearInterval(globalNotifInterval);
   globalNotifInterval = setInterval(fetchGlobalNotifications, 15000);
 
-  // 🔥 REMOVED DELAY: Chrome ko spam na lage isliye instantly call hoga
   if (typeof initNotifications === 'function') {
      initNotifications(userObj);
   }
@@ -670,11 +664,9 @@ async function initNotifications(user) {
         return;
     }
 
-    // Request permission explicitly
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {
       console.warn("❌ Web Push Permission Denied by User!");
-      // 🔥 ALERT TO USER: Agar token nahi banega toh yahan reason pata chal jayega
       alert("⚠️ Web Notifications Blocked: Please click the Lock 🔒 icon in the URL bar and ALLOW Notifications!");
       return;
     }
@@ -707,7 +699,7 @@ async function initNotifications(user) {
 
 window.onload = function() {
   if (currentUser) {
-    fetchUsersForMentions();   // ✅ instant load
+    fetchUsersForMentions(); 
     loadConversations();
     loadLabelsForForm();
   }
@@ -849,8 +841,20 @@ const applyFilters = debounce(function() {
     const cardMembers = card._cachedMembers || JSON.parse(card.dataset.members || '[]'); 
   
     const matchesLabels = checkedLabels.length === 0 || checkedLabels.every(l => cardLabels.includes(l));
-    const matchesMembers = checkedMembers.length === 0 || checkedMembers.some(m => cardMembers.some(cm => cm.toLowerCase().includes(m)));
+    
+    // 🔥 FIX: Correctly maps underlying emails to names before filtering
+    const matchesMembers = checkedMembers.length === 0 || checkedMembers.some(m => 
+        cardMembers.some(cm => {
+            if (!cm) return false;
+            const cmEmail = cm.toLowerCase();
+            const cmName = window.getUserNameByEmail(cm).toLowerCase();
+            return cmEmail.includes(m) || cmName.includes(m);
+        })
+    );
+    
+    // 🔥 FIX: Allows searching by ID or Subject
     const matchesId = !idQuery || card.dataset.convId.toLowerCase().includes(idQuery) || (card.dataset.subject && card.dataset.subject.includes(idQuery));
+    
     card.style.display = (showTab && matchesId && matchesLabels && matchesMembers) ? 'block' : 'none';
   });
 }, 300);
@@ -932,27 +936,42 @@ function getFilteredUsersForMention(query) {
     } else {
         const caseMembersLower = (window.currentCaseAllMembers || []).map(str => String(str).toLowerCase().trim());
         result = allUsersList.filter(u => {
+            if(!u || !u.email) return false;
             const uEmail = u.email.toLowerCase().trim();
-            const uName = u.name.toLowerCase().trim();
+            const uName = (u.name || '').toLowerCase().trim();
             return caseMembersLower.includes(uEmail) || caseMembersLower.some(member => member.includes(uEmail) || member.includes(uName));
         });
     }
-    if (queryLower) result = result.filter(u => u.name.toLowerCase().includes(queryLower) || u.email.toLowerCase().includes(queryLower));
+    if (queryLower) result = result.filter(u => {
+        if(!u || !u.email) return false;
+        const uName = (u.name || '').toLowerCase();
+        const uEmail = u.email.toLowerCase();
+        return uName.includes(queryLower) || uEmail.includes(queryLower);
+    });
     return result.filter((u, index, self) => index === self.findIndex((t) => t.email === u.email));
 }
 
+// 🔥 FIX: Safe array filtering for Manage Members modal
 window.searchNewMember = debounce(function(q) {
    const dropdown = document.getElementById('member_search_dropdown');
    if(!q) { dropdown.classList.add('hidden'); return; }
-   const filtered = allUsersList.filter(u => (u.name.toLowerCase().includes(q.toLowerCase()) || u.email.toLowerCase().includes(q.toLowerCase())) && !tempAdmins.includes(u.name) && !tempUsers.includes(u.name));
+   const queryLower = q.toLowerCase();
+   
+   const filtered = allUsersList.filter(u => {
+       if(!u || !u.email) return false;
+       const uName = (u.name || '').toLowerCase();
+       const uEmail = u.email.toLowerCase();
+       return (uName.includes(queryLower) || uEmail.includes(queryLower)) && !tempAdmins.includes(u.email) && !tempUsers.includes(u.email);
+   });
+   
    if(filtered.length === 0) { dropdown.innerHTML = '<div class="p-3 text-xs text-slate-500">No users found</div>'; }
    else {
       dropdown.innerHTML = filtered.map(u => `
         <div class="p-3 hover:bg-indigo-50 border-b flex justify-between items-center">
-           <span class="text-sm font-medium text-slate-800">${u.name}</span>
+           <span class="text-sm font-medium text-slate-800">${escapeHTML(u.name || u.email)}</span>
            <div class="flex gap-1">
-             <button type="button" onclick="addNewTempMember('${u.name.replace(/'/g, "\\'")}', 'Admin')" class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded font-bold">Admin</button>
-             <button type="button" onclick="addNewTempMember('${u.name.replace(/'/g, "\\'")}', 'User')" class="px-2 py-0.5 bg-slate-200 text-slate-700 text-[10px] rounded font-bold">User</button>
+             <button type="button" onclick="addNewTempMember('${u.email.replace(/'/g, "\\'")}', 'Admin')" class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded font-bold">Admin</button>
+             <button type="button" onclick="addNewTempMember('${u.email.replace(/'/g, "\\'")}', 'User')" class="px-2 py-0.5 bg-slate-200 text-slate-700 text-[10px] rounded font-bold">User</button>
            </div>
         </div>`).join('');
    }
@@ -967,27 +986,27 @@ window.closeManageMembers = function() { document.getElementById('manageMembersM
 
 function renderManageMembersList() {
    let allMems = [];
-   tempAdmins.forEach(a => allMems.push({name: a, role: 'Admin'}));
-   tempUsers.forEach(u => allMems.push({name: u, role: 'User'}));
+   tempAdmins.forEach(email => allMems.push({email: email, role: 'Admin'}));
+   tempUsers.forEach(email => allMems.push({email: email, role: 'User'}));
    const list = document.getElementById('manage_members_list');
    if(allMems.length === 0) { list.innerHTML = '<p class="text-xs text-slate-400">No members assigned.</p>'; return; }
    list.innerHTML = allMems.map(m => `
      <div class="flex justify-between items-center bg-white border border-slate-200 rounded p-2 shadow-sm">
-       <span class="text-sm font-bold text-slate-700">${m.name}</span>
+       <span class="text-sm font-bold text-slate-700">${escapeHTML(window.getUserNameByEmail(m.email))}</span>
        <div class="flex gap-2 items-center">
-         <select onchange="updateTempRole('${m.name}', this.value)" class="text-xs font-bold border rounded p-1 bg-slate-50 text-slate-700">
+         <select onchange="updateTempRole('${m.email}', this.value)" class="text-xs font-bold border rounded p-1 bg-slate-50 text-slate-700">
             <option value="Admin" ${m.role==='Admin'?'selected':''}>Admin</option>
             <option value="User" ${m.role==='User'?'selected':''}>User</option>
          </select>
-         <button onclick="removeTempMember('${m.name}')" class="text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded font-bold text-lg leading-none">&times;</button>
+         <button onclick="removeTempMember('${m.email}')" class="text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded font-bold text-lg leading-none">&times;</button>
        </div>
      </div>
    `).join('');
 }
 
-window.updateTempRole = function(name, newRole) { tempAdmins = tempAdmins.filter(n => n !== name); tempUsers = tempUsers.filter(n => n !== name); if(newRole === 'Admin') tempAdmins.push(name); if(newRole === 'User') tempUsers.push(name); renderManageMembersList(); };
-window.removeTempMember = function(name) { tempAdmins = tempAdmins.filter(n => n !== name); tempUsers = tempUsers.filter(n => n !== name); renderManageMembersList(); };
-window.addNewTempMember = function(name, role) { tempAdmins = tempAdmins.filter(n => n !== name); tempUsers = tempUsers.filter(n => n !== name); if(role === 'Admin') tempAdmins.push(name); else tempUsers.push(name); document.getElementById('member_search_input').value = ''; document.getElementById('member_search_dropdown').classList.add('hidden'); renderManageMembersList(); };
+window.updateTempRole = function(email, newRole) { tempAdmins = tempAdmins.filter(e => e !== email); tempUsers = tempUsers.filter(e => e !== email); if(newRole === 'Admin') tempAdmins.push(email); if(newRole === 'User') tempUsers.push(email); renderManageMembersList(); };
+window.removeTempMember = function(email) { tempAdmins = tempAdmins.filter(e => e !== email); tempUsers = tempUsers.filter(e => e !== email); renderManageMembersList(); };
+window.addNewTempMember = function(email, role) { tempAdmins = tempAdmins.filter(e => e !== email); tempUsers = tempUsers.filter(e => e !== email); if(role === 'Admin') tempAdmins.push(email); else tempUsers.push(email); document.getElementById('member_search_input').value = ''; document.getElementById('member_search_dropdown').classList.add('hidden'); renderManageMembersList(); };
 
 window.saveManagedMembers = async function() {
    const btn = document.getElementById('saveMembersBtn'); btn.innerText = "Saving..."; btn.disabled = true;
@@ -1050,8 +1069,8 @@ function showReplyUserList() {
     dropdown.classList.remove('hidden');
     const filtered = getFilteredUsersForMention(mentionSearchQuery);
     dropdown.innerHTML = filtered.map(u => 
-        `<div onclick="selectReplyMentionUser('${u.name.replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}')" class="p-2 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 text-left">
-            <div class="text-sm font-bold text-slate-800">${u.name}</div>
+        `<div onclick="selectReplyMentionUser('${(u.name||'').replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}')" class="p-2 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 text-left">
+            <div class="text-sm font-bold text-slate-800">${u.name||u.email}</div>
             <div class="text-[11px] text-slate-500 truncate">${u.email}</div>
          </div>`
     ).join('');
@@ -1536,23 +1555,23 @@ window.submitDetailReply = async function() {
         let payloadToSend;
         if (replyComposerState.mode === 'DIFFERENT' && replyComposerState.recipients.length > 0) {
             payloadToSend = replyComposerState.recipients.map(r => {
-                const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); // 🔥 FIX 1
+                const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); 
                 return {
                     caseId: caseId, text: (r.customText && r.customText.trim() !== '') ? r.customText.trim() : msgHTML, mentionType: r.type || 'Message', sender: currentUser.email, receiver: r.email, parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName,
-                    uniqueId: tempId // 🔥 FIX 2
+                    uniqueId: tempId 
                 };
             });
         } else {
-            const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); // 🔥 FIX 1
-            payloadToSend = { caseId: caseId, text: msgHTML, mentionType: replyComposerState.globalType || 'Message', sender: currentUser.email, receiver: replyComposerState.recipients.map(r => r.email).join(','), parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId }; // 🔥 FIX 2
+            const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); 
+            payloadToSend = { caseId: caseId, text: msgHTML, mentionType: replyComposerState.globalType || 'Message', sender: currentUser.email, receiver: replyComposerState.recipients.map(r => r.email).join(','), parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId }; 
         }
 
         // ⚡ 1. INSTANT LOCAL UI UPDATE (0ms lag)
         const localSenderName = currentUser.name || currentUser.email;
         const payloads = Array.isArray(payloadToSend) ? payloadToSend : [payloadToSend];
         payloads.forEach(p => {
-             const tempId = p.uniqueId; // 🔥 FIX 3
-             seenMessages.add(tempId); // 🔥 BONUS: Track to avoid duplication
+             const tempId = p.uniqueId; 
+             seenMessages.add(tempId); 
              
              allLoadedComments.push({
                  caseId: p.caseId,
@@ -1566,7 +1585,7 @@ window.submitDetailReply = async function() {
                  askId: '', 
                  status: '',
                  parentAskId: p.parentAskId || '',
-                 uniqueId: tempId, // 🔥 FIX 3
+                 uniqueId: tempId, 
                  threadId: p.threadId || 'LOCAL-T-' + Math.random(),
                  threadColor: p.threadColor || '#f8fafc'
              });
@@ -1664,8 +1683,8 @@ window.handleInlineTyping = function(e) {
             dropdown.classList.remove('hidden');
             const filtered = getFilteredUsersForMention(inlineMentionSearchQuery);
             dropdown.innerHTML = filtered.map(u => 
-                `<div onclick="selectInlineMentionUser('${u.name.replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}')" class="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-left">
-                    <div class="text-xs font-bold text-slate-800 leading-tight">${u.name}</div>
+                `<div onclick="selectInlineMentionUser('${(u.name||'').replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}')" class="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-left">
+                    <div class="text-xs font-bold text-slate-800 leading-tight">${u.name || u.email}</div>
                     <div class="text-[9px] text-slate-500 truncate mt-0.5">${u.email}</div>
                  </div>`
             ).join('');
@@ -1784,12 +1803,12 @@ window.submitInlineReply = async function(btn) {
             if(result && result.url) { fileUrl = result.url; fileName = result.name || file.name; }
         }
 
-        const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); // 🔥 FIX 1
-        const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId }; // 🔥 FIX 2
+        const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); 
+        const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId }; 
 
         // ⚡ 1. INSTANT LOCAL UI RENDER
         const localSenderName = currentUser.name || currentUser.email;
-        seenMessages.add(tempId); // 🔥 BONUS: Track to avoid duplication
+        seenMessages.add(tempId); 
         
         allLoadedComments.push({
              caseId: caseId,
@@ -1803,7 +1822,7 @@ window.submitInlineReply = async function(btn) {
              askId: '', 
              status: '',
              parentAskId: payload.parentAskId,
-             uniqueId: tempId, // 🔥 FIX 3
+             uniqueId: tempId, 
              threadId: payload.threadId || 'LOCAL-T-' + Math.random(),
              threadColor: payload.threadColor || '#f8fafc'
          });
@@ -1850,7 +1869,7 @@ window.renderNewCaseMembers = function() {
 
     listContainer.innerHTML = composerRecipients.map((m, i) => `
         <span class="px-2 py-1 ${m.role === 'Admin' ? 'bg-blue-100 text-blue-800 border-blue-200' : 'bg-slate-100 text-slate-800 border-slate-200'} border text-xs rounded-lg font-bold shadow-sm flex items-center gap-1">
-            ${m.role === 'Admin' ? '👑' : '👤'} ${m.name}
+            ${m.role === 'Admin' ? '👑' : '👤'} ${escapeHTML(m.name)}
             ${(m.email !== currentUser.email) ? `<button type="button" onclick="removeNewCaseMember(${i})" class="ml-1 text-red-500 hover:text-red-700 font-extrabold">&times;</button>` : ''}
         </span>
     `).join('');
@@ -1869,11 +1888,14 @@ window.searchNewCaseMember = debounce(function(q) {
     }
 
     const existingEmails = composerRecipients.map(r => r.email);
+    const queryLower = q.toLowerCase();
 
-    const filtered = allUsersList.filter(u => 
-        (u.name.toLowerCase().includes(q.toLowerCase()) || u.email.toLowerCase().includes(q.toLowerCase())) && 
-        !existingEmails.includes(u.email)
-    );
+    const filtered = allUsersList.filter(u => {
+        if(!u || !u.email) return false;
+        const uName = (u.name || '').toLowerCase();
+        const uEmail = u.email.toLowerCase();
+        return (uName.includes(queryLower) || uEmail.includes(queryLower)) && !existingEmails.includes(u.email);
+    });
 
     if (filtered.length === 0) {
         dropdown.innerHTML = '<div class="p-3 text-xs text-slate-500 text-center">No users found</div>';
@@ -1881,12 +1903,12 @@ window.searchNewCaseMember = debounce(function(q) {
         dropdown.innerHTML = filtered.map(u => `
             <div class="p-3 hover:bg-indigo-50 border-b flex justify-between items-center cursor-pointer">
                 <div class="flex flex-col">
-                    <span class="text-sm font-medium text-slate-800">${u.name}</span>
-                    <span class="text-[10px] text-slate-500">${u.email}</span>
+                    <span class="text-sm font-medium text-slate-800">${escapeHTML(u.name || u.email)}</span>
+                    <span class="text-[10px] text-slate-500">${escapeHTML(u.email)}</span>
                 </div>
                 <div class="flex gap-1">
-                    <button type="button" onclick="addNewCaseMember('${u.name.replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}', 'Admin')" class="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] rounded font-bold shadow-sm">Admin</button>
-                    <button type="button" onclick="addNewCaseMember('${u.name.replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}', 'User')" class="px-2 py-1 bg-slate-200 text-slate-700 text-[10px] rounded font-bold shadow-sm">User</button>
+                    <button type="button" onclick="addNewCaseMember('${(u.name || '').replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}', 'Admin')" class="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] rounded font-bold shadow-sm">Admin</button>
+                    <button type="button" onclick="addNewCaseMember('${(u.name || '').replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}', 'User')" class="px-2 py-1 bg-slate-200 text-slate-700 text-[10px] rounded font-bold shadow-sm">User</button>
                 </div>
             </div>
         `).join('');
@@ -1895,7 +1917,7 @@ window.searchNewCaseMember = debounce(function(q) {
 }, 200);
 
 window.addNewCaseMember = function(name, email, role) {
-    composerRecipients.push({ name: name, email: email, role: role });
+    composerRecipients.push({ name: name || window.getUserNameByEmail(email), email: email, role: role });
     document.getElementById('new_case_member_search').value = '';
     document.getElementById('new_case_member_dropdown').classList.add('hidden');
     window.renderNewCaseMembers();
@@ -1953,7 +1975,7 @@ async function loadConversations() {
       cardDiv._cachedLabels = conv.labels; cardDiv._cachedMembers = [...conv.admins, ...conv.users, conv.createdBy];
       
       cardDiv.dataset.convId = conv.id; cardDiv.dataset.subject = conv.subject.toLowerCase(); cardDiv.dataset.status = conv.status; cardDiv.dataset.snooze = safeSnoozeMs; cardDiv.dataset.hasAdminRights = hasAdminRights; cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments); cardDiv.dataset.labels = JSON.stringify(conv.labels); cardDiv.dataset.members = JSON.stringify([...conv.admins, ...conv.users, conv.createdBy]); cardDiv.dataset.caseAdmins = JSON.stringify(conv.admins); cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
-      card.querySelector('[data-id="conv-id"]').textContent = conv.id; card.querySelector('[data-id="subject"]').textContent = conv.subject; card.querySelector('[data-id="details"]').textContent = conv.details; card.querySelector('[data-id="message"]').innerHTML = conv.message; card.querySelector('[data-id="author"]').textContent = conv.createdBy; card.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString(); card.querySelector('[data-id="display-case-id"]').textContent = conv.id;
+      card.querySelector('[data-id="conv-id"]').textContent = conv.id; card.querySelector('[data-id="subject"]').textContent = conv.subject; card.querySelector('[data-id="details"]').textContent = conv.details; card.querySelector('[data-id="message"]').innerHTML = conv.message; card.querySelector('[data-id="author"]').textContent = window.getUserNameByEmail(conv.createdBy); card.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString(); card.querySelector('[data-id="display-case-id"]').textContent = conv.id;
       
       const isSnoozed = safeSnoozeMs > Date.now(); 
       const badge = card.querySelector('[data-id="status-badge"]');
