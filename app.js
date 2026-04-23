@@ -1826,6 +1826,65 @@ window.handleDrop = function(e) { e.preventDefault(); addFiles(e.dataTransfer.fi
 function addFiles(files) { Array.from(files).forEach(file => { if(pendingFiles.length >= 10) return; if(!pendingFiles.some(pf => pf.name === file.name)) pendingFiles.push(file); }); renderFileList(); } 
 function renderFileList() { document.getElementById('file_list').innerHTML = pendingFiles.map((f, i) => `<span class="bg-slate-200 text-xs px-2 py-1 rounded flex gap-1 items-center font-medium">${f.name} <button type="button" onclick="removeFile(${i})" class="text-red-500 hover:text-red-700 font-bold ml-1">&times;</button></span>`).join(''); } 
 window.removeFile = function(index) { pendingFiles.splice(index, 1); renderFileList(); };
+// ==========================================
+// NEW CASE MEMBER SEARCH & RENDER FIX
+// ==========================================
+window.renderNewCaseMembers = function() {
+    const listContainer = document.getElementById('new_case_members_list');
+    if (!listContainer) return;
+
+    listContainer.innerHTML = composerRecipients.map((m, i) => `
+        <span class="px-2 py-1 ${m.role === 'Admin' ? 'bg-blue-100 text-blue-800 border-blue-200' : 'bg-slate-100 text-slate-800 border-slate-200'} border text-xs rounded-lg font-bold shadow-sm flex items-center gap-1">
+            ${m.role === 'Admin' ? '👑' : '👤'} ${m.name.split('@')[0]}
+            ${(m.email !== currentUser.email) ? `<button type="button" onclick="removeNewCaseMember(${i})" class="ml-1 text-red-500 hover:text-red-700 font-extrabold">&times;</button>` : ''}
+        </span>
+    `).join('');
+};
+
+window.removeNewCaseMember = function(index) {
+    composerRecipients.splice(index, 1);
+    window.renderNewCaseMembers();
+};
+
+window.searchNewCaseMember = debounce(function(q) {
+    const dropdown = document.getElementById('new_case_member_dropdown');
+    if (!q) {
+        dropdown.classList.add('hidden');
+        return;
+    }
+
+    const existingEmails = composerRecipients.map(r => r.email);
+
+    const filtered = allUsersList.filter(u => 
+        (u.name.toLowerCase().includes(q.toLowerCase()) || u.email.toLowerCase().includes(q.toLowerCase())) && 
+        !existingEmails.includes(u.email)
+    );
+
+    if (filtered.length === 0) {
+        dropdown.innerHTML = '<div class="p-3 text-xs text-slate-500 text-center">No users found</div>';
+    } else {
+        dropdown.innerHTML = filtered.map(u => `
+            <div class="p-3 hover:bg-indigo-50 border-b flex justify-between items-center cursor-pointer">
+                <div class="flex flex-col">
+                    <span class="text-sm font-medium text-slate-800">${u.name}</span>
+                    <span class="text-[10px] text-slate-500">${u.email}</span>
+                </div>
+                <div class="flex gap-1">
+                    <button type="button" onclick="addNewCaseMember('${u.name.replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}', 'Admin')" class="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] rounded font-bold shadow-sm">Admin</button>
+                    <button type="button" onclick="addNewCaseMember('${u.name.replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}', 'User')" class="px-2 py-1 bg-slate-200 text-slate-700 text-[10px] rounded font-bold shadow-sm">User</button>
+                </div>
+            </div>
+        `).join('');
+    }
+    dropdown.classList.remove('hidden');
+}, 200);
+
+window.addNewCaseMember = function(name, email, role) {
+    composerRecipients.push({ name: name, email: email, role: role });
+    document.getElementById('new_case_member_search').value = '';
+    document.getElementById('new_case_member_dropdown').classList.add('hidden');
+    window.renderNewCaseMembers();
+};
 
 async function loadLabelsForForm() { availableLabels = await apiCall('getLabels'); renderLabels(); populateFilterDropdowns(); } 
 function renderLabels() { document.getElementById('labels_container').innerHTML = availableLabels.map(label => `<span onclick="toggleLabel('${label}')" class="cursor-pointer px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm border ${selectedLabels.has(label) ? 'bg-green-800 text-white border-green-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">${label}</span>`).join(''); } 
