@@ -1268,7 +1268,10 @@ window.handleCardClick = function(event, cardEl) {
 
 window.openCaseDetail = function(cardEl) {
   try {
-      const card = cardEl.classList.contains('card-main') ? cardEl : cardEl.querySelector('.card-main'); 
+      // 🔥 FIX: Ab ye correctly parent card ko dhundhega
+      const card = cardEl.closest('.card-main'); 
+      if (!card) return;
+
       const dataset = card.dataset; const convId = dataset.convId;
       document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]').innerText; 
       document.getElementById('detail-id').innerText = convId; 
