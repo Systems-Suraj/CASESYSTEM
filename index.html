@@ -13,6 +13,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    
+    <style>
+      .card-main[style*="display: block"] {
+          display: flex !important;
+      }
+    </style>
   </head>
   <body class="bg-slate-100 text-slate-800 font-sans antialiased overflow-x-hidden selection:bg-indigo-100 selection:text-indigo-900">
     
@@ -83,7 +89,8 @@
       </div>
 
       <div id="dashboardView" class="w-full px-4 sm:px-8 lg:px-12 py-6 md:py-10 flex-1">
-        <div class="flex flex-col gap-4 mb-6 bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+        
+        <div class="flex flex-col gap-4 mb-6 bg-white p-5 rounded-2xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] border border-slate-200 sticky top-[55px] z-[90]">
           <div class="flex justify-between items-center mb-2">
             <h1 class="text-2xl font-extrabold tracking-tight">
                <span class="sm:hidden text-indigo-700">CaseSys</span>
@@ -117,8 +124,9 @@
             </div>
           </div>
         </div> 
-        <div id="conversationFeed" class="space-y-5 pb-10">
-          <div class="flex justify-center py-10"><div class="loader"></div></div>
+
+        <div id="conversationFeed" class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-10">
+          <div class="flex justify-center py-10 col-span-full"><div class="loader"></div></div>
         </div>
       </div>
 
@@ -384,61 +392,63 @@
     </div>
     
     <template id="cardTemplate">
-      <div class="card-main bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden sm:hover:shadow-lg sm:transition-all sm:duration-300 sm:transform sm:hover:-translate-y-1 mb-5">
-        <div class="p-4 sm:p-6 cursor-pointer" onclick="handleCardClick(event, this)">
-          <div class="flex justify-between items-start mb-3">
-            <div class="flex flex-col gap-2">
-               <span class="text-[10px] sm:text-xs font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 w-fit" data-id="display-case-id"></span>
-               <div class="flex gap-2 flex-wrap" data-id="labels-container"></div>
+      <div>
+        <div class="card-main bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden sm:hover:shadow-lg sm:transition-all sm:duration-300 sm:transform sm:hover:-translate-y-1 flex flex-col h-full">
+          <div class="p-4 sm:p-6 cursor-pointer flex-1 flex flex-col" onclick="handleCardClick(event, this)">
+            <div class="flex justify-between items-start mb-3">
+              <div class="flex flex-col gap-2">
+                 <span class="text-[10px] sm:text-xs font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 w-fit" data-id="display-case-id"></span>
+                 <div class="flex gap-2 flex-wrap" data-id="labels-container"></div>
+              </div>
+              <div class="flex items-center gap-3 shrink-0">
+                <span class="text-[9px] sm:text-[10px] font-extrabold px-2 py-1 sm:px-2.5 sm:py-1 rounded-md uppercase tracking-widest shadow-sm" data-id="status-badge"></span>
+              </div>
             </div>
-            <div class="flex items-center gap-3 shrink-0">
-              <span class="text-[9px] sm:text-[10px] font-extrabold px-2 py-1 sm:px-2.5 sm:py-1 rounded-md uppercase tracking-widest shadow-sm" data-id="status-badge"></span>
+            
+            <h3 class="font-extrabold text-lg sm:text-xl text-slate-900 mb-2 line-clamp-2 tracking-tight" data-id="subject"></h3>
+            <p class="text-slate-500 text-xs sm:text-sm line-clamp-3 leading-relaxed mb-4" data-id="details"></p>
+            
+            <div class="flex flex-col gap-1.5 mt-auto" data-id="members-wrapper">
+               <div class="flex gap-1.5 flex-wrap empty:hidden" data-id="admins-container"></div>
+               <div class="flex gap-1.5 flex-wrap empty:hidden" data-id="users-container"></div>
             </div>
+            
+            <span class="hidden" data-id="conv-id"></span>
+            <p class="hidden" data-id="message"></p>
           </div>
-          
-          <h3 class="font-extrabold text-lg sm:text-xl text-slate-900 mb-2 line-clamp-1 tracking-tight" data-id="subject"></h3>
-          <p class="text-slate-500 text-xs sm:text-sm line-clamp-2 leading-relaxed mb-4" data-id="details"></p>
-          
-          <div class="flex flex-col gap-1.5 mt-2" data-id="members-wrapper">
-             <div class="flex gap-1.5 flex-wrap empty:hidden" data-id="admins-container"></div>
-             <div class="flex gap-1.5 flex-wrap empty:hidden" data-id="users-container"></div>
-          </div>
-          
-          <span class="hidden" data-id="conv-id"></span>
-          <p class="hidden" data-id="message"></p>
-        </div>
 
-        <div class="px-3 py-3 sm:px-6 sm:py-4 bg-orange-500 border-t border-orange-600 flex flex-col sm:flex-row justify-between sm:items-center gap-3 cursor-pointer transition-colors hover:bg-orange-600" onclick="handleCardClick(event, this)">
-          <div class="flex items-center gap-2 sm:gap-3">
-            <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr from-orange-300 to-orange-100 flex items-center justify-center text-orange-800 font-extrabold text-[10px] sm:text-xs shadow-md border-2 border-white" data-id="avatar-letter">A</div>
-            <div class="flex flex-col text-white">
-              <span class="text-[11px] sm:text-[13px] font-bold leading-tight">Created by <span data-id="author" class="font-bold"></span></span>
-              <span class="text-[9px] sm:text-[11px] font-semibold tracking-wide opacity-90" data-id="timestamp"></span>
+          <div class="px-3 py-3 sm:px-6 sm:py-4 bg-orange-500 border-t border-orange-600 flex flex-col sm:flex-row justify-between sm:items-center gap-3 cursor-pointer transition-colors hover:bg-orange-600 mt-auto" onclick="handleCardClick(event, this)">
+            <div class="flex items-center gap-2 sm:gap-3">
+              <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr from-orange-300 to-orange-100 flex items-center justify-center text-orange-800 font-extrabold text-[10px] sm:text-xs shadow-md border-2 border-white" data-id="avatar-letter">A</div>
+              <div class="flex flex-col text-white">
+                <span class="text-[11px] sm:text-[13px] font-bold leading-tight line-clamp-1">Created by <span data-id="author" class="font-bold"></span></span>
+                <span class="text-[9px] sm:text-[11px] font-semibold tracking-wide opacity-90" data-id="timestamp"></span>
+              </div>
             </div>
-          </div>
-          
-          <div class="flex items-center gap-3 text-sm flex-wrap sm:flex-nowrap justify-end">
-             <label class="hidden flex items-center gap-1.5 cursor-pointer archive-cb-container text-white font-bold group">
-                <input type="checkbox" class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-600 rounded border-orange-300 focus:ring-orange-500 bulk-archive-cb transition-colors cursor-pointer">
-                <span class="text-[10px] sm:text-xs group-hover:text-orange-100 tracking-wider uppercase transition-colors">Archive</span>
-             </label>
-             
-             <button type="button" class="snooze-card-btn hidden text-orange-600 font-bold bg-white/90 hover:bg-white px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg transition-colors border border-orange-200 shadow-sm text-[10px] sm:text-sm leading-none whitespace-nowrap" onclick="event.stopPropagation(); openSnoozeModalFromCard(this)" title="Snooze case">
-                ⏰ Snooze
-             </button>
+            
+            <div class="flex items-center gap-3 text-sm flex-wrap sm:flex-nowrap justify-end shrink-0">
+               <label class="hidden flex items-center gap-1.5 cursor-pointer archive-cb-container text-white font-bold group">
+                  <input type="checkbox" class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-600 rounded border-orange-300 focus:ring-orange-500 bulk-archive-cb transition-colors cursor-pointer">
+                  <span class="text-[10px] sm:text-xs group-hover:text-orange-100 tracking-wider uppercase transition-colors">Archive</span>
+               </label>
+               
+               <button type="button" class="snooze-card-btn hidden text-orange-600 font-bold bg-white/90 hover:bg-white px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg transition-colors border border-orange-200 shadow-sm text-[10px] sm:text-sm leading-none whitespace-nowrap" onclick="event.stopPropagation(); openSnoozeModalFromCard(this)" title="Snooze case">
+                  ⏰ Snooze
+               </button>
 
-             <button type="button" class="unsnooze-card-btn hidden text-orange-600 font-bold bg-white/90 hover:bg-white px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg transition-colors border border-orange-200 shadow-sm text-[10px] sm:text-sm leading-none whitespace-nowrap" onclick="event.stopPropagation(); processUnsnooze(this)" title="Un-Snooze case">
-                🔔 Un-Snooze
-             </button>
-             
-             <button type="button" class="unarchive-card-btn hidden text-orange-600 font-bold bg-white/90 hover:bg-white px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg transition-colors border border-orange-200 shadow-sm text-[10px] sm:text-sm leading-none whitespace-nowrap" onclick="event.stopPropagation(); processUnarchive(this)" title="Un-Archive case">
-                📂 Un-Archive
-             </button>
+               <button type="button" class="unsnooze-card-btn hidden text-orange-600 font-bold bg-white/90 hover:bg-white px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg transition-colors border border-orange-200 shadow-sm text-[10px] sm:text-sm leading-none whitespace-nowrap" onclick="event.stopPropagation(); processUnsnooze(this)" title="Un-Snooze case">
+                  🔔 Un-Snooze
+               </button>
+               
+               <button type="button" class="unarchive-card-btn hidden text-orange-600 font-bold bg-white/90 hover:bg-white px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg transition-colors border border-orange-200 shadow-sm text-[10px] sm:text-sm leading-none whitespace-nowrap" onclick="event.stopPropagation(); processUnarchive(this)" title="Un-Archive case">
+                  📂 Un-Archive
+               </button>
 
-             <div class="flex items-center gap-1.5 text-indigo-600 font-bold bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl transition-colors shadow-sm text-[10px] sm:text-xs border border-indigo-100 pointer-events-none whitespace-nowrap">
-                <span>Open</span>
-                <i class="fas fa-arrow-right text-[10px] sm:text-xs"></i>
-             </div>
+               <div class="flex items-center gap-1.5 text-indigo-600 font-bold bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl transition-colors shadow-sm text-[10px] sm:text-xs border border-indigo-100 pointer-events-none whitespace-nowrap">
+                  <span>Open</span>
+                  <i class="fas fa-arrow-right text-[10px] sm:text-xs"></i>
+               </div>
+            </div>
           </div>
         </div>
       </div>
