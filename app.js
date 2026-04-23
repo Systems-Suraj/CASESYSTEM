@@ -225,7 +225,7 @@ let hasMore = true;
 let lastTimestamp = 0;
 let seenMessages = new Set();
 let realtimeInterval = null;
-let isInitialLoadDone = false; // 🔥 Ensures data isn't loaded twice
+let isInitialLoadDone = false; 
 
 // ==========================================
 // 🔥 GLOBAL UNREAD FETCHER & NOTIFICATIONS (V12)
@@ -317,13 +317,15 @@ function toggleNotifications(event) {
   }
 }
 
+// 🔥 FIX: Improved Case ID Parsing for accurate lookup
 async function openFromNotification(caseId, uniqueId) {
   const panel = document.getElementById("notifPanel");
   if (panel) panel.classList.add("hidden");
 
   if(!caseId) return;
 
-  const card = document.querySelector(`.card-main[data-conv-id="${caseId}"]`);
+  const cleanCaseId = String(caseId).trim();
+  const card = document.querySelector(`[data-conv-id="${cleanCaseId}"]`);
   
   if (card) {
       window.openCaseDetail(card); 
@@ -332,7 +334,6 @@ async function openFromNotification(caseId, uniqueId) {
       if (notif && notif.type === 'Ask') {
           console.log("Opened an Ask. It will remain in notifications until replied.");
       } else {
-          // 🔥 INSTANT OPTIMISTIC UI REMOVAL
           notifications = notifications.filter(n => n.id !== uniqueId);
           unreadCount = notifications.length;
           updateNotificationUI();
@@ -342,7 +343,7 @@ async function openFromNotification(caseId, uniqueId) {
           }
       }
   } else {
-      showCustomDialog("Notice", "Case " + caseId + " is not in your current list. Please use search.", false);
+      showCustomDialog("Notice", "Case " + cleanCaseId + " is not in your current list. Please use search.", false);
   }
 }
 
@@ -551,16 +552,14 @@ function showCustomDialog(title, message, isConfirm, onConfirmCallback) {
 function closeDialog() { document.getElementById('customDialog').classList.add('hidden'); }
 
 // ==========================================
-// 🔥 DATA LOAD CONTROLLER (PREVENTS RACE CONDITION)
+// 🔥 DATA LOAD CONTROLLER
 // ==========================================
 async function initDataLoad() {
     if (isInitialLoadDone) return;
     isInitialLoadDone = true;
     
-    // 1. Await full user list fetch FIRST to guarantee names are loaded
     await fetchUsersForMentions();
     
-    // 2. Only then load the cases, ensuring the names are ready to map
     loadConversations();
     loadLabelsForForm();
 }
@@ -642,7 +641,7 @@ window.logoutUser = function() {
   localStorage.removeItem("user");
   sessionStorage.removeItem("user");
   currentUser = null;
-  isInitialLoadDone = false; // Reset data flag
+  isInitialLoadDone = false;
   document.getElementById("appView").classList.add("hidden"); 
   document.getElementById("loginView").classList.remove("hidden");
   document.getElementById("email").value = "";
@@ -670,7 +669,6 @@ function showAppScreen(userObj) {
      initNotifications(userObj);
   }
 
-  // Load UI Data safely on fresh logins
   initDataLoad();
 
   setTimeout(() => {
@@ -713,7 +711,7 @@ async function initNotifications(user) {
         person: user.name || user.email,
         email: user.email,
         token: token,
-        platform: "web" // explicitly 'web'
+        platform: "web" 
       });
       console.log("✅ Web Token Saved to Database!");
     } else {
@@ -846,7 +844,6 @@ const applyFilters = debounce(function() {
   const checkedLabels = Array.from(document.querySelectorAll('.flabel[data-applied="true"]')).map(cb => cb.value);
   const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => cb.value.toLowerCase());
   
-  // 🔥 FIX: Iterate over wrappers, but check the .card-main datasets
   Array.from(document.getElementById('conversationFeed').children).forEach(wrapper => {
     const card = wrapper.classList.contains('card-main') ? wrapper : wrapper.querySelector('.card-main');
     if(!card || !card.dataset.convId) return; 
@@ -875,7 +872,6 @@ const applyFilters = debounce(function() {
     
     const matchesId = !idQuery || card.dataset.convId.toLowerCase().includes(idQuery) || (card.dataset.subject && card.dataset.subject.includes(idQuery));
     
-    // Toggle visibility on the wrapper so grid doesn't break
     wrapper.style.display = (showTab && matchesId && matchesLabels && matchesMembers) ? 'block' : 'none';
   });
 }, 300);
@@ -883,18 +879,36 @@ const applyFilters = debounce(function() {
 // ==========================================
 // ACTIONS: ARCHIVE, SNOOZE
 // ==========================================
+
+// 🔥 FIX: Robust ID selection to prevent bulk archive freezing
 window.processBulkArchive = function() {
-  const selectedIds = Array.from(document.querySelectorAll('.bulk-archive-cb:checked')).map(cb => cb.closest('.card-main').dataset.convId);
+  const selectedIds = Array.from(document.querySelectorAll('.bulk-archive-cb:checked')).map(cb => {
+      const card = cb.closest('[data-conv-id]');
+      return card ? String(card.dataset.convId).trim() : null;
+  }).filter(Boolean);
+  
   if(selectedIds.length === 0) return showCustomDialog("Notice", "Please select at least one case to archive.", false);
+  
   showCustomDialog("Confirm Archive", `Are you sure you want to archive ${selectedIds.length} selected case(s)?\n\nCase IDs: \n${selectedIds.join('\n')}`, true, async () => {
-      const btn = document.getElementById('bulkArchiveBtn'); btn.innerText = "Archiving...";
-      try { await apiCall('bulkArchive', { ids: selectedIds, user: currentUser.email || currentUser.name }); loadConversations(); } catch(e) { showCustomDialog("Error", "Failed to archive.", false); }
-      btn.innerText = "Archive Selected";
+      const btn = document.getElementById('bulkArchiveBtn'); 
+      btn.innerText = "Archiving..."; 
+      btn.disabled = true;
+      try { 
+          await apiCall('bulkArchive', { ids: selectedIds, user: currentUser.email || currentUser.name }); 
+          await loadConversations(); 
+      } catch(e) { 
+          showCustomDialog("Error", "Failed to archive.", false); 
+      } finally {
+          btn.innerText = "Archive Selected";
+          btn.disabled = false;
+      }
   });
 };
 
 window.processUnarchive = async function(btn) {
-  const convId = btn.dataset.convId || btn.closest('.card-main').dataset.convId; 
+  const parent = btn.closest('[data-conv-id]');
+  const convId = parent ? String(parent.dataset.convId).trim() : null; 
+  if(!convId) return;
   btn.innerText = "Unarchiving..."; btn.disabled = true;
   try { await apiCall('unarchiveCaseServer', { id: convId, user: currentUser.email || currentUser.name }); loadConversations();
   if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
@@ -902,7 +916,9 @@ window.processUnarchive = async function(btn) {
 };
 
 window.openSnoozeModal = function(btn) { 
-    document.getElementById('snoozeConvId').value = btn.dataset.convId || btn.closest('.card-main').dataset.convId;
+    const parent = btn.closest('[data-conv-id]');
+    if(!parent) return;
+    document.getElementById('snoozeConvId').value = String(parent.dataset.convId).trim();
     document.getElementById('snoozeModal').classList.remove('hidden');
 };
 
@@ -912,7 +928,7 @@ window.confirmSnooze = async function() {
     const timestamp = new Date(dt).getTime();
     if (isNaN(timestamp)) { return showCustomDialog("Error", "Invalid date/time selected", false); }
 
-    const id = document.getElementById('snoozeConvId').value;
+    const id = String(document.getElementById('snoozeConvId').value).trim();
     let btn = document.activeElement;
     if (!btn || btn.tagName !== 'BUTTON') { btn = document.querySelector('#snoozeModal button:last-of-type'); }
     const origText = btn ? btn.innerText : 'Snooze Now';
@@ -935,15 +951,20 @@ window.confirmSnooze = async function() {
 };
 
 window.processUnsnooze = async function(btn) {
-    const convId = btn.dataset.convId || btn.closest('.card-main').dataset.convId; 
+    const parent = btn.closest('[data-conv-id]');
+    const convId = parent ? String(parent.dataset.convId).trim() : null; 
+    if(!convId) return;
     btn.innerText = "Un-snoozing..."; btn.disabled = true;
     try { await apiCall('unsnoozeCaseServer', { id: convId }); loadConversations(); if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
     } catch(e) { showCustomDialog("Error", "Failed to un-snooze.", false); btn.innerText = "🔔 Un-Snooze"; btn.disabled = false; }
 };
 
 window.openSnoozeModalFromCard = function(btn) {
-  document.getElementById('snoozeConvId').value = btn.closest('.card-main').dataset.convId;
-  document.getElementById('snoozeModal').classList.remove('hidden');
+  const parent = btn.closest('[data-conv-id]');
+  if(parent) {
+      document.getElementById('snoozeConvId').value = String(parent.dataset.convId).trim();
+      document.getElementById('snoozeModal').classList.remove('hidden');
+  }
 };
 
 // ==========================================
@@ -2005,7 +2026,7 @@ async function loadConversations() {
       cardDiv._cachedLabels = conv.labels; 
       cardDiv._cachedMembers = [...conv.admins, ...conv.users, conv.createdBy];
       
-      cardDiv.dataset.convId = conv.id; 
+      cardDiv.dataset.convId = String(conv.id).trim(); 
       cardDiv.dataset.subject = conv.subject.toLowerCase(); 
       cardDiv.dataset.status = conv.status; 
       cardDiv.dataset.snooze = safeSnoozeMs; 
@@ -2017,7 +2038,7 @@ async function loadConversations() {
       cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
       
       if (wrapperDiv !== cardDiv) {
-          wrapperDiv.dataset.convId = conv.id;
+          wrapperDiv.dataset.convId = String(conv.id).trim();
       }
 
       const creatorName = window.getUserNameByEmail(conv.createdBy);
