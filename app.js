@@ -237,31 +237,31 @@ let globalNotifInterval = null;
 const tingSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
 
 function addNotification(msg) {
-  // ❌ Apna khud ka message skip karo
   if (msg.sender && currentUser?.email && msg.sender.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return;
   if (msg.sender && currentUser?.name && msg.sender.toLowerCase().trim() === currentUser.name.toLowerCase().trim()) return;
 
-  // 🔥 HTML Tags (jaise <span...>) ko hatane ke liye Regex
   let cleanText = msg.text || msg.body || "New activity on your case";
-  cleanText = cleanText.replace(/<[^>]*>?/gm, ''); // Sirf plain text bachega
+  cleanText = cleanText.replace(/<[^>]*>?/gm, '');
+
+  // 🔥 Stable ID prevents duplicates even if uniqueId is missing
+  const notifId = msg.uniqueId || (msg.caseId + "_" + msg.timestamp + "_" + msg.sender);
 
   const notif = {
-    id: msg.uniqueId || Date.now() + Math.random().toString(),
-    text: cleanText, // Cleaned text use kar rahe hain
+    id: notifId,
+    text: cleanText,
     caseId: msg.caseId || "",
     sender: msg.sender || msg.title || "System",
-    time: msg.timestamp || Date.now()
+    time: msg.timestamp || Date.now(),
+    type: msg.type || 'Message', // Capture Ask/Reply type
+    askId: msg.askId || msg.parentAskId || ''
   };
 
-  // Duplicate rokne ke liye
   if (notifications.some(n => n.id === notif.id)) return;
 
   notifications.unshift(notif);
   unreadCount++;
   
-  // 🔥 Play Ting Sound (Agar browser allow kare)
-  tingSound.play().catch(e => console.log("Sound blocked by browser interaction policy"));
-
+  tingSound.play().catch(e => console.log("Sound blocked"));
   updateNotificationUI();
 }
 
@@ -294,7 +294,7 @@ function updateNotificationUI() {
           <div class="p-4 cursor-pointer hover:bg-indigo-50 transition-colors flex flex-col gap-1.5"
                onclick="openFromNotification('${n.caseId}', '${n.id}')">
             <div class="flex justify-between items-start">
-                <span class="text-sm font-bold text-slate-800">${escapeHTML(n.sender.split('@')[0])}</span>
+                <span class="text-sm font-bold text-slate-800">${escapeHTML(window.getUserNameByEmail(n.sender))}</span>
                 <span class="text-[9px] text-slate-400 font-bold tracking-wider">${new Date(n.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
             </div>
             <div class="text-xs text-slate-600 line-clamp-2 leading-relaxed">${escapeHTML(n.text)}</div>
@@ -318,38 +318,36 @@ function toggleNotifications(event) {
   }
 }
 
-// 🔥 UPDATED: Pehle Case khulega, phir Col P mein entry hogi
 async function openFromNotification(caseId, uniqueId) {
   const panel = document.getElementById("notifPanel");
   if (panel) panel.classList.add("hidden");
 
   if(!caseId) return;
 
-  // 1. Pehle DOM mein card dhoondo aur Case Open karo
   const card = document.querySelector(`.card-main[data-conv-id="${caseId}"]`);
   
   if (card) {
-      // Case open function call (UI transition)
       window.openCaseDetail(card); 
 
-      // 2. Case successfully khulne ke BAAD hi Backend ko Seen mark karo
-      if (uniqueId && currentUser?.email) {
-          console.log("Opening case first, then marking seen:", uniqueId);
-          
-          apiCall('markSeen', { 
-              notificationId: uniqueId, 
-              userEmail: currentUser.email 
-          }).then(() => {
-              // 3. Seen hone ke baad bell list se hata do taaki count kam ho jaye
-              notifications = notifications.filter(n => n.id !== uniqueId);
-              unreadCount = notifications.length;
-              updateNotificationUI();
-          }).catch(e => console.log("Col P update failed", e));
+      // 🔥 Check if it's an Ask. If yes, KEEP it in the notifications list
+      const notif = notifications.find(n => n.id === uniqueId);
+      if (notif && notif.type === 'Ask') {
+          console.log("Opened an Ask. It will remain in notifications until replied.");
+      } else {
+          // Normal message: Mark seen and remove
+          if (uniqueId && currentUser?.email) {
+              apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email }).then(() => {
+                  notifications = notifications.filter(n => n.id !== uniqueId);
+                  unreadCount = notifications.length;
+                  updateNotificationUI();
+              }).catch(e => console.log("Col P update failed", e));
+          }
       }
   } else {
       showCustomDialog("Notice", "Case " + caseId + " is not in your current list. Please use search.", false);
   }
 }
+
 function clearAllNotifications() {
     notifications = [];
     unreadCount = 0;
@@ -723,6 +721,15 @@ function escapeHTML(str) {
     return String(str).replace(/[&<>'"]/g, match => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[match]));
 }
 
+window.getUserNameByEmail = function(email) {
+    if (!email) return 'Unknown';
+    if (typeof allUsersList !== 'undefined' && allUsersList.length > 0) {
+        const user = allUsersList.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
+        if (user && user.name) return user.name;
+    }
+    return email.split('@')[0];
+};
+
 // ==========================================
 // FILTERS & DROPDOWNS
 // ==========================================
@@ -843,7 +850,7 @@ const applyFilters = debounce(function() {
   
     const matchesLabels = checkedLabels.length === 0 || checkedLabels.every(l => cardLabels.includes(l));
     const matchesMembers = checkedMembers.length === 0 || checkedMembers.some(m => cardMembers.some(cm => cm.toLowerCase().includes(m)));
-    const matchesId = !idQuery || card.dataset.convId.toLowerCase().includes(idQuery);
+    const matchesId = !idQuery || card.dataset.convId.toLowerCase().includes(idQuery) || (card.dataset.subject && card.dataset.subject.includes(idQuery));
     card.style.display = (showTab && matchesId && matchesLabels && matchesMembers) ? 'block' : 'none';
   });
 }, 300);
@@ -990,8 +997,8 @@ window.saveManagedMembers = async function() {
        currentCaseAdmins = [...tempAdmins]; currentCaseUsers = [...tempUsers];
        const detAdm = document.getElementById('detail-admins'); detAdm.innerHTML = '';
        const detUsr = document.getElementById('detail-users'); detUsr.innerHTML = '';
-       currentCaseAdmins.forEach(a => { if(a) detAdm.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${a.split('@')[0]}</span>`; });
-       currentCaseUsers.forEach(u => { if(u) detUsr.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${u.split('@')[0]}</span>`; });
+       currentCaseAdmins.forEach(a => { if(a) detAdm.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${window.getUserNameByEmail(a)}</span>`; });
+       currentCaseUsers.forEach(u => { if(u) detUsr.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${window.getUserNameByEmail(u)}</span>`; });
        detAdm.innerHTML += `<button onclick="openManageMembers()" class="ml-1 text-blue-600 hover:text-blue-800 p-0.5 rounded-full hover:bg-blue-50 transition-colors" title="Manage Members"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>`;
        closeManageMembers(); loadConversations();
    } catch(e) { showCustomDialog("Error", "Failed to update members", false); } finally { btn.innerText = "Save Changes"; btn.disabled = false; }
@@ -1083,7 +1090,7 @@ window.finalizeReplyMention = function(name, email, role) {
       if (!window.currentCaseAllMembers) window.currentCaseAllMembers = [];
       window.currentCaseAllMembers.push(email);
       const detAdm = document.getElementById('detail-admins'); const detUsr = document.getElementById('detail-users');
-      const badgeHtml = `<span class="px-2 py-0.5 ${role === 'Admin' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-600 border-slate-200'} border text-[10px] rounded font-bold shadow-sm">${role === 'Admin' ? '👑' : '👤'} ${name.split('@')[0]}</span>`;
+      const badgeHtml = `<span class="px-2 py-0.5 ${role === 'Admin' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-600 border-slate-200'} border text-[10px] rounded font-bold shadow-sm">${role === 'Admin' ? '👑' : '👤'} ${name}</span>`;
       if (role === 'Admin') { detAdm.insertAdjacentHTML('afterbegin', badgeHtml); } 
       else { detUsr.insertAdjacentHTML('afterbegin', badgeHtml); }
       apiCall('updateCaseMembers', { id: document.getElementById('detail-conv-id').value, admins: currentCaseAdmins, users: currentCaseUsers }).catch(e=>{});
@@ -1224,8 +1231,8 @@ window.openCaseDetail = function(cardEl) {
       window.currentCaseAllMembers = JSON.parse(dataset.members || '[]');
       const detAdm = document.getElementById('detail-admins'); detAdm.innerHTML = '';
       const detUsr = document.getElementById('detail-users'); detUsr.innerHTML = '';
-      currentCaseAdmins.forEach(a => { if(a) detAdm.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${a.split('@')[0]}</span>`; });
-      currentCaseUsers.forEach(u => { if(u) detUsr.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${u.split('@')[0]}</span>`; });
+      currentCaseAdmins.forEach(a => { if(a) detAdm.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${window.getUserNameByEmail(a)}</span>`; });
+      currentCaseUsers.forEach(u => { if(u) detUsr.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${window.getUserNameByEmail(u)}</span>`; });
       if(hasAdminRights) detAdm.innerHTML += `<button onclick="openManageMembers()" class="ml-1 text-blue-600 hover:text-blue-800 p-0.5 rounded-full hover:bg-blue-50 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>`;
 
       const attContainer = document.getElementById('detail-attachments'); attContainer.innerHTML = '';
@@ -1465,7 +1472,7 @@ function renderThreadHTML(list, level = 0) {
                 <div class="p-4 rounded-xl shadow-sm transition-all border border-slate-200/50" style="background-color: ${tColor}; border-left: 4px solid rgba(0,0,0,0.1);">
                     <div class="flex items-center gap-2 mb-2">
                         <div class="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold shadow-inner">${(c.sender || 'U').charAt(0).toUpperCase()}</div>
-                        <span class="font-bold text-sm text-slate-900">${(c.sender || 'Unknown').split('@')[0]}</span>
+                        <span class="font-bold text-sm text-slate-900">${window.getUserNameByEmail(c.sender || 'Unknown')}</span>
                         ${badge}
                         <span class="text-[10px] text-slate-500 font-medium ml-auto">${new Date(c.timestamp).toLocaleString()}</span>
                     </div>
@@ -1719,7 +1726,7 @@ window.finalizeInlineMention = function(name, email, role) {
 
         const detAdm = document.getElementById('detail-admins');
         const detUsr = document.getElementById('detail-users');
-        const shortName = email.split('@')[0];
+        const shortName = window.getUserNameByEmail(email);
         const badgeHtml = `<span class="px-2 py-0.5 ${role === 'Admin' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-600 border-slate-200'} border text-[10px] rounded font-bold shadow-sm">${role === 'Admin' ? '👑' : '👤'} ${shortName}</span>`;
 
         if (role === 'Admin') detAdm.insertAdjacentHTML('afterbegin', badgeHtml);
@@ -1801,6 +1808,13 @@ window.submitInlineReply = async function(btn) {
              threadColor: payload.threadColor || '#f8fafc'
          });
 
+        // 🔥 Clear the Ask notification once replied
+        if (payload.parentAskId) {
+            notifications = notifications.filter(n => n.askId !== payload.parentAskId && n.id !== payload.parentAskId);
+            unreadCount = notifications.length;
+            updateNotificationUI();
+        }
+
         // 2. Clear UI instantly
         inputDiv.innerHTML = ''; inlinePendingFiles = []; replyBox.querySelector('.inline-file-list').innerHTML = ''; replyBox.classList.add('hidden');
         
@@ -1826,6 +1840,7 @@ window.handleDrop = function(e) { e.preventDefault(); addFiles(e.dataTransfer.fi
 function addFiles(files) { Array.from(files).forEach(file => { if(pendingFiles.length >= 10) return; if(!pendingFiles.some(pf => pf.name === file.name)) pendingFiles.push(file); }); renderFileList(); } 
 function renderFileList() { document.getElementById('file_list').innerHTML = pendingFiles.map((f, i) => `<span class="bg-slate-200 text-xs px-2 py-1 rounded flex gap-1 items-center font-medium">${f.name} <button type="button" onclick="removeFile(${i})" class="text-red-500 hover:text-red-700 font-bold ml-1">&times;</button></span>`).join(''); } 
 window.removeFile = function(index) { pendingFiles.splice(index, 1); renderFileList(); };
+
 // ==========================================
 // NEW CASE MEMBER SEARCH & RENDER FIX
 // ==========================================
@@ -1835,7 +1850,7 @@ window.renderNewCaseMembers = function() {
 
     listContainer.innerHTML = composerRecipients.map((m, i) => `
         <span class="px-2 py-1 ${m.role === 'Admin' ? 'bg-blue-100 text-blue-800 border-blue-200' : 'bg-slate-100 text-slate-800 border-slate-200'} border text-xs rounded-lg font-bold shadow-sm flex items-center gap-1">
-            ${m.role === 'Admin' ? '👑' : '👤'} ${m.name.split('@')[0]}
+            ${m.role === 'Admin' ? '👑' : '👤'} ${m.name}
             ${(m.email !== currentUser.email) ? `<button type="button" onclick="removeNewCaseMember(${i})" class="ml-1 text-red-500 hover:text-red-700 font-extrabold">&times;</button>` : ''}
         </span>
     `).join('');
@@ -1937,7 +1952,7 @@ async function loadConversations() {
 
       cardDiv._cachedLabels = conv.labels; cardDiv._cachedMembers = [...conv.admins, ...conv.users, conv.createdBy];
       
-      cardDiv.dataset.convId = conv.id; cardDiv.dataset.status = conv.status; cardDiv.dataset.snooze = safeSnoozeMs; cardDiv.dataset.hasAdminRights = hasAdminRights; cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments); cardDiv.dataset.labels = JSON.stringify(conv.labels); cardDiv.dataset.members = JSON.stringify([...conv.admins, ...conv.users, conv.createdBy]); cardDiv.dataset.caseAdmins = JSON.stringify(conv.admins); cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
+      cardDiv.dataset.convId = conv.id; cardDiv.dataset.subject = conv.subject.toLowerCase(); cardDiv.dataset.status = conv.status; cardDiv.dataset.snooze = safeSnoozeMs; cardDiv.dataset.hasAdminRights = hasAdminRights; cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments); cardDiv.dataset.labels = JSON.stringify(conv.labels); cardDiv.dataset.members = JSON.stringify([...conv.admins, ...conv.users, conv.createdBy]); cardDiv.dataset.caseAdmins = JSON.stringify(conv.admins); cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
       card.querySelector('[data-id="conv-id"]').textContent = conv.id; card.querySelector('[data-id="subject"]').textContent = conv.subject; card.querySelector('[data-id="details"]').textContent = conv.details; card.querySelector('[data-id="message"]').innerHTML = conv.message; card.querySelector('[data-id="author"]').textContent = conv.createdBy; card.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString(); card.querySelector('[data-id="display-case-id"]').textContent = conv.id;
       
       const isSnoozed = safeSnoozeMs > Date.now(); 
@@ -1954,8 +1969,8 @@ async function loadConversations() {
       
       const lCont = card.querySelector('[data-id="labels-container"]'); conv.labels.forEach(l => { if(l){ const s = document.createElement('span'); s.className='px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded font-bold'; s.innerText=l; lCont.appendChild(s); } });
       const admCont = card.querySelector('[data-id="admins-container"]'); const usrCont = card.querySelector('[data-id="users-container"]');
-      conv.admins.forEach(a => { if(a) admCont.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${a.split('@')[0]}</span>`; });
-      conv.users.forEach(u => { if(u) usrCont.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${u.split('@')[0]}</span>`; });
+      conv.admins.forEach(a => { if(a) admCont.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${window.getUserNameByEmail(a)}</span>`; });
+      conv.users.forEach(u => { if(u) usrCont.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${window.getUserNameByEmail(u)}</span>`; });
       fragment.appendChild(card);
     });
     
