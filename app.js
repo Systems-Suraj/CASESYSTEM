@@ -708,14 +708,11 @@ async function initNotifications(user) {
 }
 
 window.onload = function() {
-  setTimeout(() => {
-    if (currentUser) {
-        console.log("🔥 45 sec over: Loading background data...");
-        fetchUsersForMentions(); 
-        loadConversations();
-        loadLabelsForForm();
-    }
-  }, 45000);
+  if (currentUser) {
+    fetchUsersForMentions();   // ✅ instant load
+    loadConversations();
+    loadLabelsForForm();
+  }
 };
 
 // ==========================================
