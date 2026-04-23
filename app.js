@@ -317,7 +317,6 @@ function toggleNotifications(event) {
   }
 }
 
-// 🔥 FIX: Improved Case ID Parsing for accurate lookup
 async function openFromNotification(caseId, uniqueId) {
   const panel = document.getElementById("notifPanel");
   if (panel) panel.classList.add("hidden");
@@ -1220,7 +1219,10 @@ window.openEditCaseModal = function() {
     renderEditLabels();
     
     const convId = document.getElementById('detail-conv-id').value;
-    const card = document.querySelector(`.card-main[data-conv-id="${convId}"]`) || document.querySelector(`div[data-conv-id="${convId}"]`);
+    // 🔥 Ensures it finds the right data no matter what wrapper it's in
+    let card = document.querySelector(`[data-conv-id="${convId}"]`);
+    if(card && !card.dataset.attachmentsData) card = card.querySelector('.card-main') || card.closest('.card-main');
+    
     if(card) currentEditAttachments = JSON.parse(card.dataset.attachmentsData || '[]').filter(String);
     newEditPendingFiles = []; renderEditAttachments();
     document.getElementById('editCaseModal').classList.remove('hidden');
@@ -1266,11 +1268,18 @@ window.handleCardClick = function(event, cardEl) {
    window.openCaseDetail(cardEl);
 };
 
+// 🔥 FIX: 100% Robust Case Detail Opening Logic
 window.openCaseDetail = function(cardEl) {
   try {
-      // 🔥 FIX: Ab ye correctly parent card ko dhundhega
-      const card = cardEl.closest('.card-main'); 
-      if (!card) return;
+      let card = cardEl.classList && cardEl.classList.contains('card-main') ? cardEl : null;
+      if (!card && cardEl.closest) card = cardEl.closest('.card-main');
+      if (!card && cardEl.querySelector) card = cardEl.querySelector('.card-main');
+      if (!card) card = cardEl.closest('[data-conv-id]'); 
+
+      if (!card) {
+          console.error("Card element not found for opening.");
+          return;
+      }
 
       const dataset = card.dataset; const convId = dataset.convId;
       document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]').innerText; 
@@ -1326,7 +1335,6 @@ window.openCaseDetail = function(cardEl) {
 
       document.getElementById('dashboardView').classList.add('hidden'); document.getElementById('caseDetailView').classList.remove('hidden');
       
-      // 🔥 REALTIME START (Reset & Start Polling)
       lastTimestamp = 0;
       seenMessages.clear();
       if (realtimeInterval) {
