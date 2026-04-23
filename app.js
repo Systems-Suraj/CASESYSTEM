@@ -225,6 +225,7 @@ let hasMore = true;
 let lastTimestamp = 0;
 let seenMessages = new Set();
 let realtimeInterval = null;
+let isInitialLoadDone = false; // 🔥 Ensures data isn't loaded twice
 
 // ==========================================
 // 🔥 GLOBAL UNREAD FETCHER & NOTIFICATIONS (V12)
@@ -549,6 +550,27 @@ function showCustomDialog(title, message, isConfirm, onConfirmCallback) {
 function closeDialog() { document.getElementById('customDialog').classList.add('hidden'); }
 
 // ==========================================
+// 🔥 DATA LOAD CONTROLLER (PREVENTS RACE CONDITION)
+// ==========================================
+async function initDataLoad() {
+    if (isInitialLoadDone) return;
+    isInitialLoadDone = true;
+    
+    // 1. Await full user list fetch FIRST to guarantee names are loaded
+    await fetchUsersForMentions();
+    
+    // 2. Only then load the cases, ensuring the names are ready to map
+    loadConversations();
+    loadLabelsForForm();
+}
+
+window.onload = function() {
+    if (currentUser) {
+        initDataLoad();
+    }
+};
+
+// ==========================================
 // 🔥 SIMPLE DIRECT LOGIN LOGIC
 // ==========================================
 window.handleNextOrLogin = function() {
@@ -619,6 +641,7 @@ window.logoutUser = function() {
   localStorage.removeItem("user");
   sessionStorage.removeItem("user");
   currentUser = null;
+  isInitialLoadDone = false; // Reset data flag
   document.getElementById("appView").classList.add("hidden"); 
   document.getElementById("loginView").classList.remove("hidden");
   document.getElementById("email").value = "";
@@ -645,6 +668,9 @@ function showAppScreen(userObj) {
   if (typeof initNotifications === 'function') {
      initNotifications(userObj);
   }
+
+  // Load UI Data safely on fresh logins
+  initDataLoad();
 
   setTimeout(() => {
     if (window.Android && userObj.email) {
@@ -696,14 +722,6 @@ async function initNotifications(user) {
     console.error("❌ Notification Error in app.js:", err);
   }
 }
-
-window.onload = function() {
-  if (currentUser) {
-    fetchUsersForMentions(); 
-    loadConversations();
-    loadLabelsForForm();
-  }
-};
 
 // ==========================================
 // HELPERS
@@ -842,7 +860,6 @@ const applyFilters = debounce(function() {
   
     const matchesLabels = checkedLabels.length === 0 || checkedLabels.every(l => cardLabels.includes(l));
     
-    // 🔥 FIX: Correctly maps underlying emails to names before filtering
     const matchesMembers = checkedMembers.length === 0 || checkedMembers.some(m => 
         cardMembers.some(cm => {
             if (!cm) return false;
@@ -852,7 +869,6 @@ const applyFilters = debounce(function() {
         })
     );
     
-    // 🔥 FIX: Allows searching by ID or Subject
     const matchesId = !idQuery || card.dataset.convId.toLowerCase().includes(idQuery) || (card.dataset.subject && card.dataset.subject.includes(idQuery));
     
     card.style.display = (showTab && matchesId && matchesLabels && matchesMembers) ? 'block' : 'none';
@@ -951,7 +967,6 @@ function getFilteredUsersForMention(query) {
     return result.filter((u, index, self) => index === self.findIndex((t) => t.email === u.email));
 }
 
-// 🔥 FIX: Safe array filtering for Manage Members modal
 window.searchNewMember = debounce(function(q) {
    const dropdown = document.getElementById('member_search_dropdown');
    if(!q) { dropdown.classList.add('hidden'); return; }
@@ -1230,13 +1245,17 @@ window.openCaseDetail = function(cardEl) {
       const card = cardEl.closest('.card-main'); const dataset = card.dataset; const convId = dataset.convId;
       document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]').innerText; 
       document.getElementById('detail-id').innerText = convId; 
-      document.getElementById('detail-author').innerText = card.querySelector('[data-id="author"]').innerText; 
+      const creatorName = card.querySelector('[data-id="author"]').innerText;
+      document.getElementById('detail-author').innerText = creatorName; 
       document.getElementById('detail-timestamp').innerText = card.querySelector('[data-id="timestamp"]').innerText;
       document.getElementById('detail-details').innerText = card.querySelector('[data-id="details"]').innerText; 
       document.getElementById('detail-message').innerHTML = card.querySelector('[data-id="message"]').innerHTML;
       document.getElementById('detail-labels').innerHTML = card.querySelector('[data-id="labels-container"]').innerHTML; 
       document.getElementById('detail-status-badge').innerHTML = card.querySelector('[data-id="status-badge"]').outerHTML;
       
+      const detailAvatar = document.getElementById('detail-avatar-letter');
+      if(detailAvatar) detailAvatar.textContent = creatorName.charAt(0).toUpperCase();
+
       currentCaseAdmins = JSON.parse(dataset.caseAdmins || '[]').filter(String);
       let rawCaseUsers = JSON.parse(dataset.caseUsers || '[]').filter(String);
       const hasAdminRights = dataset.hasAdminRights === 'true';
@@ -1485,13 +1504,14 @@ function renderThreadHTML(list, level = 0) {
         }
 
         const parentAskIdForBackend = (c.type === 'Ask') ? c.askId : (c.parentAskId || '');
+        const senderName = window.getUserNameByEmail(c.sender || 'Unknown');
 
         return `
             <div class="mb-4 group" style="${indentStyle}" data-id="reply-container">
                 <div class="p-4 rounded-xl shadow-sm transition-all border border-slate-200/50" style="background-color: ${tColor}; border-left: 4px solid rgba(0,0,0,0.1);">
                     <div class="flex items-center gap-2 mb-2">
-                        <div class="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold shadow-inner">${(c.sender || 'U').charAt(0).toUpperCase()}</div>
-                        <span class="font-bold text-sm text-slate-900">${window.getUserNameByEmail(c.sender || 'Unknown')}</span>
+                        <div class="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold shadow-inner">${senderName.charAt(0).toUpperCase()}</div>
+                        <span class="font-bold text-sm text-slate-900">${senderName}</span>
                         ${badge}
                         <span class="text-[10px] text-slate-500 font-medium ml-auto">${new Date(c.timestamp).toLocaleString()}</span>
                     </div>
@@ -1975,8 +1995,14 @@ async function loadConversations() {
       cardDiv._cachedLabels = conv.labels; cardDiv._cachedMembers = [...conv.admins, ...conv.users, conv.createdBy];
       
       cardDiv.dataset.convId = conv.id; cardDiv.dataset.subject = conv.subject.toLowerCase(); cardDiv.dataset.status = conv.status; cardDiv.dataset.snooze = safeSnoozeMs; cardDiv.dataset.hasAdminRights = hasAdminRights; cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments); cardDiv.dataset.labels = JSON.stringify(conv.labels); cardDiv.dataset.members = JSON.stringify([...conv.admins, ...conv.users, conv.createdBy]); cardDiv.dataset.caseAdmins = JSON.stringify(conv.admins); cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
-      card.querySelector('[data-id="conv-id"]').textContent = conv.id; card.querySelector('[data-id="subject"]').textContent = conv.subject; card.querySelector('[data-id="details"]').textContent = conv.details; card.querySelector('[data-id="message"]').innerHTML = conv.message; card.querySelector('[data-id="author"]').textContent = window.getUserNameByEmail(conv.createdBy); card.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString(); card.querySelector('[data-id="display-case-id"]').textContent = conv.id;
       
+      const creatorName = window.getUserNameByEmail(conv.createdBy);
+      
+      card.querySelector('[data-id="conv-id"]').textContent = conv.id; card.querySelector('[data-id="subject"]').textContent = conv.subject; card.querySelector('[data-id="details"]').textContent = conv.details; card.querySelector('[data-id="message"]').innerHTML = conv.message; card.querySelector('[data-id="author"]').textContent = creatorName; card.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString(); card.querySelector('[data-id="display-case-id"]').textContent = conv.id;
+      
+      const avatarEl = card.querySelector('[data-id="avatar-letter"]');
+      if(avatarEl) avatarEl.textContent = creatorName.charAt(0).toUpperCase();
+
       const isSnoozed = safeSnoozeMs > Date.now(); 
       const badge = card.querySelector('[data-id="status-badge"]');
       badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm";
