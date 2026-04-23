@@ -332,12 +332,13 @@ async function openFromNotification(caseId, uniqueId) {
       if (notif && notif.type === 'Ask') {
           console.log("Opened an Ask. It will remain in notifications until replied.");
       } else {
+          // 🔥 INSTANT OPTIMISTIC UI REMOVAL
+          notifications = notifications.filter(n => n.id !== uniqueId);
+          unreadCount = notifications.length;
+          updateNotificationUI();
+          
           if (uniqueId && currentUser?.email) {
-              apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email }).then(() => {
-                  notifications = notifications.filter(n => n.id !== uniqueId);
-                  unreadCount = notifications.length;
-                  updateNotificationUI();
-              }).catch(e => console.log("Col P update failed", e));
+              apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email }).catch(e => console.log("Col P update failed", e));
           }
       }
   } else {
@@ -845,8 +846,11 @@ const applyFilters = debounce(function() {
   const checkedLabels = Array.from(document.querySelectorAll('.flabel[data-applied="true"]')).map(cb => cb.value);
   const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => cb.value.toLowerCase());
   
-  Array.from(document.getElementById('conversationFeed').children).forEach(card => {
-    if(!card.dataset.convId) return; 
+  // 🔥 FIX: Iterate over wrappers, but check the .card-main datasets
+  Array.from(document.getElementById('conversationFeed').children).forEach(wrapper => {
+    const card = wrapper.classList.contains('card-main') ? wrapper : wrapper.querySelector('.card-main');
+    if(!card || !card.dataset.convId) return; 
+    
     const isArchived = card.dataset.status === 'Archived'; 
     const isSnoozed = parseInt(card.dataset.snooze || 0) > Date.now();
     let showTab = false;
@@ -871,7 +875,8 @@ const applyFilters = debounce(function() {
     
     const matchesId = !idQuery || card.dataset.convId.toLowerCase().includes(idQuery) || (card.dataset.subject && card.dataset.subject.includes(idQuery));
     
-    card.style.display = (showTab && matchesId && matchesLabels && matchesMembers) ? 'block' : 'none';
+    // Toggle visibility on the wrapper so grid doesn't break
+    wrapper.style.display = (showTab && matchesId && matchesLabels && matchesMembers) ? 'block' : 'none';
   });
 }, 300);
 
@@ -1194,7 +1199,7 @@ window.openEditCaseModal = function() {
     renderEditLabels();
     
     const convId = document.getElementById('detail-conv-id').value;
-    const card = document.querySelector(`.card-main[data-conv-id="${convId}"]`);
+    const card = document.querySelector(`.card-main[data-conv-id="${convId}"]`) || document.querySelector(`div[data-conv-id="${convId}"]`);
     if(card) currentEditAttachments = JSON.parse(card.dataset.attachmentsData || '[]').filter(String);
     newEditPendingFiles = []; renderEditAttachments();
     document.getElementById('editCaseModal').classList.remove('hidden');
@@ -1242,7 +1247,8 @@ window.handleCardClick = function(event, cardEl) {
 
 window.openCaseDetail = function(cardEl) {
   try {
-      const card = cardEl.closest('.card-main'); const dataset = card.dataset; const convId = dataset.convId;
+      const card = cardEl.classList.contains('card-main') ? cardEl : cardEl.querySelector('.card-main'); 
+      const dataset = card.dataset; const convId = dataset.convId;
       document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]').innerText; 
       document.getElementById('detail-id').innerText = convId; 
       const creatorName = card.querySelector('[data-id="author"]').innerText;
@@ -1982,7 +1988,11 @@ async function loadConversations() {
     allCasesData.forEach(conv => {
       const cardTemp = document.getElementById('cardTemplate');
       if(!cardTemp) return;
-      const card = cardTemp.content.cloneNode(true); const cardDiv = card.querySelector('div');
+      const cardFragment = cardTemp.content.cloneNode(true); 
+      
+      const wrapperDiv = cardFragment.firstElementChild;
+      const cardDiv = wrapperDiv.classList.contains('card-main') ? wrapperDiv : wrapperDiv.querySelector('.card-main');
+      
       const hasAdminRights = conv.createdBy.toLowerCase().includes(uEmail) || conv.createdBy.toLowerCase().includes(uName) || conv.admins.some(a => a.toLowerCase().includes(uEmail) || a.toLowerCase().includes(uName));
       
       let safeSnoozeMs = 0;
@@ -1992,34 +2002,61 @@ async function loadConversations() {
               : parseInt(conv.snoozeTime, 10) || 0;
       }
 
-      cardDiv._cachedLabels = conv.labels; cardDiv._cachedMembers = [...conv.admins, ...conv.users, conv.createdBy];
+      cardDiv._cachedLabels = conv.labels; 
+      cardDiv._cachedMembers = [...conv.admins, ...conv.users, conv.createdBy];
       
-      cardDiv.dataset.convId = conv.id; cardDiv.dataset.subject = conv.subject.toLowerCase(); cardDiv.dataset.status = conv.status; cardDiv.dataset.snooze = safeSnoozeMs; cardDiv.dataset.hasAdminRights = hasAdminRights; cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments); cardDiv.dataset.labels = JSON.stringify(conv.labels); cardDiv.dataset.members = JSON.stringify([...conv.admins, ...conv.users, conv.createdBy]); cardDiv.dataset.caseAdmins = JSON.stringify(conv.admins); cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
+      cardDiv.dataset.convId = conv.id; 
+      cardDiv.dataset.subject = conv.subject.toLowerCase(); 
+      cardDiv.dataset.status = conv.status; 
+      cardDiv.dataset.snooze = safeSnoozeMs; 
+      cardDiv.dataset.hasAdminRights = hasAdminRights; 
+      cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments); 
+      cardDiv.dataset.labels = JSON.stringify(conv.labels); 
+      cardDiv.dataset.members = JSON.stringify([...conv.admins, ...conv.users, conv.createdBy]); 
+      cardDiv.dataset.caseAdmins = JSON.stringify(conv.admins); 
+      cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
       
+      if (wrapperDiv !== cardDiv) {
+          wrapperDiv.dataset.convId = conv.id;
+      }
+
       const creatorName = window.getUserNameByEmail(conv.createdBy);
       
-      card.querySelector('[data-id="conv-id"]').textContent = conv.id; card.querySelector('[data-id="subject"]').textContent = conv.subject; card.querySelector('[data-id="details"]').textContent = conv.details; card.querySelector('[data-id="message"]').innerHTML = conv.message; card.querySelector('[data-id="author"]').textContent = creatorName; card.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString(); card.querySelector('[data-id="display-case-id"]').textContent = conv.id;
+      cardDiv.querySelector('[data-id="conv-id"]').textContent = conv.id; 
+      cardDiv.querySelector('[data-id="subject"]').textContent = conv.subject; 
+      cardDiv.querySelector('[data-id="details"]').textContent = conv.details; 
+      cardDiv.querySelector('[data-id="message"]').innerHTML = conv.message; 
+      cardDiv.querySelector('[data-id="author"]').textContent = creatorName; 
+      cardDiv.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString(); 
+      cardDiv.querySelector('[data-id="display-case-id"]').textContent = conv.id;
       
-      const avatarEl = card.querySelector('[data-id="avatar-letter"]');
+      const avatarEl = cardDiv.querySelector('[data-id="avatar-letter"]');
       if(avatarEl) avatarEl.textContent = creatorName.charAt(0).toUpperCase();
 
       const isSnoozed = safeSnoozeMs > Date.now(); 
-      const badge = card.querySelector('[data-id="status-badge"]');
+      const badge = cardDiv.querySelector('[data-id="status-badge"]');
       badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm";
       
       if(conv.status === 'Archived') { badge.classList.add('bg-emerald-700','text-white'); badge.innerText = "ARCHIVED"; } else if(isSnoozed) { badge.classList.add('bg-orange-100','text-orange-700'); badge.innerText = "SNOOZED"; } else { badge.classList.add('bg-emerald-500','text-white'); badge.innerText = "ACTIVE"; }
       
-      const footerActions = card.querySelector('.flex.items-center.gap-3.text-sm'); const cbContainer = footerActions.querySelector('.archive-cb-container'); const snoozeBtn = footerActions.querySelector('.snooze-card-btn'); const unsnoozeBtn = footerActions.querySelector('.unsnooze-card-btn'); const unarchiveBtn = footerActions.querySelector('.unarchive-card-btn'); const checkbox = footerActions.querySelector('.bulk-archive-cb');
+      const footerActions = cardDiv.querySelector('.flex.items-center.gap-3.text-sm'); 
+      const cbContainer = footerActions.querySelector('.archive-cb-container'); 
+      const snoozeBtn = footerActions.querySelector('.snooze-card-btn'); 
+      const unsnoozeBtn = footerActions.querySelector('.unsnooze-card-btn'); 
+      const unarchiveBtn = footerActions.querySelector('.unarchive-card-btn'); 
+      const checkbox = footerActions.querySelector('.bulk-archive-cb');
       cbContainer.classList.add('hidden'); cbContainer.classList.remove('flex'); snoozeBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden'); unarchiveBtn.classList.add('hidden');
       
       if (hasAdminRights) { if (conv.status === 'Archived') { unarchiveBtn.classList.remove('hidden'); } else if (isSnoozed) { unsnoozeBtn.classList.remove('hidden'); } }
       if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) { cbContainer.classList.remove('hidden'); cbContainer.classList.add('flex'); checkbox.disabled = false; snoozeBtn.classList.remove('hidden'); }
       
-      const lCont = card.querySelector('[data-id="labels-container"]'); conv.labels.forEach(l => { if(l){ const s = document.createElement('span'); s.className='px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded font-bold'; s.innerText=l; lCont.appendChild(s); } });
-      const admCont = card.querySelector('[data-id="admins-container"]'); const usrCont = card.querySelector('[data-id="users-container"]');
+      const lCont = cardDiv.querySelector('[data-id="labels-container"]'); 
+      conv.labels.forEach(l => { if(l){ const s = document.createElement('span'); s.className='px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded font-bold'; s.innerText=l; lCont.appendChild(s); } });
+      const admCont = cardDiv.querySelector('[data-id="admins-container"]'); 
+      const usrCont = cardDiv.querySelector('[data-id="users-container"]');
       conv.admins.forEach(a => { if(a) admCont.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${window.getUserNameByEmail(a)}</span>`; });
       conv.users.forEach(u => { if(u) usrCont.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${window.getUserNameByEmail(u)}</span>`; });
-      fragment.appendChild(card);
+      fragment.appendChild(cardFragment);
     });
     
     feed.appendChild(fragment); window.switchTab(currentTab); 
