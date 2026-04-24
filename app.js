@@ -1327,8 +1327,8 @@ window.openCaseDetail = function(cardEl) {
       resetCaseState();
 
       const dataset = card.dataset; 
-      // 🔥 FIX 2: NORMALIZE CASE ID
-      const convId = String(dataset.convId || "").trim().toLowerCase();
+      // 🔥 FIX: JUST TRIM, NO LOWERCASE HERE (Keep UI looking good)
+      const convId = String(dataset.convId || "").trim();
       
       document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]').innerText; 
       document.getElementById('detail-id').innerText = convId; 
@@ -1467,14 +1467,16 @@ function loadCommentsPaginated(caseId, reset = false) {
             }
             if (data.length < limit) hasMore = false;
             
+            // 🔥 NORMALIZE ACTIVE CASE ID ONCE
+            const cleanActiveCaseId = String(caseId).trim().toLowerCase();
+            
             const validData = [];
             data.forEach(msg => {
-                // 🛑 STRICT CASE FILTER (Stop cross-case bleeding)
-                if (String(msg.caseId).trim() !== String(caseId).trim()) return;
+                // 🛑 STRICT MATCHING (BOTH SIDES LOWERCASE & TRIMMED)
+                if (String(msg.caseId).trim().toLowerCase() !== cleanActiveCaseId) return;
 
                 const id = msg.uniqueId || (msg.timestamp + msg.sender);
                 
-                // 🔥 BULLETPROOF DUPLICATE CHECK
                 const isDuplicate = seenMessages.has(id) || allLoadedComments.some(c => 
                     (c.uniqueId && msg.uniqueId && c.uniqueId === msg.uniqueId) || 
                     (String(c.text || '').trim() === String(msg.text || '').trim() && 
@@ -1499,7 +1501,6 @@ function loadCommentsPaginated(caseId, reset = false) {
 async function fetchNewMessages() {
     const caseId = document.getElementById('detail-conv-id')?.value;
     
-    // Agar case view open nahi hai ya pagination load ho raha hai, toh fetch mat karo
     if (!caseId || document.getElementById("caseDetailView").classList.contains("hidden") || isLoading) return;
 
     try {
@@ -1511,14 +1512,15 @@ async function fetchNewMessages() {
         if (!messages || messages.length === 0) return;
 
         let hasNew = false;
+        // 🔥 NORMALIZE ACTIVE CASE ID ONCE
+        const cleanActiveCaseId = String(caseId).trim().toLowerCase();
 
         messages.forEach(msg => {
-            // 🛑 STRICT CASE FILTER (Stop cross-case bleeding)
-            if (String(msg.caseId).trim() !== String(caseId).trim()) return;
+            // 🛑 STRICT MATCHING (BOTH SIDES LOWERCASE & TRIMMED)
+            if (String(msg.caseId).trim().toLowerCase() !== cleanActiveCaseId) return;
 
             const id = msg.uniqueId || (msg.timestamp + msg.sender);
 
-            // 🔥 BULLETPROOF DUPLICATE CHECK (Fixes double double append)
             const isDuplicate = seenMessages.has(id) || allLoadedComments.some(c => 
                 (c.uniqueId && msg.uniqueId && c.uniqueId === msg.uniqueId) || 
                 (String(c.text || '').trim() === String(msg.text || '').trim() && 
@@ -1535,12 +1537,10 @@ async function fetchNewMessages() {
             allLoadedComments.push(msg);
             hasNew = true;
 
-            // 🔥 Update timestamp
             if (msg.timestamp > lastTimestamp) {
                 lastTimestamp = msg.timestamp;
             }
 
-            // 🔥 Mark as seen on backend if not already seen by this user
             if (!msg.seen || !msg.seen.includes(currentUser.email)) {
                 fetch(API_URL, {
                     method: "POST",
@@ -1558,7 +1558,6 @@ async function fetchNewMessages() {
 
         if (hasNew) {
             renderAllCommentsLocally();
-            
             setTimeout(() => {
                 const scrollArea = document.getElementById("detail-thread-container").parentElement;
                 if (scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
