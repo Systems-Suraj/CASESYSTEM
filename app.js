@@ -1,7 +1,7 @@
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v13"; // 🔄 Version bumped to v13 to force cache clear for all users with new fixes
+const APP_VERSION = "v14"; // 🔄 Version bumped to v14 to force cache clear for all users with new UI fixes
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -228,12 +228,12 @@ let realtimeInterval = null;
 let isInitialLoadDone = false; 
 
 // ==========================================
-// 🔥 GLOBAL UNREAD FETCHER & NOTIFICATIONS (V12)
+// 🔥 GLOBAL UNREAD FETCHER & NOTIFICATIONS
 // ==========================================
 let notifications = [];
 let unreadCount = 0;
 let globalNotifInterval = null;
-let locallySeenNotifications = new Set(); // 🔥 FIX: Store seen notifications locally to prevent duplicates
+let locallySeenNotifications = new Set(); 
 
 const tingSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
 
@@ -295,22 +295,22 @@ function updateNotificationUI() {
   const panel = document.getElementById("notifPanel");
   if (panel) {
       if (notifications.length === 0) {
-          panel.innerHTML = `<div class="p-5 text-center text-sm text-slate-500 font-medium" style="min-width: 250px;">No new notifications</div>`;
+          panel.innerHTML = `<div class="p-5 text-center text-sm text-slate-500 font-medium w-72 sm:w-80">No new notifications</div>`;
       } else {
           panel.innerHTML = `
-    <div class="px-4 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10" style="min-width: 320px;">
+    <div class="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50 sticky top-0 z-10 w-72 sm:w-80">
         <span class="font-extrabold text-sm text-slate-800">Notifications</span>
-        <button onclick="clearAllNotifications()" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2 py-1 rounded-md shrink-0">Clear All</button>
+        <button type="button" onclick="clearAllNotifications()" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-100 px-2 py-1 rounded-md">Clear All</button>
     </div>
-    <div class="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto">
+    <div class="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto w-72 sm:w-80">
         ${notifications.map(n => `
-          <div class="p-4 cursor-pointer hover:bg-indigo-50 transition-colors flex flex-col gap-1.5"
+          <div class="p-4 cursor-pointer hover:bg-slate-50 transition-colors block w-full"
                onclick="window.openFromNotification('${n.caseId}', '${n.id}')">
-            <div class="flex justify-between items-center gap-2">
-                <span class="text-sm font-bold text-slate-800 truncate">${escapeHTML(window.getUserNameByEmail(n.sender))}</span>
-                <span class="text-[9px] text-slate-400 font-bold tracking-wider shrink-0">${new Date(n.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+            <div class="flex justify-between items-center w-full mb-1 gap-2">
+                <span class="text-sm font-bold text-slate-900 truncate w-[65%]">${escapeHTML(window.getUserNameByEmail(n.sender))}</span>
+                <span class="text-[10px] text-slate-500 font-bold whitespace-nowrap text-right w-[35%]">${new Date(n.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
             </div>
-            <div class="text-xs text-slate-600 line-clamp-2 break-words leading-relaxed">${escapeHTML(n.text)}</div>
+            <div class="text-xs text-slate-600 line-clamp-2 w-full leading-relaxed">${escapeHTML(n.text)}</div>
           </div>
         `).join("")}
     </div>
@@ -331,36 +331,40 @@ function toggleNotifications(event) {
   }
 }
 
-window.openFromNotification = async function(caseId, uniqueId) {
+window.openFromNotification = function(caseId, uniqueId) {
+  // 1. Click hote hi notification panel hide karo
   const panel = document.getElementById("notifPanel");
   if (panel) panel.classList.add("hidden");
 
   if(!caseId || caseId === 'undefined') {
-      showCustomDialog("Notice", "Case ID is missing. Cannot open.", false);
+      showCustomDialog("Notice", "Case ID missing hai.", false);
       return;
   }
 
   const cleanCaseId = String(caseId).trim();
   const card = document.querySelector(`[data-conv-id="${cleanCaseId}"]`);
   
-  // Mark it as seen locally INSTANTLY so it never duplicates
+  // 2. Notification ko locally dekha hua (seen) mark karo
   if (uniqueId) {
       locallySeenNotifications.add(uniqueId);
   }
 
-  // Remove from notification list immediately
+  // 3. Notification list se hatao aur count update karo
   notifications = notifications.filter(n => n.id !== uniqueId);
   unreadCount = notifications.length;
   updateNotificationUI();
   
+  // 4. Backend par seen bhejo (silent)
   if (uniqueId && currentUser?.email) {
-      apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email }).catch(e => console.log("Col P update failed", e));
+      apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email }).catch(e => console.log(e));
   }
 
+  // 5. Case Open karo
   if (card) {
       window.openCaseDetail(card); 
   } else {
-      showCustomDialog("Notice", "Case " + cleanCaseId + " is not in your current feed. Please use the search box to find it.", false);
+      // Agar case current feed mein nahi hai
+      showCustomDialog("Notice", "Yeh case ID: " + cleanCaseId + " abhi screen par loaded nahi hai. Please search box use karein.", false);
   }
 };
 
@@ -897,7 +901,6 @@ const applyFilters = debounce(function() {
 // ACTIONS: ARCHIVE, SNOOZE
 // ==========================================
 
-// 🔥 FIX: Robust ID selection to prevent bulk archive freezing
 window.processBulkArchive = function() {
   const selectedIds = Array.from(document.querySelectorAll('.bulk-archive-cb:checked')).map(cb => {
       const card = cb.closest('[data-conv-id]');
@@ -1286,7 +1289,6 @@ window.handleCardClick = function(event, cardEl) {
    window.openCaseDetail(cardEl);
 };
 
-// 🔥 FIX: 100% Robust Case Detail Opening Logic
 window.openCaseDetail = function(cardEl) {
   try {
       let card = cardEl.classList && cardEl.classList.contains('card-main') ? cardEl : null;
@@ -1493,7 +1495,6 @@ async function fetchNewMessages() {
 
             // 🔥 Mark as seen on backend if not already seen by this user
             if (!msg.seen || !msg.seen.includes(currentUser.email)) {
-                // Async background hit (no need to wait for response)
                 fetch(API_URL, {
                     method: "POST",
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
