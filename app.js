@@ -1,7 +1,7 @@
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v16"; // 🔄 Version bumped to v16 to force cache clear and fix chat bleeding/duplication
+const APP_VERSION = "v17"; // 🔄 Version bumped to force cache clear & fix case matching
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -245,7 +245,7 @@ function addNotification(msg) {
   const isCaseViewOpen = document.getElementById('caseDetailView') && !document.getElementById('caseDetailView').classList.contains('hidden');
   const msgCaseId = msg.caseId || msg.id || "";
 
-  if (isCaseViewOpen && String(activeCaseId).trim() === String(msgCaseId).trim()) {
+  if (isCaseViewOpen && String(activeCaseId).trim().toLowerCase() === String(msgCaseId).trim().toLowerCase()) {
       return; 
   }
 
@@ -328,7 +328,7 @@ function toggleNotifications(event) {
   }
 }
 
-// 🔥 FIX 4: BULLETPROOF CASE SELECTION FROM NOTIFICATION
+// 🔥 NORMALIZE ID FOR SEARCHING THE DOM BUT KEEP ORIGINAL CASE ID
 window.openFromNotification = function(caseId, uniqueId) {
   const panel = document.getElementById("notifPanel");
   if (panel) panel.classList.add("hidden");
@@ -338,7 +338,7 @@ window.openFromNotification = function(caseId, uniqueId) {
       return;
   }
 
-  // Normalize incoming ID
+  // Normalize incoming ID for matching
   const cleanCaseId = String(caseId).trim().toLowerCase();
   
   // Find card robustly ignoring case/spaces
@@ -360,7 +360,7 @@ window.openFromNotification = function(caseId, uniqueId) {
   if (card) {
       window.openCaseDetail(card); 
   } else {
-      showCustomDialog("Notice", "Yeh case ID: " + cleanCaseId + " abhi screen par loaded nahi hai. Please search box use karein.", false);
+      showCustomDialog("Notice", "Yeh case ID abhi screen par loaded nahi hai. Please search box use karein.", false);
   }
 };
 
@@ -1278,7 +1278,7 @@ window.saveCaseEdits = async function() {
 };
 
 // ==========================================
-// FULL STATE AND UI RESET (FIX 1 & 3)
+// FULL STATE AND UI RESET
 // ==========================================
 function resetCaseState() {
   lastTimestamp = 0;
@@ -1288,15 +1288,12 @@ function resetCaseState() {
   currentCaseAdmins = [];
   currentCaseUsers = [];
   
-  // Clear the thread UI immediately
   const threadContainer = document.getElementById("detail-thread-container");
   if (threadContainer) threadContainer.innerHTML = "";
   
-  // Reset reply input
   const replyInput = document.getElementById("detail-reply-input");
   if (replyInput) replyInput.innerHTML = "";
   
-  // Clear any active real-time intervals of the previous case
   if (realtimeInterval) {
       clearInterval(realtimeInterval);
       realtimeInterval = null;
@@ -1311,6 +1308,7 @@ window.handleCardClick = function(event, cardEl) {
    window.openCaseDetail(cardEl);
 };
 
+// 🔥 FIX: KEEP ORIGINAL CASE FOR UI, DO NOT LOWERCASE IT
 window.openCaseDetail = function(cardEl) {
   try {
       let card = cardEl.classList && cardEl.classList.contains('card-main') ? cardEl : null;
@@ -1323,12 +1321,10 @@ window.openCaseDetail = function(cardEl) {
           return;
       }
 
-      // 🔥 RESET EVERYTHING BEFORE LOADING NEW CASE
       resetCaseState();
 
       const dataset = card.dataset; 
-      // 🔥 FIX: JUST TRIM, NO LOWERCASE HERE (Keep UI looking good)
-      const convId = String(dataset.convId || "").trim();
+      const convId = String(dataset.convId || "").trim(); // Kept Original Case String
       
       document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]').innerText; 
       document.getElementById('detail-id').innerText = convId; 
@@ -1452,6 +1448,7 @@ function renderAllCommentsLocally() {
     container.innerHTML = finalHtml;
 }
 
+// 🔥 FIX: STRICT MATCHING IN PAGINATION
 function loadCommentsPaginated(caseId, reset = false) {
     if (isLoading || !hasMore) return;
     isLoading = true;
@@ -1467,12 +1464,10 @@ function loadCommentsPaginated(caseId, reset = false) {
             }
             if (data.length < limit) hasMore = false;
             
-            // 🔥 NORMALIZE ACTIVE CASE ID ONCE
             const cleanActiveCaseId = String(caseId).trim().toLowerCase();
             
             const validData = [];
             data.forEach(msg => {
-                // 🛑 STRICT MATCHING (BOTH SIDES LOWERCASE & TRIMMED)
                 if (String(msg.caseId).trim().toLowerCase() !== cleanActiveCaseId) return;
 
                 const id = msg.uniqueId || (msg.timestamp + msg.sender);
@@ -1497,7 +1492,7 @@ function loadCommentsPaginated(caseId, reset = false) {
         }).catch(err => { isLoading = false; console.error(err); });
 }
 
-// 🔥 REALTIME FETCH (OPTIMIZED & CLEAN)
+// 🔥 FIX: STRICT MATCHING IN REALTIME SYNC
 async function fetchNewMessages() {
     const caseId = document.getElementById('detail-conv-id')?.value;
     
@@ -1512,11 +1507,9 @@ async function fetchNewMessages() {
         if (!messages || messages.length === 0) return;
 
         let hasNew = false;
-        // 🔥 NORMALIZE ACTIVE CASE ID ONCE
         const cleanActiveCaseId = String(caseId).trim().toLowerCase();
 
         messages.forEach(msg => {
-            // 🛑 STRICT MATCHING (BOTH SIDES LOWERCASE & TRIMMED)
             if (String(msg.caseId).trim().toLowerCase() !== cleanActiveCaseId) return;
 
             const id = msg.uniqueId || (msg.timestamp + msg.sender);
@@ -1558,6 +1551,7 @@ async function fetchNewMessages() {
 
         if (hasNew) {
             renderAllCommentsLocally();
+            
             setTimeout(() => {
                 const scrollArea = document.getElementById("detail-thread-container").parentElement;
                 if (scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
