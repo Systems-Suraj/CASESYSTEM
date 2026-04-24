@@ -1,7 +1,7 @@
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v14"; // 🔄 Version bumped to v14 to force cache clear for all users with new UI fixes
+const APP_VERSION = "v15"; // 🔄 Version bumped to v15 to force cache clear and fix chat bleeding/duplication
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -241,13 +241,11 @@ function addNotification(msg) {
   if (msg.sender && currentUser?.email && msg.sender.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return;
   if (msg.sender && currentUser?.name && msg.sender.toLowerCase().trim() === currentUser.name.toLowerCase().trim()) return;
 
-  // 🔥 FIX: Check if the user is already inside this exact case!
   const activeCaseId = document.getElementById('detail-conv-id')?.value;
   const isCaseViewOpen = document.getElementById('caseDetailView') && !document.getElementById('caseDetailView').classList.contains('hidden');
   const msgCaseId = msg.caseId || msg.id || "";
 
-  // Do not push to notification tray if the user is actively viewing this case thread
-  if (isCaseViewOpen && String(activeCaseId) === String(msgCaseId)) {
+  if (isCaseViewOpen && String(activeCaseId).trim() === String(msgCaseId).trim()) {
       return; 
   }
 
@@ -256,7 +254,6 @@ function addNotification(msg) {
 
   const notifId = msg.uniqueId || (msgCaseId + "_" + msg.timestamp + "_" + msg.sender);
 
-  // Reject notification if we have already clicked/seen it locally
   if (locallySeenNotifications.has(notifId)) return;
 
   const notif = {
@@ -332,7 +329,6 @@ function toggleNotifications(event) {
 }
 
 window.openFromNotification = function(caseId, uniqueId) {
-  // 1. Click hote hi notification panel hide karo
   const panel = document.getElementById("notifPanel");
   if (panel) panel.classList.add("hidden");
 
@@ -344,26 +340,21 @@ window.openFromNotification = function(caseId, uniqueId) {
   const cleanCaseId = String(caseId).trim();
   const card = document.querySelector(`[data-conv-id="${cleanCaseId}"]`);
   
-  // 2. Notification ko locally dekha hua (seen) mark karo
   if (uniqueId) {
       locallySeenNotifications.add(uniqueId);
   }
 
-  // 3. Notification list se hatao aur count update karo
   notifications = notifications.filter(n => n.id !== uniqueId);
   unreadCount = notifications.length;
   updateNotificationUI();
   
-  // 4. Backend par seen bhejo (silent)
   if (uniqueId && currentUser?.email) {
       apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email }).catch(e => console.log(e));
   }
 
-  // 5. Case Open karo
   if (card) {
       window.openCaseDetail(card); 
   } else {
-      // Agar case current feed mein nahi hai
       showCustomDialog("Notice", "Yeh case ID: " + cleanCaseId + " abhi screen par loaded nahi hai. Please search box use karein.", false);
   }
 };
@@ -698,6 +689,7 @@ function showAppScreen(userObj) {
     }
   }, 2000);
 }
+
 // ==========================================
 // 🔥 FIREBASE TOKEN GENERATOR & MULTI-DEVICE SYNC
 // ==========================================
@@ -1240,7 +1232,6 @@ window.openEditCaseModal = function() {
     renderEditLabels();
     
     const convId = document.getElementById('detail-conv-id').value;
-    // 🔥 Ensures it finds the right data no matter what wrapper it's in
     let card = document.querySelector(`[data-conv-id="${convId}"]`);
     if(card && !card.dataset.attachmentsData) card = card.querySelector('.card-main') || card.closest('.card-main');
     
@@ -1445,17 +1436,29 @@ function loadCommentsPaginated(caseId, reset = false) {
             }
             if (data.length < limit) hasMore = false;
             
-            // 🔥 Update Timestamp & Seen Messages (Backend Tracking)
+            const validData = [];
             data.forEach(msg => {
-                if (msg.timestamp > lastTimestamp) {
-                    lastTimestamp = msg.timestamp;
-                }
+                // 🛑 STRICT CASE FILTER (Stop cross-case bleeding)
+                if (String(msg.caseId).trim() !== String(caseId).trim()) return;
+
                 const id = msg.uniqueId || (msg.timestamp + msg.sender);
-                seenMessages.add(id);
+                
+                // 🔥 BULLETPROOF DUPLICATE CHECK
+                const isDuplicate = seenMessages.has(id) || allLoadedComments.some(c => 
+                    (c.uniqueId && msg.uniqueId && c.uniqueId === msg.uniqueId) || 
+                    (String(c.text || '').trim() === String(msg.text || '').trim() && 
+                     String(c.sender || '').trim() === String(msg.sender || '').trim() && 
+                     Math.abs(new Date(c.timestamp).getTime() - new Date(msg.timestamp).getTime()) < 60000)
+                );
+
+                if (!isDuplicate) {
+                    if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp;
+                    seenMessages.add(id);
+                    validData.push(msg);
+                }
             });
 
-            allLoadedComments = allLoadedComments.concat(data);
-            
+            allLoadedComments = allLoadedComments.concat(validData);
             renderAllCommentsLocally();
             page++;
         }).catch(err => { isLoading = false; console.error(err); });
@@ -1465,8 +1468,8 @@ function loadCommentsPaginated(caseId, reset = false) {
 async function fetchNewMessages() {
     const caseId = document.getElementById('detail-conv-id')?.value;
     
-    // Agar case view open nahi hai, toh API call mat karo
-    if (!caseId || document.getElementById("caseDetailView").classList.contains("hidden")) return;
+    // Agar case view open nahi hai ya pagination load ho raha hai, toh fetch mat karo
+    if (!caseId || document.getElementById("caseDetailView").classList.contains("hidden") || isLoading) return;
 
     try {
         const messages = await apiCall('getNewComments', {
@@ -1479,10 +1482,23 @@ async function fetchNewMessages() {
         let hasNew = false;
 
         messages.forEach(msg => {
+            // 🛑 STRICT CASE FILTER (Stop cross-case bleeding)
+            if (String(msg.caseId).trim() !== String(caseId).trim()) return;
+
             const id = msg.uniqueId || (msg.timestamp + msg.sender);
 
-            // 🔥 Duplicate stop
-            if (seenMessages.has(id)) return;
+            // 🔥 BULLETPROOF DUPLICATE CHECK (Fixes double double append)
+            const isDuplicate = seenMessages.has(id) || allLoadedComments.some(c => 
+                (c.uniqueId && msg.uniqueId && c.uniqueId === msg.uniqueId) || 
+                (String(c.text || '').trim() === String(msg.text || '').trim() && 
+                 String(c.sender || '').trim() === String(msg.sender || '').trim() && 
+                 Math.abs(new Date(c.timestamp).getTime() - new Date(msg.timestamp).getTime()) < 60000)
+            );
+
+            if (isDuplicate) {
+                if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp;
+                return;
+            }
 
             seenMessages.add(id);
             allLoadedComments.push(msg);
@@ -1512,7 +1528,6 @@ async function fetchNewMessages() {
         if (hasNew) {
             renderAllCommentsLocally();
             
-            // Auto scroll down for new messages
             setTimeout(() => {
                 const scrollArea = document.getElementById("detail-thread-container").parentElement;
                 if (scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
@@ -1648,7 +1663,7 @@ window.submitDetailReply = async function() {
              seenMessages.add(tempId); 
              
              allLoadedComments.push({
-                 caseId: p.caseId,
+                 caseId: String(p.caseId).trim(),
                  timestamp: new Date().getTime(),
                  sender: localSenderName,
                  receiver: p.receiver || '',
@@ -1885,7 +1900,7 @@ window.submitInlineReply = async function(btn) {
         seenMessages.add(tempId); 
         
         allLoadedComments.push({
-             caseId: caseId,
+             caseId: String(caseId).trim(),
              timestamp: new Date().getTime(),
              sender: localSenderName,
              receiver: '', 
