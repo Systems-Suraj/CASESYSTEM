@@ -1,7 +1,7 @@
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v15"; // 🔄 Version bumped to v15 to force cache clear and fix chat bleeding/duplication
+const APP_VERSION = "v16"; // 🔄 Version bumped to v16 to force cache clear and fix chat bleeding/duplication
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -328,6 +328,7 @@ function toggleNotifications(event) {
   }
 }
 
+// 🔥 FIX 4: BULLETPROOF CASE SELECTION FROM NOTIFICATION
 window.openFromNotification = function(caseId, uniqueId) {
   const panel = document.getElementById("notifPanel");
   if (panel) panel.classList.add("hidden");
@@ -337,8 +338,12 @@ window.openFromNotification = function(caseId, uniqueId) {
       return;
   }
 
-  const cleanCaseId = String(caseId).trim();
-  const card = document.querySelector(`[data-conv-id="${cleanCaseId}"]`);
+  // Normalize incoming ID
+  const cleanCaseId = String(caseId).trim().toLowerCase();
+  
+  // Find card robustly ignoring case/spaces
+  const card = [...document.querySelectorAll('[data-conv-id]')]
+      .find(el => String(el.dataset.convId).trim().toLowerCase() === cleanCaseId);
   
   if (uniqueId) {
       locallySeenNotifications.add(uniqueId);
@@ -1273,6 +1278,32 @@ window.saveCaseEdits = async function() {
 };
 
 // ==========================================
+// FULL STATE AND UI RESET (FIX 1 & 3)
+// ==========================================
+function resetCaseState() {
+  lastTimestamp = 0;
+  seenMessages = new Set();
+  page = 0;
+  hasMore = true;
+  currentCaseAdmins = [];
+  currentCaseUsers = [];
+  
+  // Clear the thread UI immediately
+  const threadContainer = document.getElementById("detail-thread-container");
+  if (threadContainer) threadContainer.innerHTML = "";
+  
+  // Reset reply input
+  const replyInput = document.getElementById("detail-reply-input");
+  if (replyInput) replyInput.innerHTML = "";
+  
+  // Clear any active real-time intervals of the previous case
+  if (realtimeInterval) {
+      clearInterval(realtimeInterval);
+      realtimeInterval = null;
+  }
+}
+
+// ==========================================
 // DETAIL VIEW & REPLIES
 // ==========================================
 window.handleCardClick = function(event, cardEl) {
@@ -1292,9 +1323,16 @@ window.openCaseDetail = function(cardEl) {
           return;
       }
 
-      const dataset = card.dataset; const convId = dataset.convId;
+      // 🔥 RESET EVERYTHING BEFORE LOADING NEW CASE
+      resetCaseState();
+
+      const dataset = card.dataset; 
+      // 🔥 FIX 2: NORMALIZE CASE ID
+      const convId = String(dataset.convId || "").trim().toLowerCase();
+      
       document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]').innerText; 
       document.getElementById('detail-id').innerText = convId; 
+      document.getElementById('detail-conv-id').value = convId; 
       const creatorName = card.querySelector('[data-id="author"]').innerText;
       document.getElementById('detail-author').innerText = creatorName; 
       document.getElementById('detail-timestamp').innerText = card.querySelector('[data-id="timestamp"]').innerText;
@@ -1330,7 +1368,6 @@ window.openCaseDetail = function(cardEl) {
               attContainer.innerHTML += `<div class="flex flex-col gap-2 mt-3 w-full max-w-sm"><div class="rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-50 relative w-full"><iframe src="${cleanUrl}" height="200" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe></div><a href="${url}" target="_blank" class="self-start inline-flex items-center gap-1 text-[11px] font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg shadow-sm border border-indigo-100">📎 Open Attachment</a></div>`;
           }
       });
-      document.getElementById('detail-conv-id').value = convId;
       const status = dataset.status; const isSnoozed = parseInt(dataset.snooze) > Date.now();
       const unarchiveBtn = document.getElementById('detail-unarchive-btn'); const unsnoozeBtn = document.getElementById('detail-unsnooze-btn'); const snoozeBtn = document.getElementById('detail-snooze-btn');
       unarchiveBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden'); snoozeBtn.classList.add('hidden');
@@ -1346,13 +1383,7 @@ window.openCaseDetail = function(cardEl) {
 
       document.getElementById('dashboardView').classList.add('hidden'); document.getElementById('caseDetailView').classList.remove('hidden');
       
-      lastTimestamp = 0;
-      seenMessages.clear();
-      if (realtimeInterval) {
-          clearInterval(realtimeInterval);
-      }
       realtimeInterval = setInterval(fetchNewMessages, 3000);
-
       loadCommentsPaginated(convId, true);
   } catch(e) { console.error("Open Case Error:", e); }
 };
