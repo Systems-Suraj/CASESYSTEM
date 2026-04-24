@@ -1,7 +1,7 @@
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v12"; // 🔄 Version bumped to v12 to force cache clear for all users
+const APP_VERSION = "v11"; // 🔄 Version bumped to v12 to force cache clear for all users
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
