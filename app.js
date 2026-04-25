@@ -1,7 +1,7 @@
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v18"; // 🔄 Version bumped to force cache clear & fix case matching
+const APP_VERSION = "v19"; // 🔄 Version bumped to force cache clear & fix case matching
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -972,9 +972,10 @@ window.confirmSnooze = async function() {
     if(btn) { btn.innerText = "Snoozing..."; btn.disabled = true; }
 
     try {
-        const res = await apiCall('snoozeCase', { id: id, time: timestamp });
+        // 🔥 FIX: Added userEmail to only snooze for this specific user
+        const res = await apiCall('snoozeCase', { id: id, time: timestamp, userEmail: currentUser.email });
         document.getElementById('snoozeModal').classList.add('hidden');
-        showCustomDialog("Success ✅", "Case Snoozed Successfully", false);
+        showCustomDialog("Success ✅", "Case Snoozed for you.", false);
         setTimeout(() => {
             loadConversations();
             if(!document.getElementById('caseDetailView').classList.contains('hidden')) { closeCaseDetail(); }
@@ -992,8 +993,15 @@ window.processUnsnooze = async function(btn) {
     const convId = parent ? String(parent.dataset.convId).trim() : null; 
     if(!convId) return;
     btn.innerText = "Un-snoozing..."; btn.disabled = true;
-    try { await apiCall('unsnoozeCaseServer', { id: convId }); loadConversations(); if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
-    } catch(e) { showCustomDialog("Error", "Failed to un-snooze.", false); btn.innerText = "🔔 Un-Snooze"; btn.disabled = false; }
+    try { 
+        // 🔥 FIX: Added userEmail to only unsnooze for this specific user
+        await apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }); 
+        loadConversations(); 
+        if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
+    } catch(e) { 
+        showCustomDialog("Error", "Failed to un-snooze.", false); 
+        btn.innerText = "🔔 Un-Snooze"; btn.disabled = false; 
+    }
 };
 
 window.openSnoozeModalFromCard = function(btn) {
@@ -2131,9 +2139,23 @@ async function loadConversations() {
       
       let safeSnoozeMs = 0;
       if (conv.snoozeTime) {
-          safeSnoozeMs = (typeof conv.snoozeTime === 'string' && conv.snoozeTime.includes('T')) 
-              ? new Date(conv.snoozeTime).getTime() 
-              : parseInt(conv.snoozeTime, 10) || 0;
+          try {
+              const snoozeObj = JSON.parse(conv.snoozeTime);
+              if (snoozeObj && snoozeObj[uEmail]) {
+                  safeSnoozeMs = parseInt(snoozeObj[uEmail], 10) || 0;
+              }
+          } catch(e) {
+              // Fallback for old global snoozes
+              safeSnoozeMs = (typeof conv.snoozeTime === 'string' && conv.snoozeTime.includes('T')) 
+                  ? new Date(conv.snoozeTime).getTime() 
+                  : parseInt(conv.snoozeTime, 10) || 0;
+          }
+      }
+
+      // 🔥 FIX: Override Snooze locally if user has unread notifications for this case
+      const hasUnread = notifications.some(n => String(n.caseId).trim() === String(conv.id).trim());
+      if (hasUnread) {
+          safeSnoozeMs = 0; // Force to Live if there is pending activity
       }
 
       cardDiv._cachedLabels = conv.labels; 
