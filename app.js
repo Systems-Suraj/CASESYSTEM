@@ -1084,6 +1084,26 @@ window.saveManagedMembers = async function() {
 // ==========================================
 // MENTIONS & COMPOSER LOGIC
 // ==========================================
+
+// ==========================================
+// 🔥 ASSIGN TASK DEEP LINKING
+// ==========================================
+window.openAssignTask = function() {
+    if (!currentUser || !currentUser.email) {
+        showCustomDialog("Notice", "User not logged in properly. Cannot find email.", false);
+        return;
+    }
+    
+    // Encode the email to ensure special characters don't break the URL
+    const userEmailEncoded = encodeURIComponent(currentUser.email);
+    
+    // Construct the URL with the dynamic email while keeping the 'Delegate Task' tab
+    const url = `https://script.google.com/a/macros/hosexperts.com/s/AKfycbyisCYLtOoFaDdjrIQCu6A1QSROpKrKp5ROBIzyT5IXwiEk4FJ7E5oKbvzQi8yfyaayLw/exec?useremail=${userEmailEncoded}&tab=Delegate%20Task`;
+    
+    // Open in a new tab
+    window.open(url, '_blank');
+};
+
 window.triggerMention = function() {
   const editor = document.getElementById('detail-reply-input');
   editor.focus();
