@@ -212,13 +212,16 @@
                <div class="px-2 sm:px-3 py-1.5 sm:py-2 border-t border-slate-200 bg-white flex justify-between items-center rounded-b-xl flex-wrap gap-2">
                   <div class="flex gap-1 sm:gap-2 items-center">
                      <button type="button" onclick="triggerMention()" class="p-1 sm:p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent">
-                        <i class="fas fa-at"></i>
-                     </button>
-                     <label class="p-1 sm:p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent cursor-pointer">
-                        <i class="fas fa-paperclip"></i>
-                        <input type="file" id="reply_f_file" multiple class="hidden" onchange="handleReplyFileSelect(event)">
-                     </label>
+    <i class="fas fa-at"></i>
+</button>
+<label class="p-1 sm:p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent cursor-pointer">
+    <i class="fas fa-paperclip"></i>
+    <input type="file" id="reply_f_file" multiple class="hidden" onchange="handleReplyFileSelect(event)">
+</label>
 
+<button type="button" onclick="openAssignTask()" class="p-1 sm:p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent" title="Assign Task">
+    <i class="fas fa-tasks"></i>
+</button>
                      <div id="global_type_selector" class="flex gap-1 items-center bg-slate-100 p-1 rounded-lg border border-slate-200 ml-1 sm:ml-2">
                         <button onclick="setReplyGlobalType('Message')" id="btn_global_reply" class="px-2 sm:px-4 py-1 sm:py-1.5 rounded-md text-[10px] sm:text-xs font-extrabold transition-all bg-white shadow-sm border border-slate-200 text-slate-800">💬 Message</button>
                         <button onclick="setReplyGlobalType('Ask')" id="btn_global_ask" class="px-2 sm:px-4 py-1 sm:py-1.5 rounded-md text-[10px] sm:text-xs font-extrabold transition-all text-slate-500 hover:text-slate-700">🎯 Ask</button>
