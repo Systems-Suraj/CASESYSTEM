@@ -1,7 +1,7 @@
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v17"; // 🔄 Version bumped to force cache clear & fix case matching
+const APP_VERSION = "v18"; // 🔄 Version bumped to force cache clear & fix case matching
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -55,6 +55,17 @@ if (firebase.messaging && firebase.messaging.isSupported && firebase.messaging.i
     try {
       console.log("🔥 Foreground message:", payload);
       const data = payload?.data || {};
+
+      // 🔥 FIX: Check if current user is the actual receiver (tagged person)
+      if (data.receiver && currentUser?.email) {
+          const receivers = data.receiver.split(',').map(e => e.toLowerCase().trim());
+          const myEmail = currentUser.email.toLowerCase().trim();
+          if (!receivers.includes(myEmail)) {
+              console.log("🔕 Ignored: Notification is for someone else.");
+              return; // Exit early if not tagged
+          }
+      }
+
       let title = data.title || "Case Update";
       let body = data.body || "";
       const caseId = data.caseId || "";
@@ -240,6 +251,15 @@ const tingSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/28
 function addNotification(msg) {
   if (msg.sender && currentUser?.email && msg.sender.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return;
   if (msg.sender && currentUser?.name && msg.sender.toLowerCase().trim() === currentUser.name.toLowerCase().trim()) return;
+
+  // 🔥 FIX: Ensure background/global notifications also respect tags
+  if (msg.receiver && currentUser?.email) {
+      const receivers = msg.receiver.split(',').map(e => e.toLowerCase().trim());
+      const myEmail = currentUser.email.toLowerCase().trim();
+      if (!receivers.includes(myEmail)) {
+          return; // Skip if this user is not tagged
+      }
+  }
 
   const activeCaseId = document.getElementById('detail-conv-id')?.value;
   const isCaseViewOpen = document.getElementById('caseDetailView') && !document.getElementById('caseDetailView').classList.contains('hidden');
@@ -1920,6 +1940,12 @@ window.submitInlineReply = async function(btn) {
     if(!msgHTML && inlinePendingFiles.length === 0) return showCustomDialog("Notice", "Please write a message or attach a file.", false);
     const caseId = document.getElementById('detail-conv-id').value;
     
+    // 🔥 FIX: Extract all tagged emails to send to backend as receivers
+    const mentionedEmails = Array.from(inputDiv.querySelectorAll('.mention-badge'))
+        .map(badge => badge.dataset.email)
+        .filter(Boolean)
+        .join(',');
+
     const toggleBtn = container.querySelector('.inline-reply-toggle-btn');
     const typeVal = replyBox.querySelector('.inline-type-val').value;
     btn.disabled = true;
@@ -1937,7 +1963,8 @@ window.submitInlineReply = async function(btn) {
         }
 
         const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); 
-        const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId }; 
+        // 🔥 FIX: Added 'receiver: mentionedEmails' to payload
+        const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, receiver: mentionedEmails, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId }; 
 
         // ⚡ 1. INSTANT LOCAL UI RENDER
         const localSenderName = currentUser.name || currentUser.email;
@@ -1947,7 +1974,7 @@ window.submitInlineReply = async function(btn) {
              caseId: String(caseId).trim(),
              timestamp: new Date().getTime(),
              sender: localSenderName,
-             receiver: '', 
+             receiver: mentionedEmails, // 🔥 FIX: Set local receiver
              text: msgHTML,
              attachmentUrl: fileUrl,
              attachmentFileName: fileName,
