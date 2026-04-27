@@ -929,7 +929,8 @@ const applyFilters = debounce(function() {
   
     const matchesLabels = checkedLabels.length === 0 || checkedLabels.every(l => cardLabels.includes(l));
     
-    const matchesMembers = checkedMembers.length === 0 || checkedMembers.some(m => 
+    const matchesMembers = checkedMembers.length === 0 ||
+    checkedMembers.every(m => 
         cardMembers.some(cm => {
             if (!cm) return false;
             const cmEmail = cm.toLowerCase();
