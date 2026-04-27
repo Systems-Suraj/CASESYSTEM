@@ -33,7 +33,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v22"; // 🔄 Version bumped to force cache clear & fix case matching
+const APP_VERSION = "v24"; // 🔄 Version bumped to force cache clear & fix case matching
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -1483,7 +1483,9 @@ window.openCaseDetail = function(cardEl) {
       unarchiveBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden'); snoozeBtn.classList.add('hidden');
       
       // 1. Archive Button: SIRF ADMIN ke liye
-      if (hasAdminRights && status === 'Archived') { unarchiveBtn.classList.remove('hidden'); }
+      if (status === 'Archived') { 
+          unarchiveBtn.classList.remove('hidden'); 
+      }
       
       // 2. Snooze / Un-Snooze: SABKE LIYE (Kyunki ye ab personal hai)
       if (status !== 'Archived') {
@@ -2304,12 +2306,16 @@ async function loadConversations() {
       
       cbContainer.classList.add('hidden'); cbContainer.classList.remove('flex'); snoozeBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden'); unarchiveBtn.classList.add('hidden');
       
-      // 1. Archive Checkboxes & Unarchive: SIRF ADMIN ke liye
-      if (hasAdminRights) { 
-          if (conv.status === 'Archived') { unarchiveBtn.classList.remove('hidden'); }
-          if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) { 
-              cbContainer.classList.remove('hidden'); cbContainer.classList.add('flex'); checkbox.disabled = false; 
-          }
+     // 1. Unarchive: AB SABKE LIYE (Kyunki ye personal hai)
+      if (conv.status === 'Archived') { 
+          unarchiveBtn.classList.remove('hidden'); 
+      }
+
+      // Sabhi users ko Archive karne ka option milega taaki unki screen clean rahe
+      if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) { 
+          cbContainer.classList.remove('hidden'); 
+          cbContainer.classList.add('flex'); 
+          checkbox.disabled = false; 
       }
       
       // 2. Snooze / Un-Snooze: SABKE LIYE (Agar case archived nahi hai)
