@@ -1479,9 +1479,17 @@ window.openCaseDetail = function(cardEl) {
       });
       const status = dataset.status; const isSnoozed = parseInt(dataset.snooze) > Date.now();
       const unarchiveBtn = document.getElementById('detail-unarchive-btn'); const unsnoozeBtn = document.getElementById('detail-unsnooze-btn'); const snoozeBtn = document.getElementById('detail-snooze-btn');
+      
       unarchiveBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden'); snoozeBtn.classList.add('hidden');
-      if (hasAdminRights) { if (status === 'Archived') unarchiveBtn.classList.remove('hidden'); else if (isSnoozed) unsnoozeBtn.classList.remove('hidden'); else snoozeBtn.classList.remove('hidden'); }
-
+      
+      // 1. Archive Button: SIRF ADMIN ke liye
+      if (hasAdminRights && status === 'Archived') { unarchiveBtn.classList.remove('hidden'); }
+      
+      // 2. Snooze / Un-Snooze: SABKE LIYE (Kyunki ye ab personal hai)
+      if (status !== 'Archived') {
+          if (isSnoozed) { unsnoozeBtn.classList.remove('hidden'); } 
+          else { snoozeBtn.classList.remove('hidden'); }
+      }
       ['Live', 'Snooze', 'Archive'].forEach(t => { if (t !== currentTab) document.getElementById(`tab-${t}`).style.display = 'none'; });
       
       replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' };
@@ -2287,18 +2295,28 @@ async function loadConversations() {
       badge.classList.add(...badgeClasses);
       badge.innerText = badgeText;
       // ==========================================
-      
       const footerActions = cardDiv.querySelector('.flex.items-center.gap-3.text-sm'); 
       const cbContainer = footerActions.querySelector('.archive-cb-container'); 
       const snoozeBtn = footerActions.querySelector('.snooze-card-btn'); 
       const unsnoozeBtn = footerActions.querySelector('.unsnooze-card-btn'); 
       const unarchiveBtn = footerActions.querySelector('.unarchive-card-btn'); 
       const checkbox = footerActions.querySelector('.bulk-archive-cb');
+      
       cbContainer.classList.add('hidden'); cbContainer.classList.remove('flex'); snoozeBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden'); unarchiveBtn.classList.add('hidden');
       
-      if (hasAdminRights) { if (conv.status === 'Archived') { unarchiveBtn.classList.remove('hidden'); } else if (isSnoozed) { unsnoozeBtn.classList.remove('hidden'); } }
-      if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) { cbContainer.classList.remove('hidden'); cbContainer.classList.add('flex'); checkbox.disabled = false; snoozeBtn.classList.remove('hidden'); }
+      // 1. Archive Checkboxes & Unarchive: SIRF ADMIN ke liye
+      if (hasAdminRights) { 
+          if (conv.status === 'Archived') { unarchiveBtn.classList.remove('hidden'); }
+          if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) { 
+              cbContainer.classList.remove('hidden'); cbContainer.classList.add('flex'); checkbox.disabled = false; 
+          }
+      }
       
+      // 2. Snooze / Un-Snooze: SABKE LIYE (Agar case archived nahi hai)
+      if (conv.status !== 'Archived') {
+          if (isSnoozed) { unsnoozeBtn.classList.remove('hidden'); } 
+          else if (currentTab === 'Live') { snoozeBtn.classList.remove('hidden'); }
+      }
       const lCont = cardDiv.querySelector('[data-id="labels-container"]'); 
       conv.labels.forEach(l => { if(l){ const s = document.createElement('span'); s.className='px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded font-bold'; s.innerText=l; lCont.appendChild(s); } });
       const admCont = cardDiv.querySelector('[data-id="admins-container"]'); 
