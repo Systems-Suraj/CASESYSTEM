@@ -33,7 +33,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v20"; // 🔄 Version bumped to force cache clear & fix case matching
+const APP_VERSION = "v21"; // 🔄 Version bumped to force cache clear & fix case matching
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -1393,6 +1393,15 @@ window.openCaseDetail = function(cardEl) {
 
       const dataset = card.dataset; 
       const convId = String(dataset.convId || "").trim(); 
+
+      // 🔥 AUTO-UNSNOOZE: Agar Reply aane par case Live hua tha, toh open karte hi hamesha ke liye Unsnooze kar do
+      const rawSnooze = parseInt(dataset.snoozeRaw || 0, 10);
+      const currentSafeSnooze = parseInt(dataset.snooze || 0, 10);
+      
+      if (rawSnooze > Date.now() && currentSafeSnooze === 0) {
+           apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }).catch(e => {});
+      }
+      // 🔥 END
       
       document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]').innerText; 
       document.getElementById('detail-id').innerText = convId; 
@@ -2155,26 +2164,53 @@ async function loadConversations() {
       
       const hasAdminRights = conv.createdBy.toLowerCase().includes(uEmail) || conv.createdBy.toLowerCase().includes(uName) || conv.admins.some(a => a.toLowerCase().includes(uEmail) || a.toLowerCase().includes(uName));
       
-      let safeSnoozeMs = 0;
+      // ==========================================
+      // 🔥 DYNAMIC BADGE & MOVED TO LIVE LOGIC
+      // ==========================================
+      let originalSnoozeMs = 0;
       if (conv.snoozeTime) {
           try {
               const snoozeObj = JSON.parse(conv.snoozeTime);
               if (snoozeObj && snoozeObj[uEmail]) {
-                  safeSnoozeMs = parseInt(snoozeObj[uEmail], 10) || 0;
+                  originalSnoozeMs = parseInt(snoozeObj[uEmail], 10) || 0;
               }
           } catch(e) {
-              // Fallback for old global snoozes
-              safeSnoozeMs = (typeof conv.snoozeTime === 'string' && conv.snoozeTime.includes('T')) 
-                  ? new Date(conv.snoozeTime).getTime() 
-                  : parseInt(conv.snoozeTime, 10) || 0;
+              originalSnoozeMs = (typeof conv.snoozeTime === 'string' && conv.snoozeTime.includes('T')) 
+                  ? new Date(conv.snoozeTime).getTime() : parseInt(conv.snoozeTime, 10) || 0;
           }
       }
 
-      // 🔥 FIX: Override Snooze locally if user has unread notifications for this case
-      const hasUnread = notifications.some(n => String(n.caseId).trim() === String(conv.id).trim());
-      if (hasUnread) {
-          safeSnoozeMs = 0; // Force to Live if there is pending activity
+      const unreadNotifsForCase = notifications.filter(n => String(n.caseId).trim() === String(conv.id).trim());
+      const hasUnread = unreadNotifsForCase.length > 0;
+      
+      let isSnoozed = false;
+      let badgeText = "ACTIVE";
+      let badgeClasses = ['bg-emerald-500', 'text-white'];
+
+      if (conv.status === 'Archived') {
+          badgeText = "ARCHIVED";
+          badgeClasses = ['bg-emerald-700', 'text-white'];
+      } else if (hasUnread && originalSnoozeMs > 0) {
+          // 🚨 Case was snoozed, but a reply came! Force to Live.
+          const replierName = window.getUserNameByEmail(unreadNotifsForCase[0].sender);
+          badgeText = `MOVED TO LIVE: REPLY BY ${replierName.toUpperCase()}`;
+          badgeClasses = ['bg-blue-100', 'text-blue-800', 'border', 'border-blue-300'];
+          isSnoozed = false; 
+      } else if (originalSnoozeMs > Date.now()) {
+          // ⏰ Snooze is still active normally
+          const snoozeDateStr = new Date(originalSnoozeMs).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+          badgeText = `SNOOZED TILL ${snoozeDateStr.toUpperCase()}`;
+          badgeClasses = ['bg-orange-100', 'text-orange-700'];
+          isSnoozed = true; 
+      } else if (originalSnoozeMs > 0 && originalSnoozeMs <= Date.now()) {
+          // ⌛ Time expired! Force to Live.
+          badgeText = "MOVED TO LIVE: TIME EXPIRED";
+          badgeClasses = ['bg-purple-100', 'text-purple-800', 'border', 'border-purple-200'];
+          isSnoozed = false; 
       }
+
+      // If forced to live, we set safeSnoozeMs to 0 so it moves tabs correctly
+      let safeSnoozeMs = isSnoozed ? originalSnoozeMs : 0;
 
       cardDiv._cachedLabels = conv.labels; 
       cardDiv._cachedMembers = [...conv.admins, ...conv.users, conv.createdBy];
@@ -2183,6 +2219,7 @@ async function loadConversations() {
       cardDiv.dataset.subject = conv.subject.toLowerCase(); 
       cardDiv.dataset.status = conv.status; 
       cardDiv.dataset.snooze = safeSnoozeMs; 
+      cardDiv.dataset.snoozeRaw = originalSnoozeMs; // 🔥 Record original timestamp for later
       cardDiv.dataset.hasAdminRights = hasAdminRights; 
       cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments); 
       cardDiv.dataset.labels = JSON.stringify(conv.labels); 
@@ -2207,24 +2244,11 @@ async function loadConversations() {
       const avatarEl = cardDiv.querySelector('[data-id="avatar-letter"]');
       if(avatarEl) avatarEl.textContent = creatorName.charAt(0).toUpperCase();
 
-      const isSnoozed = safeSnoozeMs > Date.now(); 
       const badge = cardDiv.querySelector('[data-id="status-badge"]');
       badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm";
-      
-      if(conv.status === 'Archived') { 
-          badge.classList.add('bg-emerald-700','text-white'); 
-          badge.innerText = "ARCHIVED";
-      } else if(isSnoozed) { 
-          badge.classList.add('bg-orange-100','text-orange-700'); 
-          // Format the snooze date and time nicely
-          const snoozeDateStr = new Date(safeSnoozeMs).toLocaleString('en-US', { 
-              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
-          });
-          badge.innerText = `SNOOZED TILL ${snoozeDateStr.toUpperCase()}`; 
-      } else { 
-          badge.classList.add('bg-emerald-500','text-white'); 
-          badge.innerText = "ACTIVE";
-      }
+      badge.classList.add(...badgeClasses);
+      badge.innerText = badgeText;
+      // ==========================================
       
       const footerActions = cardDiv.querySelector('.flex.items-center.gap-3.text-sm'); 
       const cbContainer = footerActions.querySelector('.archive-cb-container'); 
@@ -2256,7 +2280,7 @@ async function loadConversations() {
       fragment.appendChild(cardFragment);
     });
     
-    feed.appendChild(fragment); window.switchTab(currentTab);
+    feed.appendChild(fragment); window.switchTab(currentTab); 
   } catch(e) { console.error(e); }
 }
 
