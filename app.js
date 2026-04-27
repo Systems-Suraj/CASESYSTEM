@@ -2204,15 +2204,19 @@ async function loadConversations() {
       // 🔥 DYNAMIC BADGE & MOVED TO LIVE LOGIC
       // ==========================================
       let originalSnoozeMs = 0;
-      if (conv.snoozeTime) {
-          try {
-              const snoozeObj = JSON.parse(conv.snoozeTime);
-              if (snoozeObj && snoozeObj[uEmail]) {
-                  originalSnoozeMs = parseInt(snoozeObj[uEmail], 10) || 0;
-              }
-          } catch(e) {
-              originalSnoozeMs = (typeof conv.snoozeTime === 'string' && conv.snoozeTime.includes('T')) 
-                  ? new Date(conv.snoozeTime).getTime() : parseInt(conv.snoozeTime, 10) || 0;
+      const snoozeStr = String(conv.snoozeTime || "").trim();
+      
+      if (snoozeStr && snoozeStr !== '0' && snoozeStr !== 'NaN') {
+          if (snoozeStr.startsWith('{')) {
+             // Purane (Per-user) json data ko bhi sabke liye Global bana dega
+             try {
+                const obj = JSON.parse(snoozeStr);
+                const times = Object.values(obj).map(v => parseInt(v, 10)).filter(v => !isNaN(v));
+                if (times.length > 0) originalSnoozeMs = Math.max(...times); 
+             } catch(e) {}
+          } else {
+             // Normal Global Timestamp
+             originalSnoozeMs = snoozeStr.includes('T') ? new Date(snoozeStr).getTime() : parseInt(snoozeStr, 10) || 0;
           }
       }
 
