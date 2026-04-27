@@ -283,9 +283,23 @@ let locallySeenNotifications = new Set();
 const tingSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
 
 function addNotification(msg) {
+
+  // ===============================
+  // ❌ CLOSED ASK IGNORE (MAIN FIX)
+  // ===============================
+  if (msg.status && String(msg.status).toLowerCase().trim() === 'closed') {
+    return;
+  }
+
+  // ===============================
+  // ❌ SELF NOTIFICATION IGNORE
+  // ===============================
   if (msg.sender && currentUser?.email && msg.sender.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return;
   if (msg.sender && currentUser?.name && msg.sender.toLowerCase().trim() === currentUser.name.toLowerCase().trim()) return;
 
+  // ===============================
+  // ❌ ONLY RECEIVER SHOULD SEE
+  // ===============================
   if (msg.receiver && currentUser?.email) {
       const receivers = msg.receiver.split(',').map(e => e.toLowerCase().trim());
       const myEmail = currentUser.email.toLowerCase().trim();
@@ -294,21 +308,39 @@ function addNotification(msg) {
       }
   }
 
+  // ===============================
+  // ❌ SAME OPEN CASE → NO NOTIF
+  // ===============================
   const activeCaseId = document.getElementById('detail-conv-id')?.value;
-  const isCaseViewOpen = document.getElementById('caseDetailView') && !document.getElementById('caseDetailView').classList.contains('hidden');
+  const isCaseViewOpen = document.getElementById('caseDetailView') && 
+                         !document.getElementById('caseDetailView').classList.contains('hidden');
   const msgCaseId = msg.caseId || msg.id || "";
 
-  if (isCaseViewOpen && String(activeCaseId).trim().toLowerCase() === String(msgCaseId).trim().toLowerCase()) {
+  if (isCaseViewOpen && 
+      String(activeCaseId).trim().toLowerCase() === String(msgCaseId).trim().toLowerCase()) {
       return; 
   }
 
+  // ===============================
+  // 🧹 CLEAN MESSAGE TEXT
+  // ===============================
   let cleanText = msg.text || msg.body || "New activity on your case";
   cleanText = cleanText.replace(/<[^>]*>?/gm, '');
 
+  // ===============================
+  // 🆔 UNIQUE NOTIFICATION ID
+  // ===============================
   const notifId = msg.uniqueId || (msgCaseId + "_" + msg.timestamp + "_" + msg.sender);
 
+  // ===============================
+  // ❌ ALREADY SEEN / DUPLICATE
+  // ===============================
   if (locallySeenNotifications.has(notifId)) return;
+  if (notifications.some(n => n.id === notifId)) return;
 
+  // ===============================
+  // ✅ CREATE NOTIFICATION OBJECT
+  // ===============================
   const notif = {
     id: notifId,
     text: cleanText,
@@ -316,18 +348,22 @@ function addNotification(msg) {
     sender: msg.sender || msg.title || "System",
     time: msg.timestamp || Date.now(),
     type: msg.type || 'Message', 
-    askId: msg.askId || msg.parentAskId || ''
+    askId: msg.askId || msg.parentAskId || '',
+    status: msg.status || '' // 🔥 IMPORTANT (future logic)
   };
 
-  if (notifications.some(n => n.id === notif.id)) return;
-
+  // ===============================
+  // 🚀 PUSH NOTIFICATION
+  // ===============================
   notifications.unshift(notif);
   unreadCount++;
-  
+
+  // ===============================
+  // 🔊 SOUND + UI UPDATE
+  // ===============================
   tingSound.play().catch(e => console.log("Sound blocked"));
   updateNotificationUI();
 }
-
 function updateNotificationUI() {
   const countEl = document.getElementById("notifCount");
   
