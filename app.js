@@ -2200,16 +2200,12 @@ async function loadConversations() {
       
       const hasAdminRights = conv.createdBy.toLowerCase().includes(uEmail) || conv.createdBy.toLowerCase().includes(uName) || conv.admins.some(a => a.toLowerCase().includes(uEmail) || a.toLowerCase().includes(uName));
       
-      // ==========================================
-      // 🔥 DYNAMIC BADGE & MOVED TO LIVE LOGIC
-      // ==========================================
      // ==========================================
-      // 🔥 PER-USER DASHBOARD & ENGLISH REASONS
+      // 🔥 PER-USER DASHBOARD LOGIC (SNOOZE & REASON)
       // ==========================================
       let originalSnoozeMs = 0;
       const snoozeStr = String(conv.snoozeTime || "").trim();
       
-      // Personal Snooze extract karein
       if (snoozeStr && snoozeStr !== '0' && snoozeStr !== 'NaN') {
           if (snoozeStr.startsWith('{')) {
               try {
@@ -2217,12 +2213,10 @@ async function loadConversations() {
                   originalSnoozeMs = parseInt(obj[uEmail], 10) || 0;
               } catch(e) { originalSnoozeMs = 0; }
           } else {
-              // Fallback for old global data
               originalSnoozeMs = parseInt(snoozeStr, 10) || 0;
           }
       }
 
-      // Check for activity (Reply/Message)
       const unreadNotifsForCase = notifications.filter(n => String(n.caseId).trim() === String(conv.id).trim());
       const hasUnread = unreadNotifsForCase.length > 0;
       
@@ -2234,7 +2228,7 @@ async function loadConversations() {
           badgeText = "ARCHIVED";
           badgeClasses = ['bg-emerald-700', 'text-white'];
       } else if (hasUnread && originalSnoozeMs > 0) {
-          // 🚨 Activity Detected: Move to Live with Name
+          // 🚨 Case was snoozed, but activity detected
           const lastNotif = unreadNotifsForCase[0];
           const replierName = window.getUserNameByEmail(lastNotif.sender);
           const actType = String(lastNotif.type || "REPLY").toUpperCase();
@@ -2242,13 +2236,13 @@ async function loadConversations() {
           badgeClasses = ['bg-blue-100', 'text-blue-800', 'border', 'border-blue-300'];
           isSnoozed = false; 
       } else if (originalSnoozeMs > Date.now()) {
-          // ⏰ Still Snoozed for this user
+          // ⏰ Still Snoozed normally
           const snoozeDateStr = new Date(originalSnoozeMs).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
           badgeText = `SNOOZED TILL ${snoozeDateStr.toUpperCase()}`;
           badgeClasses = ['bg-orange-100', 'text-orange-700'];
           isSnoozed = true; 
       } else if (originalSnoozeMs > 0 && originalSnoozeMs <= Date.now()) {
-          // ⌛ Time Expired
+          // ⌛ Time expired
           badgeText = "MOVED TO LIVE: TIME EXPIRED";
           badgeClasses = ['bg-purple-100', 'text-purple-800', 'border', 'border-purple-200'];
           isSnoozed = false; 
