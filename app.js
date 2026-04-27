@@ -2242,10 +2242,20 @@ async function loadConversations() {
       const usrCont = cardDiv.querySelector('[data-id="users-container"]');
       conv.admins.forEach(a => { if(a) admCont.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${window.getUserNameByEmail(a)}</span>`; });
       conv.users.forEach(u => { if(u) usrCont.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${window.getUserNameByEmail(u)}</span>`; });
+      
+      // 🔥 UI FLICKER FIX: DOM mein attach hone se pehle hi hide kar do!
+      let showInitial = false;
+      if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) showInitial = true; 
+      if (currentTab === 'Archive' && conv.status === 'Archived') showInitial = true;
+      if (currentTab === 'Snooze' && conv.status !== 'Archived' && isSnoozed) showInitial = true;
+      
+      wrapperDiv.style.display = showInitial ? 'block' : 'none';
+      // 🔥 FIX END
+
       fragment.appendChild(cardFragment);
     });
     
-    feed.appendChild(fragment); window.switchTab(currentTab); 
+    feed.appendChild(fragment); window.switchTab(currentTab);
   } catch(e) { console.error(e); }
 }
 
