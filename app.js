@@ -2210,7 +2210,20 @@ async function loadConversations() {
       const badge = cardDiv.querySelector('[data-id="status-badge"]');
       badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm";
       
-      if(conv.status === 'Archived') { badge.classList.add('bg-emerald-700','text-white'); badge.innerText = "ARCHIVED"; } else if(isSnoozed) { badge.classList.add('bg-orange-100','text-orange-700'); badge.innerText = "SNOOZED"; } else { badge.classList.add('bg-emerald-500','text-white'); badge.innerText = "ACTIVE"; }
+      if(conv.status === 'Archived') { 
+          badge.classList.add('bg-emerald-700','text-white'); 
+          badge.innerText = "ARCHIVED";
+      } else if(isSnoozed) { 
+          badge.classList.add('bg-orange-100','text-orange-700'); 
+          // Format the snooze date and time nicely
+          const snoozeDateStr = new Date(safeSnoozeMs).toLocaleString('en-US', { 
+              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+          });
+          badge.innerText = `SNOOZED TILL ${snoozeDateStr.toUpperCase()}`; 
+      } else { 
+          badge.classList.add('bg-emerald-500','text-white'); 
+          badge.innerText = "ACTIVE";
+      }
       
       const footerActions = cardDiv.querySelector('.flex.items-center.gap-3.text-sm'); 
       const cbContainer = footerActions.querySelector('.archive-cb-container'); 
