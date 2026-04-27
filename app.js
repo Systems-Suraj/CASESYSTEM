@@ -1,4 +1,36 @@
 // ==========================================
+// 🔒 UI PROTECTION STATE (NEW - MOVED TO TOP)
+// ==========================================
+window.isUserTypingGlobal = false;
+let activeInputElement = null;
+
+document.addEventListener('focusin', (e) => {
+  if (e.target && (
+      e.target.id === 'detail-reply-input' ||
+      e.target.classList?.contains('inline-reply-input') ||
+      e.target.tagName === 'TEXTAREA' || 
+      e.target.tagName === 'INPUT'
+  )) {
+    window.isUserTypingGlobal = true;
+    activeInputElement = e.target;
+  }
+});
+
+document.addEventListener('focusout', (e) => {
+  if (e.target && (
+      e.target.id === 'detail-reply-input' ||
+      e.target.classList?.contains('inline-reply-input') ||
+      e.target.tagName === 'TEXTAREA' || 
+      e.target.tagName === 'INPUT'
+  )) {
+    setTimeout(() => {
+      window.isUserTypingGlobal = false;
+      activeInputElement = null;
+    }, 200);
+  }
+});
+
+// ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
 const APP_VERSION = "v19"; // 🔄 Version bumped to force cache clear & fix case matching
@@ -13,12 +45,15 @@ function checkAppUpdate() {
 
   if (storedVersion !== APP_VERSION) {
     console.log("🔄 New version detected");
-
     localStorage.setItem("app_version", APP_VERSION);
 
-    // 🔥 FORCE CLEAN RELOAD
+    // 🔥 FORCE CLEAN RELOAD (WITH TYPING PROTECTION)
     setTimeout(() => {
-      window.location.reload(true);
+      if (!window.isUserTypingGlobal) {
+          window.location.reload(true);
+      } else {
+          console.log("⛔ App update delayed (user typing)");
+      }
     }, 500);
   }
 }
@@ -56,13 +91,12 @@ if (firebase.messaging && firebase.messaging.isSupported && firebase.messaging.i
       console.log("🔥 Foreground message:", payload);
       const data = payload?.data || {};
 
-      // 🔥 FIX: Check if current user is the actual receiver (tagged person)
       if (data.receiver && currentUser?.email) {
           const receivers = data.receiver.split(',').map(e => e.toLowerCase().trim());
           const myEmail = currentUser.email.toLowerCase().trim();
           if (!receivers.includes(myEmail)) {
               console.log("🔕 Ignored: Notification is for someone else.");
-              return; // Exit early if not tagged
+              return; 
           }
       }
 
@@ -252,12 +286,11 @@ function addNotification(msg) {
   if (msg.sender && currentUser?.email && msg.sender.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return;
   if (msg.sender && currentUser?.name && msg.sender.toLowerCase().trim() === currentUser.name.toLowerCase().trim()) return;
 
-  // 🔥 FIX: Ensure background/global notifications also respect tags
   if (msg.receiver && currentUser?.email) {
       const receivers = msg.receiver.split(',').map(e => e.toLowerCase().trim());
       const myEmail = currentUser.email.toLowerCase().trim();
       if (!receivers.includes(myEmail)) {
-          return; // Skip if this user is not tagged
+          return; 
       }
   }
 
@@ -348,7 +381,6 @@ function toggleNotifications(event) {
   }
 }
 
-// 🔥 NORMALIZE ID FOR SEARCHING THE DOM BUT KEEP ORIGINAL CASE ID
 window.openFromNotification = function(caseId, uniqueId) {
   const panel = document.getElementById("notifPanel");
   if (panel) panel.classList.add("hidden");
@@ -358,10 +390,8 @@ window.openFromNotification = function(caseId, uniqueId) {
       return;
   }
 
-  // Normalize incoming ID for matching
   const cleanCaseId = String(caseId).trim().toLowerCase();
   
-  // Find card robustly ignoring case/spaces
   const card = [...document.querySelectorAll('[data-conv-id]')]
       .find(el => String(el.dataset.convId).trim().toLowerCase() === cleanCaseId);
   
@@ -972,7 +1002,6 @@ window.confirmSnooze = async function() {
     if(btn) { btn.innerText = "Snoozing..."; btn.disabled = true; }
 
     try {
-        // 🔥 FIX: Added userEmail to only snooze for this specific user
         const res = await apiCall('snoozeCase', { id: id, time: timestamp, userEmail: currentUser.email });
         document.getElementById('snoozeModal').classList.add('hidden');
         showCustomDialog("Success ✅", "Case Snoozed for you.", false);
@@ -994,7 +1023,6 @@ window.processUnsnooze = async function(btn) {
     if(!convId) return;
     btn.innerText = "Un-snoozing..."; btn.disabled = true;
     try { 
-        // 🔥 FIX: Added userEmail to only unsnooze for this specific user
         await apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }); 
         loadConversations(); 
         if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
@@ -1113,22 +1141,14 @@ window.saveManagedMembers = async function() {
 // MENTIONS & COMPOSER LOGIC
 // ==========================================
 
-// ==========================================
-// 🔥 ASSIGN TASK DEEP LINKING
-// ==========================================
 window.openAssignTask = function() {
     if (!currentUser || !currentUser.email) {
         showCustomDialog("Notice", "User not logged in properly. Cannot find email.", false);
         return;
     }
     
-    // Encode the email to ensure special characters don't break the URL
     const userEmailEncoded = encodeURIComponent(currentUser.email);
-    
-    // Construct the URL with the dynamic email while keeping the 'Delegate Task' tab
     const url = `https://script.google.com/a/macros/hosexperts.com/s/AKfycbyisCYLtOoFaDdjrIQCu6A1QSROpKrKp5ROBIzyT5IXwiEk4FJ7E5oKbvzQi8yfyaayLw/exec?useremail=${userEmailEncoded}&tab=Delegate%20Task`;
-    
-    // Open in a new tab
     window.open(url, '_blank');
 };
 
@@ -1356,7 +1376,6 @@ window.handleCardClick = function(event, cardEl) {
    window.openCaseDetail(cardEl);
 };
 
-// 🔥 FIX: KEEP ORIGINAL CASE FOR UI, DO NOT LOWERCASE IT
 window.openCaseDetail = function(cardEl) {
   try {
       let card = cardEl.classList && cardEl.classList.contains('card-main') ? cardEl : null;
@@ -1372,7 +1391,7 @@ window.openCaseDetail = function(cardEl) {
       resetCaseState();
 
       const dataset = card.dataset; 
-      const convId = String(dataset.convId || "").trim(); // Kept Original Case String
+      const convId = String(dataset.convId || "").trim(); 
       
       document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]').innerText; 
       document.getElementById('detail-id').innerText = convId; 
@@ -1496,7 +1515,6 @@ function renderAllCommentsLocally() {
     container.innerHTML = finalHtml;
 }
 
-// 🔥 FIX: STRICT MATCHING IN PAGINATION
 function loadCommentsPaginated(caseId, reset = false) {
     if (isLoading || !hasMore) return;
     isLoading = true;
@@ -1540,11 +1558,15 @@ function loadCommentsPaginated(caseId, reset = false) {
         }).catch(err => { isLoading = false; console.error(err); });
 }
 
-// 🔥 FIX: STRICT MATCHING IN REALTIME SYNC
 async function fetchNewMessages() {
     const caseId = document.getElementById('detail-conv-id')?.value;
-    
     if (!caseId || document.getElementById("caseDetailView").classList.contains("hidden") || isLoading) return;
+    
+    // 🔥 FIX: Block background chat rebuild if user is currently composing a message!
+    if (window.isUserTypingGlobal) {
+        console.log("⛔ Skipped thread refresh (user typing)");
+        return; 
+    }
 
     try {
         const messages = await apiCall('getNewComments', {
@@ -1599,11 +1621,6 @@ async function fetchNewMessages() {
 
         if (hasNew) {
             renderAllCommentsLocally();
-            
-            setTimeout(() => {
-                const scrollArea = document.getElementById("detail-thread-container").parentElement;
-                if (scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
-            }, 50);
         }
 
     } catch (err) {
