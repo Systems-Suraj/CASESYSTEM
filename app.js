@@ -2203,23 +2203,26 @@ async function loadConversations() {
       // ==========================================
       // 🔥 DYNAMIC BADGE & MOVED TO LIVE LOGIC
       // ==========================================
+     // ==========================================
+      // 🔥 PER-USER DASHBOARD & ENGLISH REASONS
+      // ==========================================
       let originalSnoozeMs = 0;
       const snoozeStr = String(conv.snoozeTime || "").trim();
       
+      // Personal Snooze extract karein
       if (snoozeStr && snoozeStr !== '0' && snoozeStr !== 'NaN') {
           if (snoozeStr.startsWith('{')) {
-             // Purane (Per-user) json data ko bhi sabke liye Global bana dega
-             try {
-                const obj = JSON.parse(snoozeStr);
-                const times = Object.values(obj).map(v => parseInt(v, 10)).filter(v => !isNaN(v));
-                if (times.length > 0) originalSnoozeMs = Math.max(...times); 
-             } catch(e) {}
+              try {
+                  const obj = JSON.parse(snoozeStr);
+                  originalSnoozeMs = parseInt(obj[uEmail], 10) || 0;
+              } catch(e) { originalSnoozeMs = 0; }
           } else {
-             // Normal Global Timestamp
-             originalSnoozeMs = snoozeStr.includes('T') ? new Date(snoozeStr).getTime() : parseInt(snoozeStr, 10) || 0;
+              // Fallback for old global data
+              originalSnoozeMs = parseInt(snoozeStr, 10) || 0;
           }
       }
 
+      // Check for activity (Reply/Message)
       const unreadNotifsForCase = notifications.filter(n => String(n.caseId).trim() === String(conv.id).trim());
       const hasUnread = unreadNotifsForCase.length > 0;
       
@@ -2231,25 +2234,26 @@ async function loadConversations() {
           badgeText = "ARCHIVED";
           badgeClasses = ['bg-emerald-700', 'text-white'];
       } else if (hasUnread && originalSnoozeMs > 0) {
-          // 🚨 Case was snoozed, but a reply came! Force to Live.
-          const replierName = window.getUserNameByEmail(unreadNotifsForCase[0].sender);
-          badgeText = `MOVED TO LIVE: REPLY BY ${replierName.toUpperCase()}`;
+          // 🚨 Activity Detected: Move to Live with Name
+          const lastNotif = unreadNotifsForCase[0];
+          const replierName = window.getUserNameByEmail(lastNotif.sender);
+          const actType = String(lastNotif.type || "REPLY").toUpperCase();
+          badgeText = `MOVED TO LIVE: ${actType} BY ${replierName.toUpperCase()}`;
           badgeClasses = ['bg-blue-100', 'text-blue-800', 'border', 'border-blue-300'];
           isSnoozed = false; 
       } else if (originalSnoozeMs > Date.now()) {
-          // ⏰ Snooze is still active normally
+          // ⏰ Still Snoozed for this user
           const snoozeDateStr = new Date(originalSnoozeMs).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
           badgeText = `SNOOZED TILL ${snoozeDateStr.toUpperCase()}`;
           badgeClasses = ['bg-orange-100', 'text-orange-700'];
           isSnoozed = true; 
       } else if (originalSnoozeMs > 0 && originalSnoozeMs <= Date.now()) {
-          // ⌛ Time expired! Force to Live.
+          // ⌛ Time Expired
           badgeText = "MOVED TO LIVE: TIME EXPIRED";
           badgeClasses = ['bg-purple-100', 'text-purple-800', 'border', 'border-purple-200'];
           isSnoozed = false; 
       }
 
-      // If forced to live, we set safeSnoozeMs to 0 so it moves tabs correctly
       let safeSnoozeMs = isSnoozed ? originalSnoozeMs : 0;
 
       cardDiv._cachedLabels = conv.labels; 
