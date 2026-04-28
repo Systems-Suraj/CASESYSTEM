@@ -1046,23 +1046,36 @@ window.processUnsnooze = async function(btn) {
 window.confirmSnooze = async function() {
     const dt = document.getElementById('snoozeDateTime').value;
     if (!dt) { return showCustomDialog("Notice", "Please select a date/time.", false); }
+    
     const timestamp = new Date(dt).getTime();
     if (isNaN(timestamp)) { return showCustomDialog("Error", "Invalid date/time selected", false); }
 
-    const id = String(document.getElementById('snoozeConvId').value).trim();
+    const caseId = String(document.getElementById('snoozeConvId').value).trim();
+    if (!caseId) { return showCustomDialog("Error", "Missing Case ID", false); }
+
     let btn = document.activeElement;
     if (!btn || btn.tagName !== 'BUTTON') { btn = document.querySelector('#snoozeModal button:last-of-type'); }
     const origText = btn ? btn.innerText : 'Snooze Now';
     if(btn) { btn.innerText = "Snoozing..."; btn.disabled = true; }
 
     try {
-        const res = await apiCall('snoozeCase', { id: id, time: timestamp, userEmail: currentUser.email });
+        // 🔥 API CALL (Matching exactly with Code.gs backend parameters)
+        await apiCall('snoozeCase', { 
+            id: caseId, 
+            time: timestamp, 
+            userEmail: currentUser.email 
+        });
+
         document.getElementById('snoozeModal').classList.add('hidden');
         showCustomDialog("Success ✅", "Case Snoozed for you.", false);
+        
         setTimeout(() => {
             loadConversations();
-            if(!document.getElementById('caseDetailView').classList.contains('hidden')) { closeCaseDetail(); }
+            if(!document.getElementById('caseDetailView').classList.contains('hidden')) { 
+                closeCaseDetail(); // Detail view close karke wapas live feed me bhej dega
+            }
         }, 500);
+
     } catch (e) {
         console.error("Snooze Error:", e);
         showCustomDialog("Error", "Failed to snooze.\n" + e.message, false);
@@ -1086,17 +1099,29 @@ window.processUnsnooze = async function(btn) {
     }
 };
 
-window.openSnoozeModal = function(btn) { 
-    // Detail View ke hidden input se ID nikalna hai
-    const convId = document.getElementById('detail-conv-id')?.value;
-    
-    if(!convId || convId === '') {
-        console.error("Error: Case ID not found!");
+window.openSnoozeModal = function(el) {
+    let caseId = "";
+
+    // 🔥 CASE 1: Agar card wala button (parent element) se click hua
+    if (el && el.closest && el.closest('[data-conv-id]')) {
+        caseId = el.closest('[data-conv-id]').dataset.convId;
+    } 
+    // 🔥 CASE 2: Detail view wale button se click hua (Hidden field use karega)
+    else {
+        const hiddenId = document.getElementById("detail-conv-id");
+        if (hiddenId) {
+            caseId = hiddenId.value;
+        }
+    }
+
+    if (!caseId) {
+        showCustomDialog("Error", "Case ID nahi mil raha.", false);
         return;
     }
-    
-    document.getElementById('snoozeConvId').value = String(convId).trim();
-    document.getElementById('snoozeModal').classList.remove('hidden');
+
+    // ✅ Modal open karo aur caseId set karo
+    document.getElementById("snoozeConvId").value = String(caseId).trim();
+    document.getElementById("snoozeModal").classList.remove("hidden");
 };
 
 // ==========================================
