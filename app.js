@@ -33,7 +33,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v25"; // 🔄 Version bumped to force cache clear & fix case matching
+const APP_VERSION = "v26"; // 🔄 Version bumped to force cache clear & fix case matching
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -1099,29 +1099,25 @@ window.processUnsnooze = async function(btn) {
     }
 };
 
-window.openSnoozeModal = function(el) {
-    let caseId = "";
-
-    // 🔥 CASE 1: Agar card wala button (parent element) se click hua
-    if (el && el.closest && el.closest('[data-conv-id]')) {
-        caseId = el.closest('[data-conv-id]').dataset.convId;
-    } 
-    // 🔥 CASE 2: Detail view wale button se click hua (Hidden field use karega)
-    else {
-        const hiddenId = document.getElementById("detail-conv-id");
-        if (hiddenId) {
-            caseId = hiddenId.value;
-        }
-    }
-
-    if (!caseId) {
-        showCustomDialog("Error", "Case ID nahi mil raha.", false);
+window.openSnoozeModal = function(btn) { 
+    const convId = document.getElementById('detail-conv-id')?.value;
+    if(!convId) {
+        showCustomDialog("Error", "Case ID not found.", false);
         return;
     }
+    document.getElementById('snoozeConvId').value = String(convId).trim();
+    document.getElementById('snoozeModal').classList.remove('hidden');
+};
 
-    // ✅ Modal open karo aur caseId set karo
-    document.getElementById("snoozeConvId").value = String(caseId).trim();
-    document.getElementById("snoozeModal").classList.remove("hidden");
+// 2. Bahar Wale Button Ke Liye (Dashboard Card)
+window.openSnoozeModalFromCard = function(btn) {
+    const parent = btn.closest('[data-conv-id]');
+    if(!parent) {
+        showCustomDialog("Error", "Card ID not found.", false);
+        return;
+    }
+    document.getElementById('snoozeConvId').value = String(parent.dataset.convId).trim();
+    document.getElementById('snoozeModal').classList.remove('hidden');
 };
 
 // ==========================================
