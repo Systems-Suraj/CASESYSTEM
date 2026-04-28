@@ -1011,19 +1011,36 @@ window.processBulkArchive = function() {
 
 window.processUnarchive = async function(btn) {
   const parent = btn.closest('[data-conv-id]');
-  const convId = parent ? String(parent.dataset.convId).trim() : null; 
+  // Agar parent mila (Card) toh wahan se, warna Detail View ke input se ID lo
+  const convId = parent ? String(parent.dataset.convId).trim() : document.getElementById('detail-conv-id')?.value; 
   if(!convId) return;
+  
   btn.innerText = "Unarchiving..."; btn.disabled = true;
-  try { await apiCall('unarchiveCaseServer', { id: convId, user: currentUser.email || currentUser.name }); loadConversations();
-  if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
-  } catch(e) { showCustomDialog("Error", "Failed to unarchive.", false); btn.innerText = "📂 Un-Archive"; btn.disabled = false; }
+  try { 
+      await apiCall('unarchiveCaseServer', { id: convId, user: currentUser.email || currentUser.name }); 
+      loadConversations();
+      if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
+  } catch(e) { 
+      showCustomDialog("Error", "Failed to unarchive.", false); 
+      btn.innerText = "📂 Un-Archive"; btn.disabled = false; 
+  }
 };
 
-window.openSnoozeModal = function(btn) { 
+window.processUnsnooze = async function(btn) {
     const parent = btn.closest('[data-conv-id]');
-    if(!parent) return;
-    document.getElementById('snoozeConvId').value = String(parent.dataset.convId).trim();
-    document.getElementById('snoozeModal').classList.remove('hidden');
+    // Agar parent mila (Card) toh wahan se, warna Detail View ke input se ID lo
+    const convId = parent ? String(parent.dataset.convId).trim() : document.getElementById('detail-conv-id')?.value; 
+    if(!convId) return;
+    
+    btn.innerText = "Un-snoozing..."; btn.disabled = true;
+    try { 
+        await apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }); 
+        loadConversations(); 
+        if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
+    } catch(e) { 
+        showCustomDialog("Error", "Failed to un-snooze.", false); 
+        btn.innerText = "🔔 Un-Snooze"; btn.disabled = false; 
+    }
 };
 
 window.confirmSnooze = async function() {
