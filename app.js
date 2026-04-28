@@ -33,7 +33,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v26"; // 🔄 Version bumped to force cache clear & fix case matching
+const APP_VERSION = "v27"; // 🔄 Version bumped to force cache clear & fix case matching
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -1099,6 +1099,11 @@ window.processUnsnooze = async function(btn) {
     }
 };
 
+// ==========================================
+// ⏰ SNOOZE MODAL OPENERS (BOTH INNER & OUTER)
+// ==========================================
+
+// 1. Andar Wale Button Ke Liye (Detail View)
 window.openSnoozeModal = function(btn) { 
     const convId = document.getElementById('detail-conv-id')?.value;
     if(!convId) {
