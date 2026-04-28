@@ -1086,11 +1086,12 @@ window.processUnsnooze = async function(btn) {
     }
 };
 
-window.openSnoozeModalFromCard = function(btn) {
-  const parent = btn.closest('[data-conv-id]');
-  if(parent) {
-      document.getElementById('snoozeConvId').value = String(parent.dataset.convId).trim();
-      document.getElementById('snoozeModal').classList.remove('hidden');
+window.openSnoozeModal = function(btn) { 
+    // Detail View ke hidden input se ID nikalna hai
+    const convId = document.getElementById('detail-conv-id').value;
+    if(!convId) return;
+    document.getElementById('snoozeConvId').value = String(convId).trim();
+    document.getElementById('snoozeModal').classList.remove('hidden');
   }
 };
 
