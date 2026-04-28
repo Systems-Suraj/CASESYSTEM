@@ -1088,11 +1088,15 @@ window.processUnsnooze = async function(btn) {
 
 window.openSnoozeModal = function(btn) { 
     // Detail View ke hidden input se ID nikalna hai
-    const convId = document.getElementById('detail-conv-id').value;
-    if(!convId) return;
+    const convId = document.getElementById('detail-conv-id')?.value;
+    
+    if(!convId || convId === '') {
+        console.error("Error: Case ID not found!");
+        return;
+    }
+    
     document.getElementById('snoozeConvId').value = String(convId).trim();
     document.getElementById('snoozeModal').classList.remove('hidden');
-  }
 };
 
 // ==========================================
