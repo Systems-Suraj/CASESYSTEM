@@ -941,6 +941,38 @@ window.applyLookerFilters = function(containerId, type) {
     toggleDropdown(containerId, true); applyFilters();
 };
 
+window.resetAllFilters = function() {
+    // 1. Clear Search Bar
+    const filterInput = document.getElementById('filterId');
+    if (filterInput) filterInput.value = '';
+
+    // 2. Clear Labels
+    clearAllInDropdown('labelsDropdown');
+    const labelsBtnText = document.getElementById('labelsDropdownText');
+    if (labelsBtnText) {
+        labelsBtnText.innerText = 'Filter Labels';
+        labelsBtnText.classList.remove('text-indigo-700', 'font-extrabold');
+    }
+    // Remove the applied tags
+    document.querySelectorAll('#labelsDropdown input[type="checkbox"]').forEach(cb => {
+        cb.removeAttribute('data-applied');
+    });
+
+    // 3. Clear Members
+    clearAllInDropdown('membersDropdown');
+    const membersBtnText = document.getElementById('membersDropdownText');
+    if (membersBtnText) {
+        membersBtnText.innerText = 'Filter Members';
+        membersBtnText.classList.remove('text-indigo-700', 'font-extrabold');
+    }
+    // Remove the applied tags
+    document.querySelectorAll('#membersDropdown input[type="checkbox"]').forEach(cb => {
+        cb.removeAttribute('data-applied');
+    });
+
+    // 4. Refresh Dashboard
+    applyFilters();
+};
 const applyFilters = debounce(function() {
   const filterInput = document.getElementById('filterId');
   if(!filterInput) return;
