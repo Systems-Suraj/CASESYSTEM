@@ -1000,6 +1000,9 @@ window.resetAllFilters = function() {
     applyFilters();
 };
 
+// ==========================================
+// ADVANCED FILTER LOGIC (STRICT AND LOGIC + EXACT MATCH FIX)
+// ==========================================
 window.applyFilters = debounce(function() {
     try {
         const filterInput = document.getElementById('filterId');
@@ -1008,7 +1011,8 @@ window.applyFilters = debounce(function() {
         
         // Get checked values
         const checkedLabels = Array.from(document.querySelectorAll('.flabel[data-applied="true"]')).map(cb => cb.value);
-        const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => cb.value.toLowerCase());
+        // Trim spaces to ensure clean exact matching
+        const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => String(cb.value).toLowerCase().trim());
         
         let visibleLabels = new Set();
         let visibleMembers = new Set();
@@ -1032,16 +1036,17 @@ window.applyFilters = debounce(function() {
             let cardMembers = card._cachedMembers || JSON.parse(card.dataset.members || '[]');
             if(!Array.isArray(cardMembers)) cardMembers = [];
 
-            // STRICT AND logic for Labels (Saare selected labels card par hone chahiye)
+            // STRICT AND logic for Labels
             const matchesLabels = checkedLabels.length === 0 || checkedLabels.every(l => cardLabels.includes(l));
             
-            // STRICT AND logic for Members (Saare selected members card par hone chahiye)
+            // STRICT AND logic for Members -> EXACT MATCH FIX (=== instead of .includes)
             const matchesMembers = checkedMembers.length === 0 || checkedMembers.every(m => 
                 cardMembers.some(cm => {
                     if (!cm) return false;
-                    const cmEmail = String(cm).toLowerCase();
-                    const cmName = String(window.getUserNameByEmail(cm)).toLowerCase();
-                    return cmEmail.includes(m) || cmName.includes(m);
+                    const cmEmail = String(cm).toLowerCase().trim();
+                    const cmName = String(window.getUserNameByEmail(cm)).toLowerCase().trim();
+                    // EXACT MATCH logic so "Raj Kumar" doesn't trigger inside "Suraj Kumar"
+                    return cmEmail === m || cmName === m;
                 })
             );
             
@@ -1059,16 +1064,14 @@ window.applyFilters = debounce(function() {
             }
 
             // Cross-Filter Availability Check
-            // Agar card baaki filters (id/tab + members) ko pass karta hai, toh uske labels dropdown ke liye valid hain
             if (baseMatch && matchesMembers) {
                 cardLabels.forEach(l => visibleLabels.add(String(l)));
             }
-            // Agar card baaki filters (id/tab + labels) ko pass karta hai, toh uske members dropdown ke liye valid hain
             if (baseMatch && matchesLabels) {
                 cardMembers.forEach(m => {
                     if(m) {
-                        visibleMembers.add(String(m).toLowerCase());
-                        visibleMembers.add(String(window.getUserNameByEmail(m)).toLowerCase());
+                        visibleMembers.add(String(m).toLowerCase().trim());
+                        visibleMembers.add(String(window.getUserNameByEmail(m)).toLowerCase().trim());
                     }
                 });
             }
@@ -1078,7 +1081,6 @@ window.applyFilters = debounce(function() {
         document.querySelectorAll('#labelsDropdown .dropdown-item').forEach(item => {
             const cb = item.querySelector('input[type="checkbox"]');
             if(!cb) return;
-            // Jo apply ho chuke hain ya jo filtered cards mein maujood hain, sirf wahi dikhenge
             if (cb.hasAttribute('data-applied') || visibleLabels.has(cb.value)) {
                 item.style.display = 'flex';
                 item.dataset.available = 'true';
@@ -1088,20 +1090,15 @@ window.applyFilters = debounce(function() {
             }
         });
 
-        // Dynamically Hide/Show Member Options
+        // Dynamically Hide/Show Member Options -> EXACT MATCH FIX (.has() instead of .includes())
         document.querySelectorAll('#membersDropdown .dropdown-item').forEach(item => {
             const cb = item.querySelector('input[type="checkbox"]');
             if(!cb) return;
-            const valLower = String(cb.value).toLowerCase();
+            const valLower = String(cb.value).toLowerCase().trim();
 
-            let isVisible = false;
-            for (let vm of visibleMembers) {
-                if (vm.includes(valLower) || valLower.includes(vm)) {
-                    isVisible = true; break;
-                }
-            }
+            // Using Set.has() guarantees it will look for an exact full-name match
+            const isVisible = visibleMembers.has(valLower);
 
-            // Jo apply ho chuke hain ya jo filtered cards mein maujood hain, sirf wahi dikhenge
             if (cb.hasAttribute('data-applied') || isVisible) {
                 item.style.display = 'flex';
                 item.dataset.available = 'true';
