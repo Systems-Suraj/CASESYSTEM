@@ -1000,108 +1000,118 @@ window.resetAllFilters = function() {
     applyFilters();
 };
 
-const applyFilters = debounce(function() {
-  const filterInput = document.getElementById('filterId');
-  if(!filterInput) return;
-  const idQuery = filterInput.value.toLowerCase();
-  const checkedLabels = Array.from(document.querySelectorAll('.flabel[data-applied="true"]')).map(cb => cb.value);
-  const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => cb.value.toLowerCase());
-  
-  // Set to collect dynamically available options
-  let visibleLabels = new Set();
-  let visibleMembers = new Set();
+window.applyFilters = debounce(function() {
+    try {
+        const filterInput = document.getElementById('filterId');
+        if(!filterInput) return;
+        const idQuery = filterInput.value.toLowerCase().trim();
+        
+        // Get checked values
+        const checkedLabels = Array.from(document.querySelectorAll('.flabel[data-applied="true"]')).map(cb => cb.value);
+        const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => cb.value.toLowerCase());
+        
+        let visibleLabels = new Set();
+        let visibleMembers = new Set();
 
-  Array.from(document.getElementById('conversationFeed').children).forEach(wrapper => {
-    const card = wrapper.classList.contains('card-main') ? wrapper : wrapper.querySelector('.card-main');
-    if(!card || !card.dataset.convId) return; 
-    
-    const isArchived = card.dataset.status === 'Archived'; 
-    const isSnoozed = parseInt(card.dataset.snooze || 0) > Date.now();
-    let showTab = false;
+        // Process Cards
+        Array.from(document.getElementById('conversationFeed').children).forEach(wrapper => {
+            const card = wrapper.classList.contains('card-main') ? wrapper : wrapper.querySelector('.card-main');
+            if(!card || !card.dataset.convId) return; 
+            
+            const isArchived = card.dataset.status === 'Archived'; 
+            const isSnoozed = parseInt(card.dataset.snooze || 0) > Date.now();
+            let showTab = false;
 
-    if (currentTab === 'Live' && !isArchived && !isSnoozed) showTab = true; 
-    if (currentTab === 'Archive' && isArchived) showTab = true;
-    if (currentTab === 'Snooze' && !isArchived && isSnoozed) showTab = true;
+            if (currentTab === 'Live' && !isArchived && !isSnoozed) showTab = true; 
+            if (currentTab === 'Archive' && isArchived) showTab = true;
+            if (currentTab === 'Snooze' && !isArchived && isSnoozed) showTab = true;
 
-    const cardLabels = card._cachedLabels || JSON.parse(card.dataset.labels || '[]');
-    const cardMembers = card._cachedMembers || JSON.parse(card.dataset.members || '[]'); 
-  
-    // FIX 1: Change .every() to .some() -> "Koi ek bhi match ho toh card dikhe"
-    const matchesLabels = checkedLabels.length === 0 || checkedLabels.some(l => cardLabels.includes(l));
-    
-    // FIX 2: Change .every() to .some() for members as well
-    const matchesMembers = checkedMembers.length === 0 ||
-    checkedMembers.some(m => 
-        cardMembers.some(cm => {
-            if (!cm) return false;
-            const cmEmail = cm.toLowerCase();
-            const cmName = window.getUserNameByEmail(cm).toLowerCase();
-            return cmEmail.includes(m) || cmName.includes(m);
-        })
-    );
-    
-    const matchesId = !idQuery || card.dataset.convId.toLowerCase().includes(idQuery) || (card.dataset.subject && card.dataset.subject.includes(idQuery));
-    
-    const baseMatch = showTab && matchesId;
+            let cardLabels = card._cachedLabels || JSON.parse(card.dataset.labels || '[]');
+            if(!Array.isArray(cardLabels)) cardLabels = [];
+            
+            let cardMembers = card._cachedMembers || JSON.parse(card.dataset.members || '[]');
+            if(!Array.isArray(cardMembers)) cardMembers = [];
 
-    // Display card only if EVERYTHING matches
-    if (baseMatch && matchesLabels && matchesMembers) {
-        wrapper.style.display = 'block';
-    } else {
-        wrapper.style.display = 'none';
-    }
+            // STRICT AND logic for Labels (Saare selected labels card par hone chahiye)
+            const matchesLabels = checkedLabels.length === 0 || checkedLabels.every(l => cardLabels.includes(l));
+            
+            // STRICT AND logic for Members (Saare selected members card par hone chahiye)
+            const matchesMembers = checkedMembers.length === 0 || checkedMembers.every(m => 
+                cardMembers.some(cm => {
+                    if (!cm) return false;
+                    const cmEmail = String(cm).toLowerCase();
+                    const cmName = String(window.getUserNameByEmail(cm)).toLowerCase();
+                    return cmEmail.includes(m) || cmName.includes(m);
+                })
+            );
+            
+            const matchesId = !idQuery || 
+                              String(card.dataset.convId).toLowerCase().includes(idQuery) || 
+                              (card.dataset.subject && String(card.dataset.subject).toLowerCase().includes(idQuery));
+            
+            const baseMatch = showTab && matchesId;
 
-    // FIX 3: Cross-Filter Availability Check
-    // If members match, collect its labels for the label dropdown
-    if (baseMatch && matchesMembers) {
-        cardLabels.forEach(l => visibleLabels.add(l));
-    }
-    // If labels match, collect its members for the member dropdown
-    if (baseMatch && matchesLabels) {
-        cardMembers.forEach(m => {
-            if(m) {
-                visibleMembers.add(m.toLowerCase());
-                visibleMembers.add(window.getUserNameByEmail(m).toLowerCase());
+            // Apply display to Card
+            if (baseMatch && matchesLabels && matchesMembers) {
+                wrapper.style.display = 'block';
+            } else {
+                wrapper.style.display = 'none';
+            }
+
+            // Cross-Filter Availability Check
+            // Agar card baaki filters (id/tab + members) ko pass karta hai, toh uske labels dropdown ke liye valid hain
+            if (baseMatch && matchesMembers) {
+                cardLabels.forEach(l => visibleLabels.add(String(l)));
+            }
+            // Agar card baaki filters (id/tab + labels) ko pass karta hai, toh uske members dropdown ke liye valid hain
+            if (baseMatch && matchesLabels) {
+                cardMembers.forEach(m => {
+                    if(m) {
+                        visibleMembers.add(String(m).toLowerCase());
+                        visibleMembers.add(String(window.getUserNameByEmail(m)).toLowerCase());
+                    }
+                });
             }
         });
-    }
-  });
 
-  // Dynamically Hide/Show Label Options
-  document.querySelectorAll('#labelsDropdown .dropdown-item').forEach(item => {
-      const cb = item.querySelector('input[type="checkbox"]');
-      if (cb.hasAttribute('data-applied') || visibleLabels.has(cb.value)) {
-          item.style.display = 'flex';
-          item.dataset.available = 'true';
-      } else {
-          item.style.display = 'none';
-          item.dataset.available = 'false';
-      }
-  });
+        // Dynamically Hide/Show Label Options
+        document.querySelectorAll('#labelsDropdown .dropdown-item').forEach(item => {
+            const cb = item.querySelector('input[type="checkbox"]');
+            if(!cb) return;
+            // Jo apply ho chuke hain ya jo filtered cards mein maujood hain, sirf wahi dikhenge
+            if (cb.hasAttribute('data-applied') || visibleLabels.has(cb.value)) {
+                item.style.display = 'flex';
+                item.dataset.available = 'true';
+            } else {
+                item.style.display = 'none';
+                item.dataset.available = 'false';
+            }
+        });
 
-  // Dynamically Hide/Show Member Options
-  document.querySelectorAll('#membersDropdown .dropdown-item').forEach(item => {
-      const cb = item.querySelector('input[type="checkbox"]');
-      const valLower = cb.value.toLowerCase();
+        // Dynamically Hide/Show Member Options
+        document.querySelectorAll('#membersDropdown .dropdown-item').forEach(item => {
+            const cb = item.querySelector('input[type="checkbox"]');
+            if(!cb) return;
+            const valLower = String(cb.value).toLowerCase();
 
-      let isVisible = false;
-      for (let vm of visibleMembers) {
-          if (vm.includes(valLower) || valLower.includes(vm)) {
-              isVisible = true; break;
-          }
-      }
+            let isVisible = false;
+            for (let vm of visibleMembers) {
+                if (vm.includes(valLower) || valLower.includes(vm)) {
+                    isVisible = true; break;
+                }
+            }
 
-      if (cb.hasAttribute('data-applied') || isVisible) {
-          item.style.display = 'flex';
-          item.dataset.available = 'true';
-      } else {
-          item.style.display = 'none';
-          item.dataset.available = 'false';
-      }
-  });
-
-}, 300);
-
+            // Jo apply ho chuke hain ya jo filtered cards mein maujood hain, sirf wahi dikhenge
+            if (cb.hasAttribute('data-applied') || isVisible) {
+                item.style.display = 'flex';
+                item.dataset.available = 'true';
+            } else {
+                item.style.display = 'none';
+                item.dataset.available = 'false';
+            }
+        });
+    } catch(e) { console.error("Filter Error:", e); }
+}, 150);
 // ==========================================
 // ACTIONS: ARCHIVE, SNOOZE
 // ==========================================
