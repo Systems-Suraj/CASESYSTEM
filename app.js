@@ -284,85 +284,73 @@ const tingSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/28
 
 function addNotification(msg) {
 
-  // ===============================
-  // ❌ CLOSED STATUS IGNORE (MAIN FIX)
-  // ===============================
-  if (msg.status && String(msg.status).toLowerCase().trim() === 'closed') {
-    return;
-  }
+  // ===============================
+  // ❌ CLOSED ASK IGNORE (MAIN FIX)
+  // ===============================
+  if (msg.status && String(msg.status).toLowerCase().trim() === 'closed') {
+    return;
+  }
 
-  // ===============================
-  // ❌ ALREADY SEEN BY THIS USER (STRICT NEW FIX)
-  // ===============================
-  // Agar backend se galti se aa bhi jaye, par user dekh chuka hai, toh reject kar do
-  if (msg.seen && currentUser?.email) {
-      const seenArr = String(msg.seen).toLowerCase().split(',').map(e => e.trim());
-      const myEmail = currentUser.email.toLowerCase().trim();
-      if (seenArr.includes(myEmail)) {
-          return; 
-      }
-  }
+  // ===============================
+  // ❌ SELF NOTIFICATION IGNORE
+  // ===============================
+  if (msg.sender && currentUser?.email && msg.sender.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return;
+  if (msg.sender && currentUser?.name && msg.sender.toLowerCase().trim() === currentUser.name.toLowerCase().trim()) return;
 
-  // ===============================
-  // ❌ SELF NOTIFICATION IGNORE
-  // ===============================
-  if (msg.sender && currentUser?.email && msg.sender.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return;
-  if (msg.sender && currentUser?.name && msg.sender.toLowerCase().trim() === currentUser.name.toLowerCase().trim()) return;
+  // ===============================
+  // ❌ ONLY RECEIVER SHOULD SEE
+  // ===============================
+  if (msg.receiver && currentUser?.email) {
+      const receivers = msg.receiver.split(',').map(e => e.toLowerCase().trim());
+      const myEmail = currentUser.email.toLowerCase().trim();
+      if (!receivers.includes(myEmail)) {
+          return; 
+      }
+  }
 
-  // ===============================
-  // ❌ ONLY RECEIVER SHOULD SEE
-  // ===============================
-  if (msg.receiver && currentUser?.email) {
-      const receivers = msg.receiver.split(',').map(e => e.toLowerCase().trim());
-      const myEmail = currentUser.email.toLowerCase().trim();
-      if (!receivers.includes(myEmail)) {
-          return; 
-      }
-  }
+  // ===============================
+  // ❌ SAME OPEN CASE → NO NOTIF
+  // ===============================
+  const activeCaseId = document.getElementById('detail-conv-id')?.value;
+  const isCaseViewOpen = document.getElementById('caseDetailView') && 
+                         !document.getElementById('caseDetailView').classList.contains('hidden');
+  const msgCaseId = msg.caseId || msg.id || "";
 
-  // ===============================
-  // ❌ SAME OPEN CASE → NO NOTIF
-  // ===============================
-  const activeCaseId = document.getElementById('detail-conv-id')?.value;
-  const isCaseViewOpen = document.getElementById('caseDetailView') && 
-                         !document.getElementById('caseDetailView').classList.contains('hidden');
-  const msgCaseId = msg.caseId || msg.id || "";
+  if (isCaseViewOpen && 
+      String(activeCaseId).trim().toLowerCase() === String(msgCaseId).trim().toLowerCase()) {
+      return; 
+  }
 
-  if (isCaseViewOpen && 
-      String(activeCaseId).trim().toLowerCase() === String(msgCaseId).trim().toLowerCase()) {
-      return; 
-  }
+  // ===============================
+  // 🧹 CLEAN MESSAGE TEXT
+  // ===============================
+  let cleanText = msg.text || msg.body || "New activity on your case";
+  cleanText = cleanText.replace(/<[^>]*>?/gm, '');
 
-  // ===============================
-  // 🧹 CLEAN MESSAGE TEXT
-  // ===============================
-  let cleanText = msg.text || msg.body || "New activity on your case";
-  cleanText = cleanText.replace(/<[^>]*>?/gm, '');
+  // ===============================
+  // 🆔 UNIQUE NOTIFICATION ID
+  // ===============================
+  const notifId = msg.uniqueId || (msgCaseId + "_" + msg.timestamp + "_" + msg.sender);
 
-  // ===============================
-  // 🆔 UNIQUE NOTIFICATION ID
-  // ===============================
-  const notifId = msg.uniqueId || (msgCaseId + "_" + msg.timestamp + "_" + msg.sender);
+  // ===============================
+  // ❌ ALREADY SEEN / DUPLICATE
+  // ===============================
+  if (locallySeenNotifications.has(notifId)) return;
+  if (notifications.some(n => n.id === notifId)) return;
 
-  // ===============================
-  // ❌ ALREADY SEEN / DUPLICATE
-  // ===============================
-  if (locallySeenNotifications.has(notifId)) return;
-  if (notifications.some(n => n.id === notifId)) return;
-
-  // ===============================
-  // ✅ CREATE NOTIFICATION OBJECT
-  // ===============================
-  const notif = {
-    id: notifId,
-    text: cleanText,
-    caseId: msgCaseId,
-    sender: msg.sender || msg.title || "System",
-    time: msg.timestamp || Date.now(),
-    type: msg.type || 'Message', 
-    askId: msg.askId || msg.parentAskId || '',
-    status: msg.status || '' 
-  };
+  // ===============================
+  // ✅ CREATE NOTIFICATION OBJECT
+  // ===============================
+  const notif = {
+    id: notifId,
+    text: cleanText,
+    caseId: msgCaseId,
+    sender: msg.sender || msg.title || "System",
+    time: msg.timestamp || Date.now(),
+    type: msg.type || 'Message', 
+    askId: msg.askId || msg.parentAskId || '',
+    status: msg.status || '' // 🔥 IMPORTANT (future logic)
+  };
 
   // ===============================
   // 🚀 PUSH NOTIFICATION
