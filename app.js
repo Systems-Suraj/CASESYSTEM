@@ -285,10 +285,22 @@ const tingSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/28
 function addNotification(msg) {
 
   // ===============================
-  // ❌ CLOSED ASK IGNORE (MAIN FIX)
+  // ❌ CLOSED STATUS IGNORE (MAIN FIX)
   // ===============================
   if (msg.status && String(msg.status).toLowerCase().trim() === 'closed') {
     return;
+  }
+
+  // ===============================
+  // ❌ ALREADY SEEN BY THIS USER (STRICT NEW FIX)
+  // ===============================
+  // Agar backend se galti se aa bhi jaye, par user dekh chuka hai, toh reject kar do
+  if (msg.seen && currentUser?.email) {
+      const seenArr = String(msg.seen).toLowerCase().split(',').map(e => e.trim());
+      const myEmail = currentUser.email.toLowerCase().trim();
+      if (seenArr.includes(myEmail)) {
+          return; 
+      }
   }
 
   // ===============================
@@ -349,8 +361,21 @@ function addNotification(msg) {
     time: msg.timestamp || Date.now(),
     type: msg.type || 'Message', 
     askId: msg.askId || msg.parentAskId || '',
-    status: msg.status || '' // 🔥 IMPORTANT (future logic)
+    status: msg.status || '' 
   };
+
+  // ===============================
+  // 🚀 PUSH NOTIFICATION
+  // ===============================
+  notifications.unshift(notif);
+  unreadCount++;
+
+  // ===============================
+  // 🔊 SOUND + UI UPDATE
+  // ===============================
+  tingSound.play().catch(e => console.log("Sound blocked"));
+  updateNotificationUI();
+}
 
   // ===============================
   // 🚀 PUSH NOTIFICATION
