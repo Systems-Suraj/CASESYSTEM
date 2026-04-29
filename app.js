@@ -995,6 +995,7 @@ window.resetAllFilters = function() {
     // 5. Apply (Shows all cases)
     applyFilters();
 };
+
 const applyFilters = debounce(function() {
   const filterInput = document.getElementById('filterId');
   if(!filterInput) return;
@@ -1537,7 +1538,7 @@ window.openCaseDetail = function(cardEl) {
       const currentSafeSnooze = parseInt(dataset.snooze || 0, 10);
       
       if (rawSnooze > Date.now() && currentSafeSnooze === 0) {
-           apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }).catch(e => {});
+            apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }).catch(e => {});
       }
       // 🔥 END
       
