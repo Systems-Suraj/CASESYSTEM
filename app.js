@@ -903,12 +903,32 @@ function renderLookerDropdown(containerId, items, type) {
 window.toggleDropdown = function(id, forceClose = false) {
     const drop = document.getElementById(id);
     if(!drop) return;
-    if (forceClose) { drop.classList.add('hidden'); } else {
+    
+    // Helper to revert checkboxes if user didn't click apply
+    const revertCheckboxes = (dropdownEl) => {
+        dropdownEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.checked = cb.hasAttribute('data-applied');
+        });
+    };
+
+    if (forceClose) { 
+        drop.classList.add('hidden'); 
+        revertCheckboxes(drop);
+    } else {
         const isClosing = !drop.classList.contains('hidden');
-        if (isClosing) { drop.classList.add('hidden'); } else {
-            document.querySelectorAll('[id$="Dropdown"]').forEach(d => { if(d.id !== id) d.classList.add('hidden'); });
+        if (isClosing) { 
+            drop.classList.add('hidden'); 
+            revertCheckboxes(drop);
+        } else {
+            document.querySelectorAll('[id$="Dropdown"]').forEach(d => { 
+                if(d.id !== id) {
+                    d.classList.add('hidden'); 
+                    revertCheckboxes(d);
+                }
+            });
             drop.classList.remove('hidden');
-            drop.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = cb.hasAttribute('data-applied'); });
+            revertCheckboxes(drop);
+            
             const search = drop.querySelector('input[type="text"]');
             if(search) { search.value = ''; searchInDropdown(search, id); }
         }
@@ -946,31 +966,33 @@ window.resetAllFilters = function() {
     const filterInput = document.getElementById('filterId');
     if (filterInput) filterInput.value = '';
 
-    // 2. Clear Labels
-    clearAllInDropdown('labelsDropdown');
+    // 2. Uncheck ALL labels directly & clear data-applied
+    document.querySelectorAll('.flabel').forEach(cb => {
+        cb.checked = false;
+        cb.removeAttribute('data-applied');
+    });
     const labelsBtnText = document.getElementById('labelsDropdownText');
     if (labelsBtnText) {
         labelsBtnText.innerText = 'Filter Labels';
         labelsBtnText.classList.remove('text-indigo-700', 'font-extrabold');
     }
-    // Remove the applied tags
-    document.querySelectorAll('#labelsDropdown input[type="checkbox"]').forEach(cb => {
+
+    // 3. Uncheck ALL members directly & clear data-applied
+    document.querySelectorAll('.fmember').forEach(cb => {
+        cb.checked = false;
         cb.removeAttribute('data-applied');
     });
-
-    // 3. Clear Members
-    clearAllInDropdown('membersDropdown');
     const membersBtnText = document.getElementById('membersDropdownText');
     if (membersBtnText) {
         membersBtnText.innerText = 'Filter Members';
         membersBtnText.classList.remove('text-indigo-700', 'font-extrabold');
     }
-    // Remove the applied tags
-    document.querySelectorAll('#membersDropdown input[type="checkbox"]').forEach(cb => {
-        cb.removeAttribute('data-applied');
-    });
 
-    // 4. Refresh Dashboard
+    // 4. Force Reset Dropdown Inner Searches (so hidden items reappear)
+    document.querySelectorAll('.dropdown-item').forEach(item => item.style.display = 'flex');
+    document.querySelectorAll('[id$="Dropdown"] input[type="text"]').forEach(inp => inp.value = '');
+
+    // 5. Apply (Shows all cases)
     applyFilters();
 };
 const applyFilters = debounce(function() {
