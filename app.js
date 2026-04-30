@@ -452,8 +452,8 @@ window.openFromNotification = function(caseId, uniqueId) {
   updateNotificationUI();
   
   if (uniqueId && currentUser?.email) {
-      apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email }).catch(e => console.log(e));
-  }
+          apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email, userName: currentUser.name || currentUser.email }).catch(e => console.log(e));
+      }
 
   if (card) {
       window.openCaseDetail(card); 
@@ -1682,6 +1682,17 @@ window.openCaseDetail = function(cardEl) {
       }
       ['Live', 'Snooze', 'Archive'].forEach(t => { if (t !== currentTab) document.getElementById(`tab-${t}`).style.display = 'none'; });
       
+      const caseNotifs = notifications.filter(n => String(n.caseId).trim() === convId);
+      if (caseNotifs.length > 0) {
+          caseNotifs.forEach(n => {
+              apiCall('markSeen', { notificationId: n.id, userEmail: currentUser.email, userName: currentUser.name || currentUser.email }).catch(e => console.log(e));
+              locallySeenNotifications.add(n.id);
+          });
+          notifications = notifications.filter(n => String(n.caseId).trim() !== convId);
+          unreadCount = notifications.length;
+          updateNotificationUI();
+      }
+      
       replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' };
       document.getElementById('detail-reply-input').innerHTML = ''; 
       window.setReplyGlobalType('Message');
@@ -1856,7 +1867,8 @@ async function fetchNewMessages() {
                         action: "markSeen",
                         params: {
                             notificationId: msg.uniqueId,
-                            userEmail: currentUser.email
+                            userEmail: currentUser.email,
+                            userName: currentUser.name || currentUser.email // ✅ Pass Name
                         }
                     })
                 }).catch(() => console.log("Silent background update failed."));
