@@ -33,7 +33,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v27"; // 🔄 Version bumped to force cache clear & fix case matching
+const APP_VERSION = "v28"; // 🔄 Version bumped for Ask notification fix
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -295,7 +295,7 @@ function addNotification(msg) {
   // ❌ ALREADY SEEN BY THIS USER (STRICT NEW FIX)
   // ===============================
   // Agar backend se galti se aa bhi jaye, par user dekh chuka hai, toh reject kar do
-  if (msg.seen && currentUser?.email) {
+  if (msg.seen && currentUser?.email && msg.type !== 'Ask') {
       const seenArr = String(msg.seen).toLowerCase().split(',').map(e => e.trim());
       const myEmail = currentUser.email.toLowerCase().trim();
       if (seenArr.includes(myEmail)) {
@@ -321,7 +321,7 @@ function addNotification(msg) {
   }
 
   // ===============================
-  // ❌ SAME OPEN CASE → NO NOTIF
+  // ❌ SAME OPEN CASE → NO NOTIF (UNLESS ASK)
   // ===============================
   const activeCaseId = document.getElementById('detail-conv-id')?.value;
   const isCaseViewOpen = document.getElementById('caseDetailView') && 
@@ -329,7 +329,8 @@ function addNotification(msg) {
   const msgCaseId = msg.caseId || msg.id || "";
 
   if (isCaseViewOpen && 
-      String(activeCaseId).trim().toLowerCase() === String(msgCaseId).trim().toLowerCase()) {
+      String(activeCaseId).trim().toLowerCase() === String(msgCaseId).trim().toLowerCase() && 
+      msg.type !== 'Ask') {
       return; 
   }
 
@@ -376,6 +377,7 @@ function addNotification(msg) {
   tingSound.play().catch(e => console.log("Sound blocked"));
   updateNotificationUI();
 }
+
 function updateNotificationUI() {
   const countEl = document.getElementById("notifCount");
   
@@ -444,10 +446,13 @@ window.openFromNotification = function(caseId, uniqueId) {
       .find(el => String(el.dataset.convId).trim().toLowerCase() === cleanCaseId);
   
   if (uniqueId) {
-      locallySeenNotifications.add(uniqueId);
+      const notif = notifications.find(n => n.id === uniqueId);
+      if (notif && notif.type !== 'Ask') { 
+          locallySeenNotifications.add(uniqueId);
+      }
   }
 
-  notifications = notifications.filter(n => n.id !== uniqueId);
+  notifications = notifications.filter(n => n.id !== uniqueId || n.type === 'Ask');
   unreadCount = notifications.length;
   updateNotificationUI();
   
@@ -463,8 +468,8 @@ window.openFromNotification = function(caseId, uniqueId) {
 };
 
 function clearAllNotifications() {
-    notifications = [];
-    unreadCount = 0;
+    notifications = notifications.filter(n => n.type === 'Ask');
+    unreadCount = notifications.length;
     updateNotificationUI();
 }
 
@@ -1224,21 +1229,6 @@ window.confirmSnooze = async function() {
     }
 };
 
-window.processUnsnooze = async function(btn) {
-    const parent = btn.closest('[data-conv-id]');
-    const convId = parent ? String(parent.dataset.convId).trim() : null; 
-    if(!convId) return;
-    btn.innerText = "Un-snoozing..."; btn.disabled = true;
-    try { 
-        await apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }); 
-        loadConversations(); 
-        if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
-    } catch(e) { 
-        showCustomDialog("Error", "Failed to un-snooze.", false); 
-        btn.innerText = "🔔 Un-Snooze"; btn.disabled = false; 
-    }
-};
-
 // ==========================================
 // ⏰ SNOOZE MODAL OPENERS (BOTH INNER & OUTER)
 // ==========================================
@@ -1686,9 +1676,11 @@ window.openCaseDetail = function(cardEl) {
       if (caseNotifs.length > 0) {
           caseNotifs.forEach(n => {
               apiCall('markSeen', { notificationId: n.id, userEmail: currentUser.email, userName: currentUser.name || currentUser.email }).catch(e => console.log(e));
-              locallySeenNotifications.add(n.id);
+              if (n.type !== 'Ask') { 
+                  locallySeenNotifications.add(n.id);
+              }
           });
-          notifications = notifications.filter(n => String(n.caseId).trim() !== convId);
+          notifications = notifications.filter(n => String(n.caseId).trim() !== convId || n.type === 'Ask');
           unreadCount = notifications.length;
           updateNotificationUI();
       }
