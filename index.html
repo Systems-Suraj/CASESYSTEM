@@ -26,6 +26,16 @@
       .rich-text i, .rich-text em { font-style: italic !important; }
       .rich-text u { text-decoration: underline !important; }
       [data-placeholder]:empty:before { content: attr(data-placeholder); color: #94a3b8; pointer-events: none; display: block;}
+
+      /* ✅ AUDIO RECORDING WAVES ANIMATION */
+      .recording-wave { display: flex; align-items: center; gap: 2px; height: 16px; }
+      .recording-wave span { display: block; width: 3px; height: 100%; background-color: #ef4444; border-radius: 3px; animation: wave 1s ease-in-out infinite; }
+      .recording-wave span:nth-child(1) { animation-delay: 0.0s; height: 40%; }
+      .recording-wave span:nth-child(2) { animation-delay: 0.2s; height: 80%; }
+      .recording-wave span:nth-child(3) { animation-delay: 0.4s; height: 100%; }
+      .recording-wave span:nth-child(4) { animation-delay: 0.6s; height: 60%; }
+      .recording-wave span:nth-child(5) { animation-delay: 0.8s; height: 30%; }
+      @keyframes wave { 0%, 100% { transform: scaleY(0.4); } 50% { transform: scaleY(1); } }
     </style>
   </head>
   <body class="bg-slate-100 text-slate-800 font-sans antialiased overflow-x-hidden selection:bg-indigo-100 selection:text-indigo-900">
@@ -221,18 +231,27 @@
                <div id="reply_file_list" class="flex flex-wrap gap-1.5 px-2 pb-2 empty:hidden"></div>
 
                <div class="px-2 sm:px-3 py-1.5 sm:py-2 border-t border-slate-200 bg-white flex justify-between items-center rounded-b-xl flex-wrap gap-2">
-                  <div class="flex gap-1 sm:gap-2 items-center">
+                  <div class="flex gap-1 sm:gap-2 items-center flex-wrap">
                      <button type="button" onclick="triggerMention()" class="p-1 sm:p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent">
                         <i class="fas fa-at"></i>
                      </button>
-                     <label class="p-1 sm:p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent cursor-pointer">
-                        <i class="fas fa-paperclip"></i>
-                        <input type="file" id="reply_f_file" multiple class="hidden" onchange="handleReplyFileSelect(event)">
-                     </label>
 
-                     <button id="mic-btn" type="button" onclick="toggleAudioRecording()" class="p-1 sm:p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent" title="Record Voice Note">
-                        <i class="fas fa-microphone"></i>
-                     </button>
+                     <div class="flex items-center bg-slate-50 border border-slate-200 rounded-lg p-0.5 shadow-sm">
+                         <label class="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-100 rounded transition-colors cursor-pointer" title="Attach File">
+                             <i class="fas fa-paperclip"></i>
+                             <input type="file" id="reply_f_file" multiple class="hidden" onchange="handleReplyFileSelect(event)">
+                         </label>
+                         <div class="w-px h-4 bg-slate-300 mx-0.5"></div>
+                         <button id="mic-btn" type="button" onclick="toggleAudioRecording()" class="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-100 rounded transition-colors" title="Record Voice Note">
+                             <i class="fas fa-microphone"></i>
+                         </button>
+                     </div>
+
+                     <div id="recording-ui-main" class="hidden items-center gap-2 px-3 py-1.5 bg-red-50 border border-red-200 rounded-full shadow-inner ml-1">
+                         <div class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></div>
+                         <span id="recording-timer-main" class="text-xs font-bold text-red-600 font-mono tracking-widest">00:00</span>
+                         <div class="recording-wave"><span></span><span></span><span></span><span></span><span></span></div>
+                     </div>
 
                      <button type="button" onclick="openAssignTask()" class="p-1 sm:p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent" title="Assign Task">
                         <i class="fas fa-tasks"></i>
