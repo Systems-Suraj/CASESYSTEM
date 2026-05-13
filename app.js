@@ -36,7 +36,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v30";
+const APP_VERSION = "v32";
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -891,7 +891,6 @@ window.toggleDropdown = function(id, forceClose = false) {
     const drop = document.getElementById(id);
     if(!drop) return;
     
-    // Helper to revert checkboxes if user didn't click apply
     const revertCheckboxes = (dropdownEl) => {
         dropdownEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
             cb.checked = cb.hasAttribute('data-applied');
@@ -929,7 +928,7 @@ window.searchInDropdown = function(input, containerId) {
         const items = document.getElementById(containerId).querySelectorAll('.dropdown-item');
         items.forEach(item => { 
             const matchesSearch = item.dataset.search.includes(term);
-            const isAvailable = item.dataset.available !== 'false'; // Keep cross-filtered items hidden
+            const isAvailable = item.dataset.available !== 'false';
             item.style.display = (matchesSearch && isAvailable) ? 'flex' : 'none'; 
         });
     }, 150);
@@ -950,11 +949,9 @@ window.applyLookerFilters = function(containerId, type) {
     toggleDropdown(containerId, true); applyFilters();
 };
 window.resetAllFilters = function() {
-    // 1. Clear Search Bar
     const filterInput = document.getElementById('filterId');
     if (filterInput) filterInput.value = '';
 
-    // 2. Uncheck ALL labels directly & clear data-applied
     document.querySelectorAll('.flabel').forEach(cb => {
         cb.checked = false;
         cb.removeAttribute('data-applied');
@@ -965,7 +962,6 @@ window.resetAllFilters = function() {
         labelsBtnText.classList.remove('text-indigo-700', 'font-extrabold');
     }
 
-    // 3. Uncheck ALL members directly & clear data-applied
     document.querySelectorAll('.fmember').forEach(cb => {
         cb.checked = false;
         cb.removeAttribute('data-applied');
@@ -976,16 +972,14 @@ window.resetAllFilters = function() {
         membersBtnText.classList.remove('text-indigo-700', 'font-extrabold');
     }
 
-    // 4. Force Reset Dropdown Inner Searches (so hidden items reappear)
     document.querySelectorAll('.dropdown-item').forEach(item => item.style.display = 'flex');
     document.querySelectorAll('[id$="Dropdown"] input[type="text"]').forEach(inp => inp.value = '');
 
-    // 5. Apply (Shows all cases)
     applyFilters();
 };
 
 // ==========================================
-// ADVANCED FILTER LOGIC (STRICT AND LOGIC + EXACT MATCH FIX)
+// ADVANCED FILTER LOGIC
 // ==========================================
 window.applyFilters = debounce(function() {
     try {
@@ -993,14 +987,12 @@ window.applyFilters = debounce(function() {
         if(!filterInput) return;
         const idQuery = filterInput.value.toLowerCase().trim();
         
-        // Get checked values
         const checkedLabels = Array.from(document.querySelectorAll('.flabel[data-applied="true"]')).map(cb => cb.value);
         const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => String(cb.value).toLowerCase().trim());
         
         let visibleLabels = new Set();
         let visibleMembers = new Set();
 
-        // Process Cards
         Array.from(document.getElementById('conversationFeed').children).forEach(wrapper => {
             const card = wrapper.classList.contains('card-main') ? wrapper : wrapper.querySelector('.card-main');
             if(!card || !card.dataset.convId) return; 
@@ -1297,16 +1289,25 @@ window.saveManagedMembers = async function() {
 };
 
 // ==========================================
-// 🎙️ AUDIO RECORDING LOGIC (GLOBAL)
+// 🎙️ AUDIO RECORDING LOGIC (GLOBAL + TIMER)
 // ==========================================
 let mediaRecorder;
 let audioChunks = [];
+let recordTimerInterval;
+let recordSeconds = 0;
+
 window.toggleAudioRecording = async function() {
     const micBtn = document.getElementById('mic-btn');
+    const recordingUI = document.getElementById('recording-ui-main');
+    const timerEl = document.getElementById('recording-timer-main');
+
     if (mediaRecorder && mediaRecorder.state === "recording") {
         mediaRecorder.stop();
-        micBtn.classList.remove('text-red-500', 'animate-pulse');
+        micBtn.classList.remove('text-red-600', 'bg-red-100');
         micBtn.classList.add('text-slate-500');
+        recordingUI.classList.add('hidden');
+        recordingUI.classList.remove('flex');
+        clearInterval(recordTimerInterval);
         return;
     }
     try {
@@ -1317,6 +1318,7 @@ window.toggleAudioRecording = async function() {
         mediaRecorder.onstop = () => {
             const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
             const audioFile = new File([audioBlob], `VoiceNote_${new Date().toLocaleTimeString().replace(/:/g,'-')}.webm`, { type: 'audio/webm' });
+            
             if(pendingReplyFiles && pendingReplyFiles.length < 10) {
                 pendingReplyFiles.push(audioFile);
                 if(typeof renderReplyFileList === 'function') renderReplyFileList();
@@ -1324,22 +1326,42 @@ window.toggleAudioRecording = async function() {
             stream.getTracks().forEach(track => track.stop());
         };
         mediaRecorder.start();
+        
         micBtn.classList.remove('text-slate-500');
-        micBtn.classList.add('text-red-500', 'animate-pulse');
+        micBtn.classList.add('text-red-600', 'bg-red-100');
+        recordingUI.classList.remove('hidden');
+        recordingUI.classList.add('flex');
+        
+        recordSeconds = 0;
+        timerEl.innerText = "00:00";
+        recordTimerInterval = setInterval(() => {
+            recordSeconds++;
+            const min = String(Math.floor(recordSeconds / 60)).padStart(2, '0');
+            const sec = String(recordSeconds % 60).padStart(2, '0');
+            timerEl.innerText = `${min}:${sec}`;
+        }, 1000);
+        
     } catch(e) {
         showCustomDialog("Microphone Error", "Could not access microphone.", false);
     }
 };
 
 window.toggleInlineAudioRecording = async function(btn) {
+    const activeBox = btn.closest('[data-id="inline-reply-box"]');
+    const recordingUI = activeBox.querySelector('.inline-recording-ui');
+    const timerEl = activeBox.querySelector('.inline-recording-timer');
+
     if (mediaRecorder && mediaRecorder.state === "recording") {
         mediaRecorder.stop();
-        btn.classList.remove('text-red-500', 'animate-pulse');
-        btn.classList.add('text-slate-600');
+        btn.classList.remove('text-red-600', 'bg-red-100');
+        btn.classList.add('text-slate-500');
+        recordingUI.classList.add('hidden');
+        recordingUI.classList.remove('flex');
+        clearInterval(recordTimerInterval);
         return;
     }
     try {
-        activeInlineBox = btn.closest('[data-id="inline-reply-box"]');
+        activeInlineBox = activeBox;
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream);
         audioChunks = [];
@@ -1347,6 +1369,7 @@ window.toggleInlineAudioRecording = async function(btn) {
         mediaRecorder.onstop = () => {
             const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
             const audioFile = new File([audioBlob], `VoiceNote_${new Date().toLocaleTimeString().replace(/:/g,'-')}.webm`, { type: 'audio/webm' });
+            
             if(inlinePendingFiles && inlinePendingFiles.length < 10) {
                 inlinePendingFiles.push(audioFile);
                 if(typeof renderInlineFileList === 'function') renderInlineFileList();
@@ -1354,8 +1377,21 @@ window.toggleInlineAudioRecording = async function(btn) {
             stream.getTracks().forEach(track => track.stop());
         };
         mediaRecorder.start();
-        btn.classList.remove('text-slate-600');
-        btn.classList.add('text-red-500', 'animate-pulse');
+        
+        btn.classList.remove('text-slate-500');
+        btn.classList.add('text-red-600', 'bg-red-100');
+        recordingUI.classList.remove('hidden');
+        recordingUI.classList.add('flex');
+        
+        recordSeconds = 0;
+        timerEl.innerText = "00:00";
+        recordTimerInterval = setInterval(() => {
+            recordSeconds++;
+            const min = String(Math.floor(recordSeconds / 60)).padStart(2, '0');
+            const sec = String(recordSeconds % 60).padStart(2, '0');
+            timerEl.innerText = `${min}:${sec}`;
+        }, 1000);
+        
     } catch(e) {
         showCustomDialog("Microphone Error", "Could not access microphone.", false);
     }
@@ -1863,7 +1899,7 @@ async function fetchNewMessages() {
                         params: {
                             notificationId: msg.uniqueId,
                             userEmail: currentUser.email,
-                            userName: currentUser.name || currentUser.email // ✅ Pass Name
+                            userName: currentUser.name || currentUser.email
                         }
                     })
                 }).catch(() => console.log("Silent background update failed."));
@@ -1946,14 +1982,24 @@ function renderThreadHTML(list, level = 0) {
                             <div class="hidden absolute bottom-full mb-1 left-0 sm:left-2 w-[90vw] sm:w-64 max-w-full bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] overflow-hidden inline-mention-dropdown"></div>
                             
                             <div class="flex flex-wrap gap-1 mt-2 empty:hidden inline-file-list px-1"></div>
-                            <div class="flex justify-between items-center mt-2 border-t border-black/10 pt-2">
-                                <label class="text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer p-1 rounded hover:bg-white/50">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
-                                    <input type="file" multiple class="hidden inline-file-input" onchange="handleInlineFileSelect(event, this)">
-                                </label>
-                                <button type="button" class="text-slate-600 hover:text-red-600 transition-colors p-1 rounded hover:bg-white/50 inline-mic-btn" onclick="toggleInlineAudioRecording(this)" title="Record Voice Note">
-                                    <i class="fas fa-microphone"></i>
-                                </button>
+                            <div class="flex justify-between items-center mt-2 border-t border-black/10 pt-2 flex-wrap gap-2">
+                                <div class="flex items-center gap-2">
+                                    <div class="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm">
+                                        <label class="text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer p-1.5 rounded hover:bg-indigo-50" title="Attach File">
+                                            <i class="fas fa-paperclip"></i>
+                                            <input type="file" multiple class="hidden inline-file-input" onchange="handleInlineFileSelect(event, this)">
+                                        </label>
+                                        <div class="w-px h-4 bg-slate-300 mx-0.5"></div>
+                                        <button type="button" class="text-slate-500 hover:text-red-600 transition-colors p-1.5 rounded hover:bg-red-50 inline-mic-btn" onclick="toggleInlineAudioRecording(this)" title="Record Voice Note">
+                                            <i class="fas fa-microphone"></i>
+                                        </button>
+                                    </div>
+                                    <div class="hidden items-center gap-2 px-2.5 py-1 bg-red-50 border border-red-200 rounded-full inline-recording-ui shadow-inner">
+                                        <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                                        <span class="inline-recording-timer text-[10px] font-bold text-red-600 font-mono tracking-wider">00:00</span>
+                                        <div class="recording-wave !h-3"><span></span><span></span><span></span><span></span><span></span></div>
+                                    </div>
+                                </div>
                                 <button type="button" class="px-4 py-1.5 bg-indigo-600 text-white text-[11px] font-bold rounded-lg hover:bg-indigo-700 shadow-sm transition-colors" onclick="submitInlineReply(this)">Send</button>
                             </div>
                         </div>
