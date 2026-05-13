@@ -36,7 +36,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v31";
+const APP_VERSION = "v30";
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
