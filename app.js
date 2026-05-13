@@ -7,6 +7,7 @@ let activeInputElement = null;
 document.addEventListener('focusin', (e) => {
   if (e.target && (
       e.target.id === 'detail-reply-input' ||
+      e.target.id === 'f_message_rich' ||
       e.target.classList?.contains('inline-reply-input') ||
       e.target.tagName === 'TEXTAREA' || 
       e.target.tagName === 'INPUT'
@@ -15,10 +16,10 @@ document.addEventListener('focusin', (e) => {
     activeInputElement = e.target;
   }
 });
-
 document.addEventListener('focusout', (e) => {
   if (e.target && (
       e.target.id === 'detail-reply-input' ||
+      e.target.id === 'f_message_rich' ||
       e.target.classList?.contains('inline-reply-input') ||
       e.target.tagName === 'TEXTAREA' || 
       e.target.tagName === 'INPUT'
@@ -29,15 +30,14 @@ document.addEventListener('focusout', (e) => {
     }, 200);
   }
 });
-
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v29"; // 🔄 Version bumped for Ask notification fix
+const APP_VERSION = "v30";
+// 🔄 Version bumped for Audio & Formats
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
-
   if (!storedVersion) {
     localStorage.setItem("app_version", APP_VERSION);
     return;
@@ -76,7 +76,6 @@ const firebaseConfig = {
   messagingSenderId: "399513476851",
   appId: "1:399513476851:web:668ec94543bbe3c1186186"
 };
-
 if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
@@ -85,7 +84,6 @@ let messaging = null;
 
 if (firebase.messaging && firebase.messaging.isSupported && firebase.messaging.isSupported()) {
   messaging = firebase.messaging();
-
   messaging.onMessage((payload) => {
     try {
       console.log("🔥 Foreground message:", payload);
@@ -128,14 +126,12 @@ if (firebase.messaging && firebase.messaging.isSupported && firebase.messaging.i
 // ==========================================
 // CONFIGURATION: REPLACE THIS URL!
 // ==========================================
-const API_URL = "https://script.google.com/macros/s/AKfycbxXQKRXvgVI-ryItvnhOm0SzJzh03I72QlOMGCRA4GDPMV2f6t6xevUeMfGrMkz_OtS/exec"; 
-
+const API_URL = "https://script.google.com/macros/s/AKfycbxXQKRXvgVI-ryItvnhOm0SzJzh03I72QlOMGCRA4GDPMV2f6t6xevUeMfGrMkz_OtS/exec";
 // ==========================================
 // OFFLINE DATABASE (IndexedDB Setup)
 // ==========================================
 const DB_NAME = 'CaseSysOfflineDB';
 const STORE_NAME = 'offlineRequests';
-
 function openOfflineDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, 1);
@@ -188,7 +184,7 @@ async function deleteOfflineRequest(id) {
 // ==========================================
 async function apiCall(action, params = {}, retries = 2) {
     if (currentUser && currentUser.email) {
-        params.reqUserEmail = currentUser.email; 
+        params.reqUserEmail = currentUser.email;
     }
 
     if (!navigator.onLine) {
@@ -213,7 +209,6 @@ async function apiCall(action, params = {}, retries = 2) {
             }),
             credentials: 'omit' 
         });
-        
         const text = await response.text();
         const result = JSON.parse(text);
         
@@ -242,7 +237,7 @@ let allUsersList = [];
 let mentionSearchQuery = "";
 let savedRange = null;
 let pendingFiles = [];
-let pendingReplyFiles = []; 
+let pendingReplyFiles = [];
 let composerRecipients = [];
 
 let currentCaseAdmins = [];
@@ -266,12 +261,10 @@ let page = 0;
 const limit = 5; 
 let isLoading = false;
 let hasMore = true;
-
 let lastTimestamp = 0;
 let seenMessages = new Set();
 let realtimeInterval = null;
-let isInitialLoadDone = false; 
-
+let isInitialLoadDone = false;
 // ==========================================
 // 🔥 GLOBAL UNREAD FETCHER & NOTIFICATIONS
 // ==========================================
@@ -281,7 +274,6 @@ let globalNotifInterval = null;
 let locallySeenNotifications = new Set(); 
 
 const tingSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-
 function addNotification(msg) {
 
   // ===============================
@@ -294,12 +286,11 @@ function addNotification(msg) {
   // ===============================
   // ❌ ALREADY SEEN BY THIS USER (STRICT NEW FIX)
   // ===============================
-  // Agar backend se galti se aa bhi jaye, par user dekh chuka hai, toh reject kar do
   if (msg.seen && currentUser?.email && msg.type !== 'Ask') {
       const seenArr = String(msg.seen).toLowerCase().split(',').map(e => e.trim());
       const myEmail = currentUser.email.toLowerCase().trim();
       if (seenArr.includes(myEmail)) {
-          return; 
+          return;
       }
   }
 
@@ -316,7 +307,7 @@ function addNotification(msg) {
       const receivers = msg.receiver.split(',').map(e => e.toLowerCase().trim());
       const myEmail = currentUser.email.toLowerCase().trim();
       if (!receivers.includes(myEmail)) {
-          return; 
+          return;
       }
   }
 
@@ -331,7 +322,7 @@ function addNotification(msg) {
   if (isCaseViewOpen && 
       String(activeCaseId).trim().toLowerCase() === String(msgCaseId).trim().toLowerCase() && 
       msg.type !== 'Ask') {
-      return; 
+      return;
   }
 
   // ===============================
@@ -339,7 +330,6 @@ function addNotification(msg) {
   // ===============================
   let cleanText = msg.text || msg.body || "New activity on your case";
   cleanText = cleanText.replace(/<[^>]*>?/gm, '');
-
   // ===============================
   // 🆔 UNIQUE NOTIFICATION ID
   // ===============================
@@ -370,7 +360,6 @@ function addNotification(msg) {
   // ===============================
   notifications.unshift(notif);
   unreadCount++;
-
   // ===============================
   // 🔊 SOUND + UI UPDATE
   // ===============================
@@ -434,7 +423,6 @@ function toggleNotifications(event) {
 window.openFromNotification = function(caseId, uniqueId) {
   const panel = document.getElementById("notifPanel");
   if (panel) panel.classList.add("hidden");
-
   if(!caseId || caseId === 'undefined') {
       showCustomDialog("Notice", "Case ID missing hai.", false);
       return;
@@ -444,7 +432,6 @@ window.openFromNotification = function(caseId, uniqueId) {
   
   const card = [...document.querySelectorAll('[data-conv-id]')]
       .find(el => String(el.dataset.convId).trim().toLowerCase() === cleanCaseId);
-  
   if (uniqueId) {
       const notif = notifications.find(n => n.id === uniqueId);
       if (notif && notif.type !== 'Ask') { 
@@ -455,13 +442,12 @@ window.openFromNotification = function(caseId, uniqueId) {
   notifications = notifications.filter(n => n.id !== uniqueId || n.type === 'Ask');
   unreadCount = notifications.length;
   updateNotificationUI();
-  
   if (uniqueId && currentUser?.email) {
           apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email, userName: currentUser.name || currentUser.email }).catch(e => console.log(e));
-      }
+  }
 
   if (card) {
-      window.openCaseDetail(card); 
+      window.openCaseDetail(card);
   } else {
       showCustomDialog("Notice", "Yeh case ID abhi screen par loaded nahi hai. Please search box use karein.", false);
   }
@@ -480,7 +466,8 @@ async function fetchGlobalNotifications() {
         if(unread && unread.length > 0) {
             unread.reverse().forEach(msg => addNotification(msg));
         }
-    } catch(e) { console.log("Global fetch skipped", e); }
+    } catch(e) { console.log("Global fetch skipped", e);
+    }
 }
 
 document.addEventListener('click', function(e) {
@@ -492,7 +479,6 @@ document.addEventListener('click', function(e) {
         }
     }
 });
-
 function debounce(func, wait) {
   let timeout;
   return function(...args) {
@@ -510,13 +496,11 @@ function checkComposerRestrictions(editor, type = 'main') {
     const container = type === 'main' ? editor.closest('.border-slate-300') : editor.closest('[data-id="inline-reply-box"]');
     
     if (!container) return;
-
     const attachLabel = container.querySelector('.fa-paperclip')?.parentElement || container.querySelector('label');
     const attachInput = container.querySelector('input[type="file"]');
     const submitBtn = type === 'main' ? document.getElementById('detailSubmitBtn') : container.querySelector('button[onclick*="submitInlineReply"]');
     const formatBtns = container.querySelectorAll('button[onclick*="document.execCommand"]');
     const typeSelectors = container.querySelectorAll('#global_type_selector button, .inline-type-btn');
-
     if (hasMention) {
         if(attachLabel) attachLabel.classList.remove('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
         if(attachInput) attachInput.disabled = false;
@@ -526,7 +510,8 @@ function checkComposerRestrictions(editor, type = 'main') {
     } else {
         if(attachLabel) attachLabel.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
         if(attachInput) attachInput.disabled = true;
-        if(submitBtn) { submitBtn.disabled = true; submitBtn.classList.add('opacity-50', 'cursor-not-allowed'); }
+        if(submitBtn) { submitBtn.disabled = true; submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
         formatBtns.forEach(b => { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); });
         typeSelectors.forEach(b => { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); });
     }
@@ -536,7 +521,7 @@ function checkComposerRestrictions(editor, type = 'main') {
         const hasHtmlNodes = editor.children.length > 0;
         
         if ((textContent.length > 0 && !textContent.startsWith('@')) || (hasHtmlNodes && textContent === '')) {
-            editor.innerHTML = ''; 
+            editor.innerHTML = '';
             showCustomDialog("Mention Required ⚠️", "Aap bina kisi ko @mention kiye message type, format ya attach nahi kar sakte.\n\nPlease type '@' to select a user from the list first.", false);
         }
     }
@@ -562,6 +547,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function handleScroll(e) {
       if (document.getElementById("caseDetailView") && document.getElementById("caseDetailView").classList.contains('hidden')) return;
       const convEl = document.getElementById("detail-conv-id");
+      
       if(!convEl) return;
       const caseId = convEl.value;
       if (!caseId) return;
@@ -570,7 +556,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (el === document || el === window) {
           if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 100) {
               loadCommentsPaginated(caseId);
-         }
+          }
       } else if (el && el.classList && el.classList.contains('overflow-y-auto')) {
           if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
               loadCommentsPaginated(caseId);
@@ -595,7 +581,6 @@ document.addEventListener('click', function(e) {
         document.querySelectorAll('[id$="Dropdown"]').forEach(d => toggleDropdown(d.id, true));
     }
 });
-
 document.addEventListener('keydown', function(e) {
     const target = e.target;
     if (target && (target.id === 'detail-reply-input' || target.classList?.contains('inline-reply-input'))) {
@@ -610,6 +595,7 @@ document.addEventListener('keydown', function(e) {
                 showCustomDialog("Mention Required ⚠️", "Please click/select a user from the dropdown list before typing further.", false);
                 return;
             }
+           
             const textContent = editor.textContent.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
             if (textContent.length === 0 && e.key !== '@' && !isFunctionalKey) {
                 e.preventDefault();
@@ -625,7 +611,6 @@ document.addEventListener('keydown', function(e) {
         }
     }
 });
-
 document.addEventListener('paste', function(e) {
     const target = e.target;
     if (target && (target.id === 'detail-reply-input' || target.classList?.contains('inline-reply-input'))) {
@@ -643,7 +628,6 @@ document.addEventListener('paste', function(e) {
         document.execCommand('insertText', false, text);
     }
 });
-
 function setCursorToEnd(editor) {
     editor.focus();
     const sel = window.getSelection();
@@ -698,7 +682,6 @@ window.handleNextOrLogin = function() {
   const pwd = document.getElementById("password").value.trim();
   const statusEl = document.getElementById("errorText");
   const loginBtn = document.getElementById("loginBtn");
-
   if (!idVal) {
     statusEl.style.display = "block";
     statusEl.innerText = "Enter ID first";
@@ -714,7 +697,6 @@ window.handleNextOrLogin = function() {
   loginBtn.disabled = true;
   statusEl.style.display = "block";
   statusEl.innerText = "Checking...";
-
   apiCall('loginUser', { 
     mobileOrEmail: idVal,
     password: pwd,
@@ -773,7 +755,6 @@ window.logoutUser = function() {
 
 function showAppScreen(userObj) {
   currentUser = userObj;
-  
   if (document.getElementById("loggedInUserEmail")) {
       document.getElementById("loggedInUserEmail").innerText = userObj.name || userObj.email;
   }
@@ -784,13 +765,11 @@ function showAppScreen(userObj) {
   fetchGlobalNotifications();
   if(globalNotifInterval) clearInterval(globalNotifInterval);
   globalNotifInterval = setInterval(fetchGlobalNotifications, 15000);
-
   if (typeof initNotifications === 'function') {
      initNotifications(userObj);
   }
 
   initDataLoad();
-
   setTimeout(() => {
     if (window.Android && userObj.email) {
       try { Android.sendUserEmail(userObj.email); } catch(e) {}
@@ -804,7 +783,6 @@ function showAppScreen(userObj) {
 async function initNotifications(user) {
   try {
     console.log("🔥 Checking Web Token for:", user.email);
-
     if (!('Notification' in window)) {
         console.log("❌ This browser does not support desktop notification");
         return;
@@ -820,12 +798,10 @@ async function initNotifications(user) {
     const registration = await navigator.serviceWorker.register('service-worker.js');
     await navigator.serviceWorker.ready;
     console.log("✅ Service Worker Ready!");
-
     const token = await messaging.getToken({
       vapidKey: "BGF23YCUEVWA9ZKDyD0NduAyLU_Cijhc_ZsO2UMAb8kQTThWSEBMJjnE3Qq3Ad1ys4ms1vETk3KyBeffAx9lHEw",
       serviceWorkerRegistration: registration
     });
-
     if (token) {
       console.log("✅ WEB TOKEN GENERATED:", token);
       await apiCall('saveToken', {
@@ -860,6 +836,25 @@ window.getUserNameByEmail = function(email) {
     return email.split('@')[0];
 };
 
+window.makeLinksClickable = function(html) {
+    if (!html) return '';
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const walk = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, null, false);
+    let node;
+    const nodesToReplace = [];
+    while(node = walk.nextNode()) {
+        if(node.parentNode && node.parentNode.tagName === 'A') continue;
+        if(/(https?:\/\/[^\s<]+)/g.test(node.nodeValue)) { nodesToReplace.push(node); }
+    }
+    nodesToReplace.forEach(n => {
+        const span = document.createElement('span');
+        span.innerHTML = n.nodeValue.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" class="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 shadow-sm mx-1 inline-flex items-center gap-1 font-extrabold text-[11px] hover:bg-indigo-100 transition-colors"><i class="fas fa-external-link-alt"></i> Open</a>');
+        n.parentNode.replaceChild(span, n);
+    });
+    return tempDiv.innerHTML;
+};
+
 // ==========================================
 // FILTERS & DROPDOWNS
 // ==========================================
@@ -868,8 +863,8 @@ window.switchTab = function(tab) {
   ['Live', 'Snooze', 'Archive'].forEach(t => { 
     if(document.getElementById(`tab-${t}`)) {
       document.getElementById(`tab-${t}`).className = t === tab 
-        ? "px-6 py-4 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 transition-colors" 
-        : "px-6 py-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-colors"; 
+        ? "px-4 sm:px-6 py-4 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 transition-colors flex items-center gap-2" 
+        : "px-4 sm:px-6 py-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-2"; 
     }
   });
   if(document.getElementById('bulkArchiveBtn')) document.getElementById('bulkArchiveBtn').classList.toggle('hidden', tab !== 'Live');
@@ -927,7 +922,6 @@ window.toggleDropdown = function(id, forceClose = false) {
             cb.checked = cb.hasAttribute('data-applied');
         });
     };
-
     if (forceClose) { 
         drop.classList.add('hidden'); 
         revertCheckboxes(drop);
@@ -942,7 +936,7 @@ window.toggleDropdown = function(id, forceClose = false) {
                     d.classList.add('hidden'); 
                     revertCheckboxes(d);
                 }
-            });
+             });
             drop.classList.remove('hidden');
             revertCheckboxes(drop);
             
@@ -968,7 +962,6 @@ window.searchInDropdown = function(input, containerId) {
 
 window.selectAllInDropdown = function(containerId) { document.getElementById(containerId).querySelectorAll('.dropdown-item').forEach(item => { if (item.style.display !== 'none') item.querySelector('input[type="checkbox"]').checked = true; }); };
 window.clearAllInDropdown = function(containerId) { document.getElementById(containerId).querySelectorAll('.dropdown-item').forEach(item => { if (item.style.display !== 'none') item.querySelector('input[type="checkbox"]').checked = false; }); };
-
 window.applyLookerFilters = function(containerId, type) {
     const allBoxes = document.getElementById(containerId).querySelectorAll('input[type="checkbox"]');
     allBoxes.forEach(cb => { if (cb.checked) cb.setAttribute('data-applied', 'true'); else cb.removeAttribute('data-applied'); });
@@ -981,7 +974,6 @@ window.applyLookerFilters = function(containerId, type) {
     }
     toggleDropdown(containerId, true); applyFilters();
 };
-
 window.resetAllFilters = function() {
     // 1. Clear Search Bar
     const filterInput = document.getElementById('filterId');
@@ -1016,7 +1008,6 @@ window.resetAllFilters = function() {
     // 5. Apply (Shows all cases)
     applyFilters();
 };
-
 // ==========================================
 // ADVANCED FILTER LOGIC (STRICT AND LOGIC + EXACT MATCH FIX)
 // ==========================================
@@ -1039,10 +1030,9 @@ window.applyFilters = debounce(function() {
             const card = wrapper.classList.contains('card-main') ? wrapper : wrapper.querySelector('.card-main');
             if(!card || !card.dataset.convId) return; 
             
-            const isArchived = card.dataset.status === 'Archived'; 
+            const isArchived = card.dataset.status === 'Archived';
             const isSnoozed = parseInt(card.dataset.snooze || 0) > Date.now();
             let showTab = false;
-
             if (currentTab === 'Live' && !isArchived && !isSnoozed) showTab = true; 
             if (currentTab === 'Archive' && isArchived) showTab = true;
             if (currentTab === 'Snooze' && !isArchived && isSnoozed) showTab = true;
@@ -1052,7 +1042,7 @@ window.applyFilters = debounce(function() {
             
             let cardMembers = card._cachedMembers || JSON.parse(card.dataset.members || '[]');
             if(!Array.isArray(cardMembers)) cardMembers = [];
-
+            
             // STRICT AND logic for Labels
             const matchesLabels = checkedLabels.length === 0 || checkedLabels.every(l => cardLabels.includes(l));
             
@@ -1066,13 +1056,12 @@ window.applyFilters = debounce(function() {
                     return cmEmail === m || cmName === m;
                 })
             );
-            
             const matchesId = !idQuery || 
                               String(card.dataset.convId).toLowerCase().includes(idQuery) || 
                               (card.dataset.subject && String(card.dataset.subject).toLowerCase().includes(idQuery));
             
             const baseMatch = showTab && matchesId;
-
+            
             // Apply display to Card
             if (baseMatch && matchesLabels && matchesMembers) {
                 wrapper.style.display = 'block';
@@ -1106,7 +1095,7 @@ window.applyFilters = debounce(function() {
                 item.dataset.available = 'false';
             }
         });
-
+        
         // Dynamically Hide/Show Member Options -> EXACT MATCH FIX (.has() instead of .includes())
         document.querySelectorAll('#membersDropdown .dropdown-item').forEach(item => {
             const cb = item.querySelector('input[type="checkbox"]');
@@ -1126,18 +1115,16 @@ window.applyFilters = debounce(function() {
         });
     } catch(e) { console.error("Filter Error:", e); }
 }, 150);
+
 // ==========================================
 // ACTIONS: ARCHIVE, SNOOZE
 // ==========================================
-
 window.processBulkArchive = function() {
   const selectedIds = Array.from(document.querySelectorAll('.bulk-archive-cb:checked')).map(cb => {
       const card = cb.closest('[data-conv-id]');
       return card ? String(card.dataset.convId).trim() : null;
   }).filter(Boolean);
-  
   if(selectedIds.length === 0) return showCustomDialog("Notice", "Please select at least one case to archive.", false);
-  
   showCustomDialog("Confirm Archive", `Are you sure you want to archive ${selectedIds.length} selected case(s)?\n\nCase IDs: \n${selectedIds.join('\n')}`, true, async () => {
       const btn = document.getElementById('bulkArchiveBtn'); 
       btn.innerText = "Archiving..."; 
@@ -1167,7 +1154,8 @@ window.processUnarchive = async function(btn) {
       if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
   } catch(e) { 
       showCustomDialog("Error", "Failed to unarchive.", false); 
-      btn.innerText = "📂 Un-Archive"; btn.disabled = false; 
+      btn.innerText = "📂 Un-Archive";
+      btn.disabled = false; 
   }
 };
 
@@ -1180,10 +1168,10 @@ window.processUnsnooze = async function(btn) {
     btn.innerText = "Un-snoozing..."; btn.disabled = true;
     try { 
         await apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }); 
-        loadConversations(); 
+        loadConversations();
         if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
     } catch(e) { 
-        showCustomDialog("Error", "Failed to un-snooze.", false); 
+        showCustomDialog("Error", "Failed to un-snooze.", false);
         btn.innerText = "🔔 Un-Snooze"; btn.disabled = false; 
     }
 };
@@ -1210,7 +1198,6 @@ window.confirmSnooze = async function() {
             time: timestamp, 
             userEmail: currentUser.email 
         });
-
         document.getElementById('snoozeModal').classList.add('hidden');
         showCustomDialog("Success ✅", "Case Snoozed for you.", false);
         
@@ -1220,7 +1207,6 @@ window.confirmSnooze = async function() {
                 closeCaseDetail(); // Detail view close karke wapas live feed me bhej dega
             }
         }, 500);
-
     } catch (e) {
         console.error("Snooze Error:", e);
         showCustomDialog("Error", "Failed to snooze.\n" + e.message, false);
@@ -1333,10 +1319,11 @@ function renderManageMembersList() {
    `).join('');
 }
 
-window.updateTempRole = function(email, newRole) { tempAdmins = tempAdmins.filter(e => e !== email); tempUsers = tempUsers.filter(e => e !== email); if(newRole === 'Admin') tempAdmins.push(email); if(newRole === 'User') tempUsers.push(email); renderManageMembersList(); };
+window.updateTempRole = function(email, newRole) { tempAdmins = tempAdmins.filter(e => e !== email); tempUsers = tempUsers.filter(e => e !== email);
+   if(newRole === 'Admin') tempAdmins.push(email); if(newRole === 'User') tempUsers.push(email); renderManageMembersList(); };
 window.removeTempMember = function(email) { tempAdmins = tempAdmins.filter(e => e !== email); tempUsers = tempUsers.filter(e => e !== email); renderManageMembersList(); };
-window.addNewTempMember = function(email, role) { tempAdmins = tempAdmins.filter(e => e !== email); tempUsers = tempUsers.filter(e => e !== email); if(role === 'Admin') tempAdmins.push(email); else tempUsers.push(email); document.getElementById('member_search_input').value = ''; document.getElementById('member_search_dropdown').classList.add('hidden'); renderManageMembersList(); };
-
+window.addNewTempMember = function(email, role) { tempAdmins = tempAdmins.filter(e => e !== email); tempUsers = tempUsers.filter(e => e !== email);
+   if(role === 'Admin') tempAdmins.push(email); else tempUsers.push(email); document.getElementById('member_search_input').value = ''; document.getElementById('member_search_dropdown').classList.add('hidden'); renderManageMembersList(); };
 window.saveManagedMembers = async function() {
    const btn = document.getElementById('saveMembersBtn'); btn.innerText = "Saving..."; btn.disabled = true;
    const convId = document.getElementById('detail-conv-id').value;
@@ -1355,6 +1342,39 @@ window.saveManagedMembers = async function() {
 // ==========================================
 // MENTIONS & COMPOSER LOGIC
 // ==========================================
+
+// ✅ AUDIO RECORDING LOGIC
+let mediaRecorder;
+let audioChunks = [];
+window.toggleAudioRecording = async function() {
+    const micBtn = document.getElementById('mic-btn');
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+        micBtn.classList.remove('text-red-500', 'animate-pulse');
+        micBtn.classList.add('text-slate-500');
+        return;
+    }
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            const audioFile = new File([audioBlob], `VoiceNote_${new Date().toLocaleTimeString().replace(/:/g,'-')}.webm`, { type: 'audio/webm' });
+            if(pendingReplyFiles.length < 10) {
+                pendingReplyFiles.push(audioFile);
+                if(typeof renderReplyFileList === 'function') renderReplyFileList();
+            }
+            stream.getTracks().forEach(track => track.stop()); // Free mic
+        };
+        mediaRecorder.start();
+        micBtn.classList.remove('text-slate-500');
+        micBtn.classList.add('text-red-500', 'animate-pulse');
+    } catch(e) {
+        showCustomDialog("Microphone Error", "Could not access microphone.", false);
+    }
+};
 
 window.openAssignTask = function() {
     if (!currentUser || !currentUser.email) {
@@ -1444,7 +1464,6 @@ window.finalizeReplyMention = function(name, email, role) {
   const isAdmin = currentCaseAdmins.some(a => a.toLowerCase() === emailLower || a.toLowerCase() === nameLower);
   const isUser = currentCaseUsers.some(u => u.toLowerCase() === emailLower || u.toLowerCase() === nameLower);
   const isCreator = (document.getElementById('detail-author').innerText || '').toLowerCase().includes(nameLower);
-  
   if (!isAdmin && !isUser && !isCreator) {
       if (role === 'Admin') currentCaseAdmins.push(email); else currentCaseUsers.push(email);
       if (!window.currentCaseAllMembers) window.currentCaseAllMembers = [];
@@ -1472,7 +1491,8 @@ window.finalizeReplyMention = function(name, email, role) {
 
 window.setReplyGlobalType = function(type) { 
     replyComposerState.globalType = type; replyComposerState.recipients.forEach(r => r.type = type);
-    const btnReply = document.getElementById('btn_global_reply'); const btnAsk = document.getElementById('btn_global_ask');
+    const btnReply = document.getElementById('btn_global_reply');
+    const btnAsk = document.getElementById('btn_global_ask');
     if(type === 'Message') { 
         btnReply.className = "px-2 sm:px-4 py-1 sm:py-1.5 rounded-md text-[10px] sm:text-xs font-extrabold transition-all bg-white shadow-sm border border-slate-200 text-slate-800";
         btnAsk.className = "px-2 sm:px-4 py-1 sm:py-1.5 rounded-md text-[10px] sm:text-xs font-extrabold transition-all text-slate-500 hover:text-slate-700";
@@ -1576,7 +1596,6 @@ function resetCaseState() {
   
   const replyInput = document.getElementById("detail-reply-input");
   if (replyInput) replyInput.innerHTML = "";
-  
   if (realtimeInterval) {
       clearInterval(realtimeInterval);
       realtimeInterval = null;
@@ -1606,8 +1625,7 @@ window.openCaseDetail = function(cardEl) {
       resetCaseState();
 
       const dataset = card.dataset; 
-      const convId = String(dataset.convId || "").trim(); 
-
+      const convId = String(dataset.convId || "").trim();
       // 🔥 AUTO-UNSNOOZE: Agar Reply aane par case Live hua tha, toh open karte hi hamesha ke liye Unsnooze kar do
       const rawSnooze = parseInt(dataset.snoozeRaw || 0, 10);
       const currentSafeSnooze = parseInt(dataset.snooze || 0, 10);
@@ -1615,22 +1633,23 @@ window.openCaseDetail = function(cardEl) {
       if (rawSnooze > Date.now() && currentSafeSnooze === 0) {
             apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }).catch(e => {});
       }
-      // 🔥 END
       
-      document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]').innerText; 
+      document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]').innerText;
       document.getElementById('detail-id').innerText = convId; 
       document.getElementById('detail-conv-id').value = convId; 
       const creatorName = card.querySelector('[data-id="author"]').innerText;
       document.getElementById('detail-author').innerText = creatorName; 
       document.getElementById('detail-timestamp').innerText = card.querySelector('[data-id="timestamp"]').innerText;
-      document.getElementById('detail-details').innerText = card.querySelector('[data-id="details"]').innerText; 
-      document.getElementById('detail-message').innerHTML = card.querySelector('[data-id="message"]').innerHTML;
+      document.getElementById('detail-details').innerText = card.querySelector('[data-id="details"]').innerText;
+      
+      // ✅ APPLY FORMATTING & CLICKABLE LINKS TO INITIAL MESSAGE
+      document.getElementById('detail-message').innerHTML = window.makeLinksClickable(card.querySelector('[data-id="message"]').innerHTML);
+      
       document.getElementById('detail-labels').innerHTML = card.querySelector('[data-id="labels-container"]').innerHTML; 
       document.getElementById('detail-status-badge').innerHTML = card.querySelector('[data-id="status-badge"]').outerHTML;
       
       const detailAvatar = document.getElementById('detail-avatar-letter');
       if(detailAvatar) detailAvatar.textContent = creatorName.charAt(0).toUpperCase();
-
       currentCaseAdmins = JSON.parse(dataset.caseAdmins || '[]').filter(String);
       let rawCaseUsers = JSON.parse(dataset.caseUsers || '[]').filter(String);
       const hasAdminRights = dataset.hasAdminRights === 'true';
@@ -1647,7 +1666,7 @@ window.openCaseDetail = function(cardEl) {
       currentCaseAdmins.forEach(a => { if(a) detAdm.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${window.getUserNameByEmail(a)}</span>`; });
       currentCaseUsers.forEach(u => { if(u) detUsr.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${window.getUserNameByEmail(u)}</span>`; });
       if(hasAdminRights) detAdm.innerHTML += `<button onclick="openManageMembers()" class="ml-1 text-blue-600 hover:text-blue-800 p-0.5 rounded-full hover:bg-blue-50 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>`;
-
+      
       const attContainer = document.getElementById('detail-attachments'); attContainer.innerHTML = '';
       JSON.parse(dataset.attachmentsData || '[]').forEach(url => { 
           if(url) {
@@ -1655,14 +1674,15 @@ window.openCaseDetail = function(cardEl) {
               attContainer.innerHTML += `<div class="flex flex-col gap-2 mt-3 w-full max-w-sm"><div class="rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-50 relative w-full"><iframe src="${cleanUrl}" height="200" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe></div><a href="${url}" target="_blank" class="self-start inline-flex items-center gap-1 text-[11px] font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg shadow-sm border border-indigo-100">📎 Open Attachment</a></div>`;
           }
       });
-      const status = dataset.status; const isSnoozed = parseInt(dataset.snooze) > Date.now();
+      const status = dataset.status;
+      const isSnoozed = parseInt(dataset.snooze) > Date.now();
       const unarchiveBtn = document.getElementById('detail-unarchive-btn'); const unsnoozeBtn = document.getElementById('detail-unsnooze-btn'); const snoozeBtn = document.getElementById('detail-snooze-btn');
       
       unarchiveBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden'); snoozeBtn.classList.add('hidden');
       
       // 1. Archive Button: SIRF ADMIN ke liye
       if (status === 'Archived') { 
-          unarchiveBtn.classList.remove('hidden'); 
+          unarchiveBtn.classList.remove('hidden');
       }
       
       // 2. Snooze / Un-Snooze: SABKE LIYE (Kyunki ye ab personal hai)
@@ -1735,7 +1755,6 @@ window.removeReplyFile = function(index) { pendingReplyFiles.splice(index, 1); r
 // ⚡ OPTIMISTIC UI: THREAD & COMMENT SYSTEM
 // ==========================================
 let allLoadedComments = [];
-
 function renderAllCommentsLocally() {
     const container = document.getElementById("detail-thread-container");
     const threadsMap = {};
@@ -1791,7 +1810,6 @@ function loadCommentsPaginated(caseId, reset = false) {
                      String(c.sender || '').trim() === String(msg.sender || '').trim() && 
                      Math.abs(new Date(c.timestamp).getTime() - new Date(msg.timestamp).getTime()) < 60000)
                 );
-
                 if (!isDuplicate) {
                     if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp;
                     seenMessages.add(id);
@@ -1809,10 +1827,9 @@ async function fetchNewMessages() {
     const caseId = document.getElementById('detail-conv-id')?.value;
     if (!caseId || document.getElementById("caseDetailView").classList.contains("hidden") || isLoading) return;
     
-    // 🔥 FIX: Block background chat rebuild if user is currently composing a message!
     if (window.isUserTypingGlobal) {
         console.log("⛔ Skipped thread refresh (user typing)");
-        return; 
+        return;
     }
 
     try {
@@ -1820,12 +1837,10 @@ async function fetchNewMessages() {
             caseId: caseId,
             lastTimestamp: lastTimestamp
         });
-
         if (!messages || messages.length === 0) return;
 
         let hasNew = false;
         const cleanActiveCaseId = String(caseId).trim().toLowerCase();
-
         messages.forEach(msg => {
             if (String(msg.caseId).trim().toLowerCase() !== cleanActiveCaseId) return;
 
@@ -1866,7 +1881,6 @@ async function fetchNewMessages() {
                 }).catch(() => console.log("Silent background update failed."));
             }
         });
-
         if (hasNew) {
             renderAllCommentsLocally();
         }
@@ -1904,14 +1918,17 @@ function renderThreadHTML(list, level = 0) {
         let attachmentPreviewHtml = '';
         if (c.attachmentUrl) {
             const cleanUrlForPreview = c.attachmentUrl.replace(/\/view.*/, '/preview');
-            const isAudio = c.attachmentFileName && c.attachmentFileName.match(/\.(mp3|wav|ogg|m4a)$/i);
+            // ✅ AUDIO HEIGHT ADJUSTMENT
+            const isAudio = c.attachmentFileName && c.attachmentFileName.match(/\.(mp3|wav|ogg|m4a|webm)$/i);
             const previewHeight = isAudio ? '80' : '300';
+            
             attachmentPreviewHtml = `<div class="mt-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm inline-block w-full max-w-md"><div class="rounded-lg overflow-hidden bg-slate-50 relative w-full border border-slate-100"><iframe src="${cleanUrlForPreview}" height="${previewHeight}" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe></div><div class="mt-2 text-left"><a href="${c.attachmentUrl}" target="_blank" class="inline-flex items-center gap-1 text-[11px] font-extrabold text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-100">📎 ${escapeHTML(c.attachmentFileName || 'Open Full File')}</a></div></div>`;
         }
 
         const parentAskIdForBackend = (c.type === 'Ask') ? c.askId : (c.parentAskId || '');
         const senderName = window.getUserNameByEmail(c.sender || 'Unknown');
 
+        // ✅ APPLY RICH TEXT AND CLICKABLE LINKS HERE
         return `
             <div class="mb-4 group" style="${indentStyle}" data-id="reply-container">
                 <div class="p-4 rounded-xl shadow-sm transition-all border border-slate-200/50" style="background-color: ${tColor}; border-left: 4px solid rgba(0,0,0,0.1);">
@@ -1921,8 +1938,10 @@ function renderThreadHTML(list, level = 0) {
                         ${badge}
                         <span class="text-[10px] text-slate-500 font-medium ml-auto">${new Date(c.timestamp).toLocaleString()}</span>
                     </div>
-                    <div class="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">${c.text}</div>
+                    
+                    <div class="rich-text text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">${makeLinksClickable(c.text)}</div>
                     ${attachmentPreviewHtml}
+                    
                     <div class="mt-3 flex gap-3 items-center text-xs border-t border-slate-200/50 pt-2">
                         <button class="font-bold text-slate-500 hover:text-indigo-600 transition-colors inline-reply-toggle-btn" onclick="toggleInlineReply(this)" data-askid="${parentAskIdForBackend}" data-threadid="${c.threadId}" data-threadcolor="${c.threadColor}">Reply</button>
                     </div>
@@ -1934,8 +1953,10 @@ function renderThreadHTML(list, level = 0) {
                                 <button type="button" onclick="setInlineType(this, 'Ask')" class="inline-type-btn inline-ask-btn px-3 py-1 text-[10px] font-bold rounded-md bg-white/60 text-slate-700 hover:bg-white shadow-sm transition-colors">New Ask</button>
                                 <input type="hidden" class="inline-type-val" value="Reply">
                             </div>
-                            <div contenteditable="true" oninput="handleInlineTyping(event)" data-placeholder="Start typing @ to mention..." class="w-full text-xs outline-none max-h-24 overflow-y-auto leading-relaxed inline-reply-input text-slate-900 px-2 py-2 bg-white/70 border border-black/5 rounded-lg shadow-inner"></div>
+    
+                            <div contenteditable="true" oninput="handleInlineTyping(event)" data-placeholder="Start typing @ to mention..." class="rich-text w-full text-xs outline-none max-h-24 overflow-y-auto leading-relaxed inline-reply-input text-slate-900 px-2 py-2 bg-white/70 border border-black/5 rounded-lg shadow-inner"></div>
                             <div class="hidden absolute bottom-full mb-1 left-0 sm:left-2 w-[90vw] sm:w-64 max-w-full bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] overflow-hidden inline-mention-dropdown"></div>
+                            
                             <div class="flex flex-wrap gap-1 mt-2 empty:hidden inline-file-list px-1"></div>
                             <div class="flex justify-between items-center mt-2 border-t border-black/10 pt-2">
                                 <label class="text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer p-1 rounded hover:bg-white/50">
@@ -1961,13 +1982,11 @@ window.submitDetailReply = async function() {
         return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
     }
     if(!msgHTML && pendingReplyFiles.length === 0) return showCustomDialog("Notice", "Please write a message or attach a file.", false);
-    
     const caseId = document.getElementById('detail-conv-id').value;
     const submitBtn = document.getElementById('detailSubmitBtn');
     const originalText = submitBtn.innerText;
     submitBtn.innerText = 'Posting...';
     submitBtn.disabled = true;
-    
     try {
         let fileUrl = ''; let fileName = '';
         if(pendingReplyFiles.length > 0) { 
@@ -1988,8 +2007,8 @@ window.submitDetailReply = async function() {
                 };
             });
         } else {
-            const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); 
-            payloadToSend = { caseId: caseId, text: msgHTML, mentionType: replyComposerState.globalType || 'Message', sender: currentUser.email, receiver: replyComposerState.recipients.map(r => r.email).join(','), parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId }; 
+            const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
+            payloadToSend = { caseId: caseId, text: msgHTML, mentionType: replyComposerState.globalType || 'Message', sender: currentUser.email, receiver: replyComposerState.recipients.map(r => r.email).join(','), parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId };
         }
 
         // ⚡ 1. INSTANT LOCAL UI UPDATE (0ms lag)
@@ -2016,9 +2035,8 @@ window.submitDetailReply = async function() {
                  threadColor: p.threadColor || '#f8fafc'
              });
         });
-
         // 2. Clear Composer UI Instantly
-        inputDiv.innerHTML = ''; pendingReplyFiles = []; 
+        inputDiv.innerHTML = ''; pendingReplyFiles = [];
         if(document.getElementById('reply_file_list')) renderReplyFileList();
         replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' }; window.setReplyGlobalType('Message');
         checkComposerRestrictions(document.getElementById('detail-reply-input'), 'main');
@@ -2029,12 +2047,11 @@ window.submitDetailReply = async function() {
             const scrollArea = document.getElementById("detail-thread-container").parentElement;
             if(scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
         }, 50);
-
+        
         // 4. NOW hit backend silently in background
         await apiCall('addNewComment', payloadToSend);
-
     } catch(e) { 
-        showCustomDialog("Error", "Failed to post reply. Reason: \n" + (e.message || e), false); 
+        showCustomDialog("Error", "Failed to post reply. Reason: \n" + (e.message || e), false);
     } finally { 
         submitBtn.disabled = false; submitBtn.innerText = originalText; 
     }
@@ -2052,7 +2069,7 @@ window.toggleInlineReply = function(btn) {
         
         const editor = replyBox.querySelector('.inline-reply-input');
         editor.innerHTML = '';
-        checkComposerRestrictions(editor, 'inline'); // Apply Default Lock
+        checkComposerRestrictions(editor, 'inline');
         editor.focus();
     } else {
         replyBox.classList.add('hidden');
@@ -2083,10 +2100,12 @@ window.triggerInlineMention = function(btn) {
     const editor = activeInlineBox.querySelector('.inline-reply-input');
     editor.focus();
     const sel = window.getSelection(); let range;
-    if (sel.rangeCount > 0) range = sel.getRangeAt(0); else { range = document.createRange(); range.selectNodeContents(editor); range.collapse(false); }
+    if (sel.rangeCount > 0) range = sel.getRangeAt(0);
+    else { range = document.createRange(); range.selectNodeContents(editor); range.collapse(false); }
     const textNode = document.createTextNode(' @');
     range.insertNode(textNode); range.setStartAfter(textNode); range.setEndAfter(textNode);
-    sel.removeAllRanges(); sel.addRange(range);
+    sel.removeAllRanges();
+    sel.addRange(range);
     window.handleInlineTyping({target: editor}); 
 };
 
@@ -2112,7 +2131,7 @@ window.handleInlineTyping = function(e) {
                 `<div onclick="selectInlineMentionUser('${(u.name||'').replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}')" class="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-left">
                     <div class="text-xs font-bold text-slate-800 leading-tight">${u.name || u.email}</div>
                     <div class="text-[9px] text-slate-500 truncate mt-0.5">${u.email}</div>
-                 </div>`
+                </div>`
             ).join('');
             if(filtered.length === 0) {
                 dropdown.innerHTML = `<div class="p-2 text-[10px] text-slate-400 font-bold uppercase text-center">No match</div>`;
@@ -2128,7 +2147,8 @@ window.handleInlineTyping = function(e) {
 window.selectInlineMentionUser = function(name, email) {
     if(!activeInlineBox) return;
     const dropdown = activeInlineBox.querySelector('.inline-mention-dropdown');
-    const emailLower = email.toLowerCase(); const nameLower = name.toLowerCase();
+    const emailLower = email.toLowerCase();
+    const nameLower = name.toLowerCase();
     const isAdmin = currentCaseAdmins.some(a => {
         const aLower = a.toLowerCase();
         return aLower === emailLower || aLower === nameLower || aLower.includes(nameLower) || nameLower.includes(aLower);
@@ -2185,8 +2205,7 @@ window.finalizeInlineMention = function(name, email, role) {
     sel.removeAllRanges(); sel.addRange(inlineSavedRange);
     const textNode = inlineSavedRange.startContainer;
     inlineSavedRange.setStart(textNode, textNode.textContent.lastIndexOf('@', inlineSavedRange.startOffset - 1)); 
-    inlineSavedRange.deleteContents(); 
-    
+    inlineSavedRange.deleteContents();
     const badge = document.createElement('span'); badge.contentEditable = "false";
     badge.className = `mention-badge mx-1 shadow-sm px-1.5 py-0.5 rounded text-[10px] font-bold ${role === 'Admin' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-800'}`;
     badge.dataset.email = email; badge.innerHTML = `@${name}`;
@@ -2202,10 +2221,10 @@ window.finalizeInlineMention = function(name, email, role) {
 
 // ⚡ COMPLETELY OPTIMISTIC INLINE SUBMIT
 window.submitInlineReply = async function(btn) {
-    const container = btn.closest('[data-id="reply-container"]'); const replyBox = container.querySelector('[data-id="inline-reply-box"]');
+    const container = btn.closest('[data-id="reply-container"]');
+    const replyBox = container.querySelector('[data-id="inline-reply-box"]');
     const inputDiv = replyBox.querySelector('.inline-reply-input');
     const msgHTML = inputDiv.innerHTML.trim();
-
     if (!inputDiv.querySelector('.mention-badge')) {
         return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
     }
@@ -2218,7 +2237,6 @@ window.submitInlineReply = async function(btn) {
         .map(badge => badge.dataset.email)
         .filter(Boolean)
         .join(',');
-
     const toggleBtn = container.querySelector('.inline-reply-toggle-btn');
     const typeVal = replyBox.querySelector('.inline-type-val').value;
     btn.disabled = true;
@@ -2235,10 +2253,10 @@ window.submitInlineReply = async function(btn) {
             if(result && result.url) { fileUrl = result.url; fileName = result.name || file.name; }
         }
 
-        const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); 
+        const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
         // 🔥 FIX: Added 'receiver: mentionedEmails' to payload
-        const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, receiver: mentionedEmails, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId }; 
-
+        const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, receiver: mentionedEmails, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId };
+        
         // ⚡ 1. INSTANT LOCAL UI RENDER
         const localSenderName = currentUser.name || currentUser.email;
         seenMessages.add(tempId); 
@@ -2268,16 +2286,16 @@ window.submitInlineReply = async function(btn) {
         }
 
         // 2. Clear UI instantly
-        inputDiv.innerHTML = ''; inlinePendingFiles = []; replyBox.querySelector('.inline-file-list').innerHTML = ''; replyBox.classList.add('hidden');
+        inputDiv.innerHTML = '';
+        inlinePendingFiles = []; replyBox.querySelector('.inline-file-list').innerHTML = ''; replyBox.classList.add('hidden');
         
         // 3. Render feed instantly
         renderAllCommentsLocally();
 
         // 4. Send to backend silently
         await apiCall('addNewComment', payload);
-        
     } catch(e) { 
-        showCustomDialog("Error", "Failed to post inline reply.\n" + (e.message || e), false); 
+        showCustomDialog("Error", "Failed to post inline reply.\n" + (e.message || e), false);
     } finally {
         btn.disabled = false; btn.innerText = originalText;
     }
@@ -2288,7 +2306,7 @@ window.submitInlineReply = async function(btn) {
 // ==========================================
 async function fetchUsersForMentions() { try { allUsersList = await apiCall('getUsers'); populateFilterDropdowns(); } catch(e) {} }
 window.handleFileSelect = function(e) { addFiles(e.target.files); }; 
-window.handleDrop = function(e) { e.preventDefault(); addFiles(e.dataTransfer.files); }; 
+window.handleDrop = function(e) { e.preventDefault(); addFiles(e.dataTransfer.files); };
 function addFiles(files) { Array.from(files).forEach(file => { if(pendingFiles.length >= 10) return; if(!pendingFiles.some(pf => pf.name === file.name)) pendingFiles.push(file); }); renderFileList(); } 
 function renderFileList() { document.getElementById('file_list').innerHTML = pendingFiles.map((f, i) => `<span class="bg-slate-200 text-xs px-2 py-1 rounded flex gap-1 items-center font-medium">${f.name} <button type="button" onclick="removeFile(${i})" class="text-red-500 hover:text-red-700 font-bold ml-1">&times;</button></span>`).join(''); } 
 window.removeFile = function(index) { pendingFiles.splice(index, 1); renderFileList(); };
@@ -2358,14 +2376,27 @@ window.addNewCaseMember = function(name, email, role) {
 
 async function loadLabelsForForm() { availableLabels = await apiCall('getLabels'); renderLabels(); populateFilterDropdowns(); } 
 function renderLabels() { document.getElementById('labels_container').innerHTML = availableLabels.map(label => `<span onclick="toggleLabel('${label}')" class="cursor-pointer px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm border ${selectedLabels.has(label) ? 'bg-green-800 text-white border-green-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">${label}</span>`).join(''); } 
-window.toggleLabel = function(label) { selectedLabels.has(label) ? selectedLabels.delete(label) : selectedLabels.add(label); renderLabels(); }; 
+window.toggleLabel = function(label) { selectedLabels.has(label) ? selectedLabels.delete(label) : selectedLabels.add(label); renderLabels(); };
 window.createNewLabel = async function() { const val = document.getElementById('new_label_input').value.trim(); if(!val) return; await apiCall('addLabel', {label: val}); availableLabels.push(val); selectedLabels.add(val); document.getElementById('new_label_input').value = ''; renderLabels(); populateFilterDropdowns(); };
 
-window.openModal = function() { document.getElementById('appModal').classList.remove('hidden'); pendingFiles = []; renderFileList(); document.getElementById('f_message_plain').value = ''; document.getElementById('new_case_member_search').value = ''; composerRecipients = []; composerRecipients.push({ name: currentUser.name || currentUser.email, email: currentUser.email, role: 'Admin' }); window.renderNewCaseMembers(); }; 
+window.openModal = function() { 
+    document.getElementById('appModal').classList.remove('hidden'); 
+    pendingFiles = []; 
+    renderFileList(); 
+    
+    // ✅ CLEAR NEW RICH TEXT AREA
+    const richEl = document.getElementById('f_message_rich');
+    if(richEl) richEl.innerHTML = ''; 
+    
+    document.getElementById('new_case_member_search').value = '';
+    composerRecipients = []; composerRecipients.push({ name: currentUser.name || currentUser.email, email: currentUser.email, role: 'Admin' }); 
+    window.renderNewCaseMembers(); 
+}; 
 window.closeModal = function() { document.getElementById('appModal').classList.add('hidden'); document.getElementById('convForm').reset(); };
 
 window.handleFormSubmit = async function(e) { 
-    e.preventDefault(); const btn = document.getElementById('submitBtn'); btn.disabled = true; btn.innerText = 'Uploading...';
+    e.preventDefault(); const btn = document.getElementById('submitBtn'); btn.disabled = true;
+    btn.innerText = 'Uploading...';
     try {
         let fileUrls = [];
         if(pendingFiles.length > 0) { 
@@ -2375,9 +2406,21 @@ window.handleFormSubmit = async function(e) {
                 if(result && result.url) fileUrls.push(result.url);
             } 
         } 
-        const payload = { createdBy: currentUser.email || currentUser.name, subject: document.getElementById('f_subject').value, details: document.getElementById('f_details').value, message: document.getElementById('f_message_plain').value || '', labels: Array.from(selectedLabels), adminEmails: composerRecipients.filter(r => r.role === 'Admin').map(r => r.email), userEmails: composerRecipients.filter(r => r.role === 'User').map(r => r.email), attachments: fileUrls };
+        
+        // ✅ FETCH TEXT FROM NEW RICH TEXT DIV
+        const payload = { 
+            createdBy: currentUser.email || currentUser.name, 
+            subject: document.getElementById('f_subject').value, 
+            details: document.getElementById('f_details').value, 
+            message: document.getElementById('f_message_rich').innerHTML || '', 
+            labels: Array.from(selectedLabels), 
+            adminEmails: composerRecipients.filter(r => r.role === 'Admin').map(r => r.email), 
+            userEmails: composerRecipients.filter(r => r.role === 'User').map(r => r.email), 
+            attachments: fileUrls 
+        };
         await apiCall('createCase', payload); window.closeModal(); loadConversations(); 
-    } catch(err) { showCustomDialog("Error", "Failed to create case.\n" + err.toString(), false); } finally { btn.disabled = false; btn.innerText = 'Post Case'; } 
+    } catch(err) { showCustomDialog("Error", "Failed to create case.\n" + err.toString(), false);
+    } finally { btn.disabled = false; btn.innerText = 'Post Case'; } 
 };
 
 // ==========================================
@@ -2388,10 +2431,35 @@ async function loadConversations() {
   if(!feed) return;
   try {
     allCasesData = await apiCall('getConversations', currentUser); feed.innerHTML = '';
-    if(allCasesData.length === 0) { feed.innerHTML = `<p class="text-center py-10 text-slate-500 font-medium">No cases found.</p>`; return; }
-    const uEmail = (currentUser.email || '').toLowerCase(); const uName = (currentUser.name || '').toLowerCase();
-    const fragment = document.createDocumentFragment();
     
+    // ✅ CALCULATE TAB COUNTS
+    let counts = { Live: 0, Snooze: 0, Archive: 0 };
+    const uEmail = (currentUser.email || '').toLowerCase();
+    
+    allCasesData.forEach(c => {
+        let originalSnoozeMs = parseInt(c.snoozeTime || "0", 10);
+        if (String(c.snoozeTime).startsWith('{')) {
+            try { originalSnoozeMs = parseInt(JSON.parse(c.snoozeTime)[uEmail], 10) || 0; } catch(e){}
+        }
+        
+        const hasUnread = notifications.filter(n => String(n.caseId).trim() === String(c.id).trim()).length > 0;
+        const isSnoozed = originalSnoozeMs > Date.now();
+        
+        if (c.status === 'Archived') counts.Archive++;
+        else if (isSnoozed && !hasUnread) counts.Snooze++;
+        else counts.Live++;
+    });
+
+    // UPDATE UI COUNTS
+    if(document.getElementById('count-Live')) document.getElementById('count-Live').innerText = counts.Live;
+    if(document.getElementById('count-Snooze')) document.getElementById('count-Snooze').innerText = counts.Snooze;
+    if(document.getElementById('count-Archive')) document.getElementById('count-Archive').innerText = counts.Archive;
+
+    if(allCasesData.length === 0) { feed.innerHTML = `<p class="text-center py-10 text-slate-500 font-medium">No cases found.</p>`; return; }
+    
+    const uName = (currentUser.name || '').toLowerCase();
+    const fragment = document.createDocumentFragment();
+
     allCasesData.forEach(conv => {
       const cardTemp = document.getElementById('cardTemplate');
       if(!cardTemp) return;
@@ -2425,12 +2493,10 @@ async function loadConversations() {
       let isSnoozed = false;
       let badgeText = "ACTIVE";
       let badgeClasses = ['bg-emerald-500', 'text-white'];
-
       if (conv.status === 'Archived') {
           badgeText = "ARCHIVED";
           badgeClasses = ['bg-emerald-700', 'text-white'];
       } else if (hasUnread && originalSnoozeMs > 0) {
-          // 🚨 Case was snoozed, but activity detected
           const lastNotif = unreadNotifsForCase[0];
           const replierName = window.getUserNameByEmail(lastNotif.sender);
           const actType = String(lastNotif.type || "REPLY").toUpperCase();
@@ -2438,13 +2504,11 @@ async function loadConversations() {
           badgeClasses = ['bg-blue-100', 'text-blue-800', 'border', 'border-blue-300'];
           isSnoozed = false; 
       } else if (originalSnoozeMs > Date.now()) {
-          // ⏰ Still Snoozed normally
           const snoozeDateStr = new Date(originalSnoozeMs).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
           badgeText = `SNOOZED TILL ${snoozeDateStr.toUpperCase()}`;
           badgeClasses = ['bg-orange-100', 'text-orange-700'];
-          isSnoozed = true; 
+          isSnoozed = true;
       } else if (originalSnoozeMs > 0 && originalSnoozeMs <= Date.now()) {
-          // ⌛ Time expired
           badgeText = "MOVED TO LIVE: TIME EXPIRED";
           badgeClasses = ['bg-purple-100', 'text-purple-800', 'border', 'border-purple-200'];
           isSnoozed = false; 
@@ -2457,16 +2521,15 @@ async function loadConversations() {
       
       cardDiv.dataset.convId = String(conv.id).trim(); 
       cardDiv.dataset.subject = conv.subject.toLowerCase(); 
-      cardDiv.dataset.status = conv.status; 
+      cardDiv.dataset.status = conv.status;
       cardDiv.dataset.snooze = safeSnoozeMs; 
-      cardDiv.dataset.snoozeRaw = originalSnoozeMs; // 🔥 Record original timestamp for later
-      cardDiv.dataset.hasAdminRights = hasAdminRights; 
+      cardDiv.dataset.snoozeRaw = originalSnoozeMs; 
+      cardDiv.dataset.hasAdminRights = hasAdminRights;
       cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments); 
       cardDiv.dataset.labels = JSON.stringify(conv.labels); 
       cardDiv.dataset.members = JSON.stringify([...conv.admins, ...conv.users, conv.createdBy]); 
       cardDiv.dataset.caseAdmins = JSON.stringify(conv.admins); 
       cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
-      
       if (wrapperDiv !== cardDiv) {
           wrapperDiv.dataset.convId = String(conv.id).trim();
       }
@@ -2475,8 +2538,11 @@ async function loadConversations() {
       
       cardDiv.querySelector('[data-id="conv-id"]').textContent = conv.id; 
       cardDiv.querySelector('[data-id="subject"]').textContent = conv.subject; 
-      cardDiv.querySelector('[data-id="details"]').textContent = conv.details; 
-      cardDiv.querySelector('[data-id="message"]').innerHTML = conv.message; 
+      cardDiv.querySelector('[data-id="details"]').textContent = conv.details;
+      
+      // ✅ APPLY CLICKABLE LINKS & FORMATTING TO HIDDEN MESSAGE DATA
+      cardDiv.querySelector('[data-id="message"]').innerHTML = window.makeLinksClickable(conv.message); 
+      
       cardDiv.querySelector('[data-id="author"]').textContent = creatorName; 
       cardDiv.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString(); 
       cardDiv.querySelector('[data-id="display-case-id"]').textContent = conv.id;
@@ -2488,48 +2554,45 @@ async function loadConversations() {
       badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm";
       badge.classList.add(...badgeClasses);
       badge.innerText = badgeText;
-      // ==========================================
+
       const footerActions = cardDiv.querySelector('.flex.items-center.gap-3.text-sm'); 
-      const cbContainer = footerActions.querySelector('.archive-cb-container'); 
+      const cbContainer = footerActions.querySelector('.archive-cb-container');
       const snoozeBtn = footerActions.querySelector('.snooze-card-btn'); 
       const unsnoozeBtn = footerActions.querySelector('.unsnooze-card-btn'); 
       const unarchiveBtn = footerActions.querySelector('.unarchive-card-btn'); 
       const checkbox = footerActions.querySelector('.bulk-archive-cb');
       
-      cbContainer.classList.add('hidden'); cbContainer.classList.remove('flex'); snoozeBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden'); unarchiveBtn.classList.add('hidden');
+      cbContainer.classList.add('hidden'); cbContainer.classList.remove('flex'); snoozeBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden');
+      unarchiveBtn.classList.add('hidden');
       
-     // 1. Unarchive: AB SABKE LIYE (Kyunki ye personal hai)
       if (conv.status === 'Archived') { 
-          unarchiveBtn.classList.remove('hidden'); 
+          unarchiveBtn.classList.remove('hidden');
       }
 
-      // Sabhi users ko Archive karne ka option milega taaki unki screen clean rahe
       if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) { 
-          cbContainer.classList.remove('hidden'); 
+          cbContainer.classList.remove('hidden');
           cbContainer.classList.add('flex'); 
           checkbox.disabled = false; 
       }
       
-      // 2. Snooze / Un-Snooze: SABKE LIYE (Agar case archived nahi hai)
       if (conv.status !== 'Archived') {
           if (isSnoozed) { unsnoozeBtn.classList.remove('hidden'); } 
           else if (currentTab === 'Live') { snoozeBtn.classList.remove('hidden'); }
       }
-      const lCont = cardDiv.querySelector('[data-id="labels-container"]'); 
+      
+      const lCont = cardDiv.querySelector('[data-id="labels-container"]');
       conv.labels.forEach(l => { if(l){ const s = document.createElement('span'); s.className='px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded font-bold'; s.innerText=l; lCont.appendChild(s); } });
       const admCont = cardDiv.querySelector('[data-id="admins-container"]'); 
       const usrCont = cardDiv.querySelector('[data-id="users-container"]');
       conv.admins.forEach(a => { if(a) admCont.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${window.getUserNameByEmail(a)}</span>`; });
       conv.users.forEach(u => { if(u) usrCont.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${window.getUserNameByEmail(u)}</span>`; });
       
-      // 🔥 UI FLICKER FIX: DOM mein attach hone se pehle hi hide kar do!
       let showInitial = false;
-      if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) showInitial = true; 
+      if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) showInitial = true;
       if (currentTab === 'Archive' && conv.status === 'Archived') showInitial = true;
       if (currentTab === 'Snooze' && conv.status !== 'Archived' && isSnoozed) showInitial = true;
       
       wrapperDiv.style.display = showInitial ? 'block' : 'none';
-      // 🔥 FIX END
 
       fragment.appendChild(cardFragment);
     });
@@ -2556,7 +2619,6 @@ window.addEventListener('beforeinstallprompt', (e) => {
         installBtn.classList.remove('hidden');
     }
 });
-
 if (installBtn) { 
     installBtn.addEventListener('click', async () => { 
         if (deferredPrompt) { 
@@ -2566,7 +2628,7 @@ if (installBtn) {
         } else {
             showCustomDialog("Install CaseSys 📱", "Click 3-dots (⋮) and select 'Add to Home screen'.", false);
         }
-    }); 
+    });
 }
 
 window.addEventListener('appinstalled', () => { 
@@ -2576,7 +2638,6 @@ window.addEventListener('appinstalled', () => {
     } 
     console.log('CaseSys has been installed!');
 });
-
 window.addEventListener('online', async () => {
     const requests = await getOfflineRequests();
     if (requests.length > 0) {
@@ -2598,7 +2659,6 @@ window.addEventListener('online', async () => {
         }
     }
 });
-
 window.addEventListener('offline', () => {
     console.log("You are now offline. Actions will be queued.");
 });
