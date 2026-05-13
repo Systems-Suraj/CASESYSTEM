@@ -1419,20 +1419,43 @@ window.handleEditFileSelect = function(e) { Array.from(e.target.files).forEach(f
 window.removeNewEditFile = function(index) { newEditPendingFiles.splice(index, 1); renderEditAttachments(); };
 
 window.saveCaseEdits = async function() {
-    const btn = document.getElementById('saveEditBtn'); btn.innerText = "Saving..."; btn.disabled = true;
+    const btn = document.getElementById('saveEditBtn'); 
+    btn.innerText = "Saving..."; 
+    btn.disabled = true;
     try {
         let finalUrls = [...currentEditAttachments];
+        
         if(newEditPendingFiles.length > 0) {
-            for(let file of newEditPendingFiles) {
-                const base64 = await new Promise(res => { const reader = new FileReader(); reader.onload = ev => res(ev.target.result); reader.readAsDataURL(file); });
-                const result = await apiCall('uploadFile', { base64: base64, filename: file.name });
-                if(result && result.url) finalUrls.push(result.url);
-            }
+            showUploadOverlay("Updating Attachments");
+            const newlyUploadedUrls = await uploadMultipleFilesResumable(newEditPendingFiles);
+            finalUrls = finalUrls.concat(newlyUploadedUrls);
+            hideUploadOverlay();
         }
-        await apiCall('updateCaseDetails', { id: document.getElementById('detail-conv-id').value, subject: document.getElementById('edit_subject').value.trim(), details: document.getElementById('edit_details_rich').innerHTML.trim(), labels: Array.from(currentEditLabels), attachments: finalUrls, userEmail: currentUser.email });
+        
+        await apiCall('updateCaseDetails', { 
+            id: document.getElementById('detail-conv-id').value, 
+            subject: document.getElementById('edit_subject').value.trim(), 
+            details: document.getElementById('edit_details_rich').innerHTML.trim(), 
+            labels: Array.from(currentEditLabels), 
+            attachments: finalUrls, 
+            userEmail: currentUser.email 
+        });
+        
         document.getElementById('editCaseModal').classList.add('hidden');
-        loadConversations(); closeCaseDetail(); 
-    } catch(e) { showCustomDialog("Error", "Failed to save edits.", false); } finally { btn.innerText = "Save Changes"; btn.disabled = false; }
+        
+        if(window.isMobileClient && window.isMobileClient()) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIBRATE' }));
+        }
+        
+        loadConversations(); 
+        closeCaseDetail(); 
+    } catch(e) { 
+        hideUploadOverlay();
+        showCustomDialog("Error", "Failed to save edits.", false); 
+    } finally { 
+        btn.innerText = "Save Changes"; 
+        btn.disabled = false; 
+    }
 };
 
 // ==========================================
@@ -1842,76 +1865,99 @@ function renderThreadHTML(list, level = 0) {
 window.submitDetailReply = async function() {
     const inputDiv = document.getElementById('detail-reply-input');
     const msgHTML = inputDiv.innerHTML.trim();
-    if (!inputDiv.querySelector('.mention-badge')) {
-        return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
-    }
+    if (!inputDiv.querySelector('.mention-badge')) return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
     if(!msgHTML && pendingReplyFiles.length === 0) return showCustomDialog("Notice", "Please write a message or attach a file.", false);
+    
     const caseId = document.getElementById('detail-conv-id').value;
     const submitBtn = document.getElementById('detailSubmitBtn');
     const originalText = submitBtn.innerText;
-    submitBtn.innerText = 'Posting...';
-    submitBtn.disabled = true;
+    submitBtn.innerText = 'Posting...'; submitBtn.disabled = true;
+
     try {
         let fileUrl = ''; let fileName = '';
+        
         if(pendingReplyFiles.length > 0) { 
+            showUploadOverlay("Uploading Attachment");
             const file = pendingReplyFiles[0];
-            const base64 = await new Promise(res => { const reader = new FileReader(); reader.onload = e => res(e.target.result); reader.readAsDataURL(file); });
-            const result = await apiCall('uploadFile', { base64: base64, filename: file.name });
-            if (result && result.error) throw new Error("File Upload Failed: " + result.error);
-            if(result && result.url) { fileUrl = result.url; fileName = result.name || file.name; }
+            const result = await uploadFileResumable(file, (pct, l, t) => updateUploadOverlay(1, 1, pct, formatSize(l), formatSize(t)));
+            fileUrl = result.url; fileName = result.name;
+            hideUploadOverlay();
         }
 
         let payloadToSend;
+        
         if (replyComposerState.mode === 'DIFFERENT' && replyComposerState.recipients.length > 0) {
             payloadToSend = replyComposerState.recipients.map(r => {
                 const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); 
                 return {
-                    caseId: caseId, text: (r.customText && r.customText.trim() !== '') ? r.customText.trim() : msgHTML, mentionType: r.type || 'Message', sender: currentUser.email, receiver: r.email, parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName,
+                    caseId: caseId, 
+                    text: (r.customText && r.customText.trim() !== '') ? r.customText.trim() : msgHTML, 
+                    mentionType: r.type || 'Message', 
+                    sender: currentUser.email, 
+                    receiver: r.email, 
+                    parentAskId: '', 
+                    threadId: '', 
+                    attachmentUrl: fileUrl, 
+                    attachmentFileName: fileName, 
                     uniqueId: tempId 
                 };
             });
         } else {
             const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
-            payloadToSend = { caseId: caseId, text: msgHTML, mentionType: replyComposerState.globalType || 'Message', sender: currentUser.email, receiver: replyComposerState.recipients.map(r => r.email).join(','), parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId };
+            payloadToSend = { 
+                caseId: caseId, 
+                text: msgHTML, 
+                mentionType: replyComposerState.globalType || 'Message', 
+                sender: currentUser.email, 
+                receiver: replyComposerState.recipients.map(r => r.email).join(','), 
+                parentAskId: '', 
+                threadId: '', 
+                attachmentUrl: fileUrl, 
+                attachmentFileName: fileName, 
+                uniqueId: tempId 
+            };
         }
 
-        const localSenderName = currentUser.name || currentUser.email;
-        const payloads = Array.isArray(payloadToSend) ? payloadToSend : [payloadToSend];
-        payloads.forEach(p => {
-             const tempId = p.uniqueId; 
-             seenMessages.add(tempId); 
-             
-             allLoadedComments.push({
-                 caseId: String(p.caseId).trim(),
-                 timestamp: new Date().getTime(),
-                 sender: localSenderName,
-                 receiver: p.receiver || '',
-                 text: p.text,
-                 attachmentUrl: p.attachmentUrl || '',
-                 attachmentFileName: p.attachmentFileName || '',
-                 type: p.mentionType,
-                 askId: '', 
-                 status: '',
-                 parentAskId: p.parentAskId || '',
-                 uniqueId: tempId, 
-                 threadId: p.threadId || 'LOCAL-T-' + Math.random(),
-                 threadColor: p.threadColor || '#f8fafc'
-             });
+        // --- OPTIMISTIC UI UPDATE ---
+        const tempComments = Array.isArray(payloadToSend) ? payloadToSend : [payloadToSend];
+        tempComments.forEach(c => {
+            allLoadedComments.push({
+                caseId: c.caseId,
+                timestamp: new Date().getTime(),
+                sender: c.sender,
+                receiver: c.receiver,
+                text: c.text,
+                type: c.mentionType,
+                askId: c.parentAskId,
+                threadId: c.threadId,
+                attachment: c.attachmentUrl ? c.attachmentUrl + '|' + c.attachmentFileName : '',
+                isPending: true,
+                uniqueId: c.uniqueId
+            });
         });
-        
-        inputDiv.innerHTML = ''; pendingReplyFiles = [];
+        renderThreadUI(allLoadedComments);
+        setTimeout(() => {
+            const scrollContainer = document.getElementById('detail-thread-container').parentElement;
+            scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        }, 100);
+
+        // Clean UI
+        inputDiv.innerHTML = ''; 
+        pendingReplyFiles = [];
         if(document.getElementById('reply_file_list')) renderReplyFileList();
-        replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' }; window.setReplyGlobalType('Message');
+        replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' }; 
+        window.setReplyGlobalType('Message');
         checkComposerRestrictions(document.getElementById('detail-reply-input'), 'main');
         
-        renderAllCommentsLocally();
-        setTimeout(() => {
-            const scrollArea = document.getElementById("detail-thread-container").parentElement;
-            if(scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
-        }, 50);
-        
         await apiCall('addNewComment', payloadToSend);
+        
+        if(window.isMobileClient && window.isMobileClient()) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIBRATE' }));
+        }
+        setTimeout(() => loadCaseDetails(caseId), 500);
+
     } catch(e) { 
+        hideUploadOverlay();
         showCustomDialog("Error", "Failed to post reply. Reason: \n" + (e.message || e), false);
     } finally { 
         submitBtn.disabled = false; submitBtn.innerText = originalText; 
@@ -2086,69 +2132,77 @@ window.submitInlineReply = async function(btn) {
     const replyBox = container.querySelector('[data-id="inline-reply-box"]');
     const inputDiv = replyBox.querySelector('.inline-reply-input');
     const msgHTML = inputDiv.innerHTML.trim();
-    if (!inputDiv.querySelector('.mention-badge')) {
-        return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
-    }
     
+    if (!inputDiv.querySelector('.mention-badge')) return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
     if(!msgHTML && inlinePendingFiles.length === 0) return showCustomDialog("Notice", "Please write a message or attach a file.", false);
-    const caseId = document.getElementById('detail-conv-id').value;
     
-    const mentionedEmails = Array.from(inputDiv.querySelectorAll('.mention-badge'))
-        .map(badge => badge.dataset.email)
-        .filter(Boolean)
-        .join(',');
+    const caseId = document.getElementById('detail-conv-id').value;
+    const mentionedEmails = Array.from(inputDiv.querySelectorAll('.mention-badge')).map(badge => badge.dataset.email).filter(Boolean).join(',');
     const toggleBtn = container.querySelector('.inline-reply-toggle-btn');
     const typeVal = replyBox.querySelector('.inline-type-val').value;
-    btn.disabled = true;
-    const originalText = btn.innerText;
+    
+    btn.disabled = true; 
+    const originalText = btn.innerText; 
     btn.innerText = '...';
+    
     try {
-        let fileUrl = '';
-        let fileName = '';
+        let fileUrl = ''; let fileName = '';
+        
         if(inlinePendingFiles.length > 0) { 
+            showUploadOverlay("Uploading Attachment");
             const file = inlinePendingFiles[0];
-            const base64 = await new Promise(res => { const reader = new FileReader(); reader.onload = e => res(e.target.result); reader.readAsDataURL(file); });
-            const result = await apiCall('uploadFile', { base64: base64, filename: file.name });
-            if (result && result.error) throw new Error("Upload Failed: " + result.error);
-            if(result && result.url) { fileUrl = result.url; fileName = result.name || file.name; }
+            const result = await uploadFileResumable(file, (pct, l, t) => updateUploadOverlay(1, 1, pct, formatSize(l), formatSize(t)));
+            fileUrl = result.url; fileName = result.name;
+            hideUploadOverlay();
         }
 
         const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
-        const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, receiver: mentionedEmails, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId };
+        const payload = { 
+            caseId: caseId, 
+            text: msgHTML, 
+            mentionType: typeVal, 
+            sender: currentUser.email, 
+            receiver: mentionedEmails, 
+            parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', 
+            threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', 
+            threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', 
+            attachmentUrl: fileUrl, 
+            attachmentFileName: fileName, 
+            uniqueId: tempId 
+        };
         
-        const localSenderName = currentUser.name || currentUser.email;
-        seenMessages.add(tempId); 
-        
+        // --- OPTIMISTIC UI UPDATE ---
         allLoadedComments.push({
-             caseId: String(caseId).trim(),
-             timestamp: new Date().getTime(),
-             sender: localSenderName,
-             receiver: mentionedEmails, 
-             text: msgHTML,
-             attachmentUrl: fileUrl,
-             attachmentFileName: fileName,
-             type: typeVal,
-             askId: '', 
-             status: '',
-             parentAskId: payload.parentAskId,
-             uniqueId: tempId, 
-             threadId: payload.threadId || 'LOCAL-T-' + Math.random(),
-             threadColor: payload.threadColor || '#f8fafc'
-         });
+            caseId: payload.caseId,
+            timestamp: new Date().getTime(),
+            sender: payload.sender,
+            receiver: payload.receiver,
+            text: payload.text,
+            type: payload.mentionType,
+            askId: payload.parentAskId,
+            threadId: payload.threadId,
+            threadColor: payload.threadColor,
+            attachment: payload.attachmentUrl ? payload.attachmentUrl + '|' + payload.attachmentFileName : '',
+            isPending: true,
+            uniqueId: payload.uniqueId
+        });
+        renderThreadUI(allLoadedComments);
 
-        if (payload.parentAskId) {
-            notifications = notifications.filter(n => n.askId !== payload.parentAskId && n.id !== payload.parentAskId);
-            unreadCount = notifications.length;
-            updateNotificationUI();
-        }
-
-        inputDiv.innerHTML = '';
-        inlinePendingFiles = []; replyBox.querySelector('.inline-file-list').innerHTML = ''; replyBox.classList.add('hidden');
+        // Clean UI
+        inputDiv.innerHTML = ''; 
+        inlinePendingFiles = [];
+        replyBox.querySelector('.inline-file-list').innerHTML = ''; 
+        replyBox.classList.add('hidden');
         
-        renderAllCommentsLocally();
-
         await apiCall('addNewComment', payload);
+        
+        if(window.isMobileClient && window.isMobileClient()) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIBRATE' }));
+        }
+        setTimeout(() => loadCaseDetails(caseId), 500);
+
     } catch(e) { 
+        hideUploadOverlay();
         showCustomDialog("Error", "Failed to post inline reply.\n" + (e.message || e), false);
     } finally {
         btn.disabled = false; btn.innerText = originalText;
@@ -2246,17 +2300,98 @@ window.openModal = function() {
 }; 
 window.closeModal = function() { document.getElementById('appModal').classList.add('hidden'); document.getElementById('convForm').reset(); };
 
-window.handleFormSubmit = async function(e) { 
-    e.preventDefault(); const btn = document.getElementById('submitBtn'); btn.disabled = true;
+// ==========================================
+// 🚀 ADVANCED CHUNKED UPLOADER LOGIC
+// ==========================================
+function formatSize(bytes){
+  if(!bytes) return "0 KB";
+  const kb = bytes / 1024;
+  if(kb < 1024) return kb.toFixed(1) + " KB";
+  return (kb / 1024).toFixed(1) + " MB";
+}
+
+function showUploadOverlay(title) {
+    document.getElementById('globalUploadTitle').innerText = title || 'Processing...';
+    document.getElementById('globalUploadText').innerText = 'Starting...';
+    document.getElementById('globalUploadBar').style.width = '0%';
+    document.getElementById('globalUploadSize').innerText = '';
+    const overlay = document.getElementById('globalUploadOverlay');
+    if (overlay) { overlay.classList.remove('hidden'); overlay.classList.add('flex'); }
+}
+
+function updateUploadOverlay(fileIndex, totalFiles, percent, loadedStr, totalStr) {
+    document.getElementById('globalUploadText').innerText = totalFiles > 1 ? `Uploading File ${fileIndex} of ${totalFiles} (${percent}%)` : `Uploading... ${percent}%`;
+    document.getElementById('globalUploadBar').style.width = `${percent}%`;
+    document.getElementById('globalUploadSize').innerText = `${loadedStr} / ${totalStr}`;
+}
+
+function hideUploadOverlay() {
+    const overlay = document.getElementById('globalUploadOverlay');
+    if (overlay) { overlay.classList.add('hidden'); overlay.classList.remove('flex'); }
+}
+
+async function uploadFileResumable(file, onProgress) {
+    const uploadUrl = await apiCall('getResumableUploadUrl', { fileName: file.name, mimeType: file.type });
+    const chunkSize = 2097152; // 2MB Chunk Limit
+    let start = 0;
+
+    return new Promise((resolve, reject) => {
+        function uploadNext() {
+            let end = Math.min(start + chunkSize, file.size) - 1;
+            let blob = file.slice(start, end + 1);
+            let reader = new FileReader();
+            
+            reader.onload = async function(e) {
+                let base64Data = e.target.result.split(",")[1];
+                let percent = Math.round(((end + 1) / file.size) * 100);
+                if(onProgress) onProgress(percent, end + 1, file.size);
+
+                try {
+                    let res = await apiCall('uploadChunkToDrive', {
+                        uploadUrl: uploadUrl, base64Data: base64Data, start: start, end: end, totalSize: file.size
+                    });
+                    
+                    if (res.status === "incomplete") {
+                        start = end + 1;
+                        uploadNext();
+                    } else if (res.status === "done") {
+                        let pUrl = `https://drive.google.com/file/d/${res.fileId}/view`;
+                        if(file.type.startsWith('video/')) pUrl = `https://drive.google.com/file/d/${res.fileId}/preview`;
+                        else if(file.type.startsWith('image/')) pUrl = `https://drive.google.com/thumbnail?id=${res.fileId}&sz=w2000`;
+                        resolve({ url: pUrl, name: file.name, id: res.fileId });
+                    }
+                } catch(err) { reject(err); }
+            };
+            reader.readAsDataURL(blob);
+        }
+        uploadNext();
+    });
+}
+
+async function uploadMultipleFilesResumable(filesArray) {
+    let fileUrls = [];
+    for (let i = 0; i < filesArray.length; i++) {
+        const file = filesArray[i];
+        const result = await uploadFileResumable(file, (percent, loaded, total) => {
+            updateUploadOverlay(i + 1, filesArray.length, percent, formatSize(loaded), formatSize(total));
+        });
+        fileUrls.push(result.url); 
+    }
+    return fileUrls;
+}
+
+window.handleFormSubmit = async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('submitBtn'); 
+    btn.disabled = true; 
     btn.innerText = 'Uploading...';
+    
     try {
         let fileUrls = [];
         if(pendingFiles.length > 0) { 
-            for(let file of pendingFiles) { 
-                const base64 = await new Promise(res => { const reader = new FileReader(); reader.onload = ev => res(ev.target.result); reader.readAsDataURL(file); });
-                const result = await apiCall('uploadFile', { base64: base64, filename: file.name });
-                if(result && result.url) fileUrls.push(result.url);
-            } 
+            showUploadOverlay("Creating New Case");
+            fileUrls = await uploadMultipleFilesResumable(pendingFiles);
+            hideUploadOverlay();
         } 
         
         const payload = { 
@@ -2269,9 +2404,21 @@ window.handleFormSubmit = async function(e) {
             userEmails: composerRecipients.filter(r => r.role === 'User').map(r => r.email), 
             attachments: fileUrls 
         };
-        await apiCall('createCase', payload); window.closeModal(); loadConversations(); 
-    } catch(err) { showCustomDialog("Error", "Failed to create case.\n" + err.toString(), false);
-    } finally { btn.disabled = false; btn.innerText = 'Post Case'; } 
+        
+        await apiCall('createCase', payload); 
+        
+        if(window.isMobileClient && window.isMobileClient()) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIBRATE' }));
+        }
+        window.closeModal(); 
+        loadConversations(); 
+    } catch(err) { 
+        hideUploadOverlay();
+        showCustomDialog("Error", "Failed to create case.\n" + err.toString(), false);
+    } finally { 
+        btn.disabled = false; 
+        btn.innerText = 'Post Case'; 
+    } 
 };
 
 // ==========================================
