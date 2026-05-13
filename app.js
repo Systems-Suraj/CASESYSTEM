@@ -7,10 +7,11 @@ let activeInputElement = null;
 document.addEventListener('focusin', (e) => {
   if (e.target && (
       e.target.id === 'detail-reply-input' ||
-      e.target.id === 'f_message_rich' ||
       e.target.classList?.contains('inline-reply-input') ||
       e.target.tagName === 'TEXTAREA' || 
-      e.target.tagName === 'INPUT'
+      e.target.tagName === 'INPUT' ||
+      e.target.id === 'f_details_rich' ||
+      e.target.id === 'f_message_rich'
   )) {
     window.isUserTypingGlobal = true;
     activeInputElement = e.target;
@@ -19,10 +20,11 @@ document.addEventListener('focusin', (e) => {
 document.addEventListener('focusout', (e) => {
   if (e.target && (
       e.target.id === 'detail-reply-input' ||
-      e.target.id === 'f_message_rich' ||
       e.target.classList?.contains('inline-reply-input') ||
       e.target.tagName === 'TEXTAREA' || 
-      e.target.tagName === 'INPUT'
+      e.target.tagName === 'INPUT' ||
+      e.target.id === 'f_details_rich' ||
+      e.target.id === 'f_message_rich'
   )) {
     setTimeout(() => {
       window.isUserTypingGlobal = false;
@@ -30,11 +32,11 @@ document.addEventListener('focusout', (e) => {
     }, 200);
   }
 });
+
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
 const APP_VERSION = "v30";
-// 🔄 Version bumped for Audio & Formats
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -127,6 +129,7 @@ if (firebase.messaging && firebase.messaging.isSupported && firebase.messaging.i
 // CONFIGURATION: REPLACE THIS URL!
 // ==========================================
 const API_URL = "https://script.google.com/macros/s/AKfycbxXQKRXvgVI-ryItvnhOm0SzJzh03I72QlOMGCRA4GDPMV2f6t6xevUeMfGrMkz_OtS/exec";
+
 // ==========================================
 // OFFLINE DATABASE (IndexedDB Setup)
 // ==========================================
@@ -265,6 +268,7 @@ let lastTimestamp = 0;
 let seenMessages = new Set();
 let realtimeInterval = null;
 let isInitialLoadDone = false;
+
 // ==========================================
 // 🔥 GLOBAL UNREAD FETCHER & NOTIFICATIONS
 // ==========================================
@@ -276,16 +280,10 @@ let locallySeenNotifications = new Set();
 const tingSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
 function addNotification(msg) {
 
-  // ===============================
-  // ❌ CLOSED STATUS IGNORE (MAIN FIX)
-  // ===============================
   if (msg.status && String(msg.status).toLowerCase().trim() === 'closed') {
     return;
   }
 
-  // ===============================
-  // ❌ ALREADY SEEN BY THIS USER (STRICT NEW FIX)
-  // ===============================
   if (msg.seen && currentUser?.email && msg.type !== 'Ask') {
       const seenArr = String(msg.seen).toLowerCase().split(',').map(e => e.trim());
       const myEmail = currentUser.email.toLowerCase().trim();
@@ -294,15 +292,9 @@ function addNotification(msg) {
       }
   }
 
-  // ===============================
-  // ❌ SELF NOTIFICATION IGNORE
-  // ===============================
   if (msg.sender && currentUser?.email && msg.sender.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return;
   if (msg.sender && currentUser?.name && msg.sender.toLowerCase().trim() === currentUser.name.toLowerCase().trim()) return;
 
-  // ===============================
-  // ❌ ONLY RECEIVER SHOULD SEE
-  // ===============================
   if (msg.receiver && currentUser?.email) {
       const receivers = msg.receiver.split(',').map(e => e.toLowerCase().trim());
       const myEmail = currentUser.email.toLowerCase().trim();
@@ -311,9 +303,6 @@ function addNotification(msg) {
       }
   }
 
-  // ===============================
-  // ❌ SAME OPEN CASE → NO NOTIF (UNLESS ASK)
-  // ===============================
   const activeCaseId = document.getElementById('detail-conv-id')?.value;
   const isCaseViewOpen = document.getElementById('caseDetailView') && 
                          !document.getElementById('caseDetailView').classList.contains('hidden');
@@ -325,25 +314,14 @@ function addNotification(msg) {
       return;
   }
 
-  // ===============================
-  // 🧹 CLEAN MESSAGE TEXT
-  // ===============================
   let cleanText = msg.text || msg.body || "New activity on your case";
   cleanText = cleanText.replace(/<[^>]*>?/gm, '');
-  // ===============================
-  // 🆔 UNIQUE NOTIFICATION ID
-  // ===============================
+
   const notifId = msg.uniqueId || (msgCaseId + "_" + msg.timestamp + "_" + msg.sender);
 
-  // ===============================
-  // ❌ ALREADY SEEN / DUPLICATE
-  // ===============================
   if (locallySeenNotifications.has(notifId)) return;
   if (notifications.some(n => n.id === notifId)) return;
 
-  // ===============================
-  // ✅ CREATE NOTIFICATION OBJECT
-  // ===============================
   const notif = {
     id: notifId,
     text: cleanText,
@@ -355,14 +333,8 @@ function addNotification(msg) {
     status: msg.status || '' 
   };
 
-  // ===============================
-  // 🚀 PUSH NOTIFICATION
-  // ===============================
   notifications.unshift(notif);
   unreadCount++;
-  // ===============================
-  // 🔊 SOUND + UI UPDATE
-  // ===============================
   tingSound.play().catch(e => console.log("Sound blocked"));
   updateNotificationUI();
 }
@@ -501,19 +473,22 @@ function checkComposerRestrictions(editor, type = 'main') {
     const submitBtn = type === 'main' ? document.getElementById('detailSubmitBtn') : container.querySelector('button[onclick*="submitInlineReply"]');
     const formatBtns = container.querySelectorAll('button[onclick*="document.execCommand"]');
     const typeSelectors = container.querySelectorAll('#global_type_selector button, .inline-type-btn');
+    const micBtns = container.querySelectorAll('#mic-btn, .inline-mic-btn');
+    
     if (hasMention) {
         if(attachLabel) attachLabel.classList.remove('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
         if(attachInput) attachInput.disabled = false;
         if(submitBtn) { submitBtn.disabled = false; submitBtn.classList.remove('opacity-50', 'cursor-not-allowed'); }
         formatBtns.forEach(b => { b.disabled = false; b.classList.remove('opacity-50', 'cursor-not-allowed'); });
         typeSelectors.forEach(b => { b.disabled = false; b.classList.remove('opacity-50', 'cursor-not-allowed'); });
+        micBtns.forEach(b => { b.disabled = false; b.classList.remove('opacity-50', 'cursor-not-allowed'); });
     } else {
         if(attachLabel) attachLabel.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
         if(attachInput) attachInput.disabled = true;
-        if(submitBtn) { submitBtn.disabled = true; submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        }
+        if(submitBtn) { submitBtn.disabled = true; submitBtn.classList.add('opacity-50', 'cursor-not-allowed'); }
         formatBtns.forEach(b => { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); });
         typeSelectors.forEach(b => { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); });
+        micBtns.forEach(b => { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); });
     }
 
     if (!hasMention) {
@@ -1008,6 +983,7 @@ window.resetAllFilters = function() {
     // 5. Apply (Shows all cases)
     applyFilters();
 };
+
 // ==========================================
 // ADVANCED FILTER LOGIC (STRICT AND LOGIC + EXACT MATCH FIX)
 // ==========================================
@@ -1019,7 +995,6 @@ window.applyFilters = debounce(function() {
         
         // Get checked values
         const checkedLabels = Array.from(document.querySelectorAll('.flabel[data-applied="true"]')).map(cb => cb.value);
-        // Trim spaces to ensure clean exact matching
         const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => String(cb.value).toLowerCase().trim());
         
         let visibleLabels = new Set();
@@ -1043,16 +1018,13 @@ window.applyFilters = debounce(function() {
             let cardMembers = card._cachedMembers || JSON.parse(card.dataset.members || '[]');
             if(!Array.isArray(cardMembers)) cardMembers = [];
             
-            // STRICT AND logic for Labels
             const matchesLabels = checkedLabels.length === 0 || checkedLabels.every(l => cardLabels.includes(l));
             
-            // STRICT AND logic for Members -> EXACT MATCH FIX (=== instead of .includes)
             const matchesMembers = checkedMembers.length === 0 || checkedMembers.every(m => 
                 cardMembers.some(cm => {
                     if (!cm) return false;
                     const cmEmail = String(cm).toLowerCase().trim();
                     const cmName = String(window.getUserNameByEmail(cm)).toLowerCase().trim();
-                    // EXACT MATCH logic so "Raj Kumar" doesn't trigger inside "Suraj Kumar"
                     return cmEmail === m || cmName === m;
                 })
             );
@@ -1062,14 +1034,12 @@ window.applyFilters = debounce(function() {
             
             const baseMatch = showTab && matchesId;
             
-            // Apply display to Card
             if (baseMatch && matchesLabels && matchesMembers) {
                 wrapper.style.display = 'block';
             } else {
                 wrapper.style.display = 'none';
             }
 
-            // Cross-Filter Availability Check
             if (baseMatch && matchesMembers) {
                 cardLabels.forEach(l => visibleLabels.add(String(l)));
             }
@@ -1083,7 +1053,6 @@ window.applyFilters = debounce(function() {
             }
         });
 
-        // Dynamically Hide/Show Label Options
         document.querySelectorAll('#labelsDropdown .dropdown-item').forEach(item => {
             const cb = item.querySelector('input[type="checkbox"]');
             if(!cb) return;
@@ -1096,13 +1065,10 @@ window.applyFilters = debounce(function() {
             }
         });
         
-        // Dynamically Hide/Show Member Options -> EXACT MATCH FIX (.has() instead of .includes())
         document.querySelectorAll('#membersDropdown .dropdown-item').forEach(item => {
             const cb = item.querySelector('input[type="checkbox"]');
             if(!cb) return;
             const valLower = String(cb.value).toLowerCase().trim();
-
-            // Using Set.has() guarantees it will look for an exact full-name match
             const isVisible = visibleMembers.has(valLower);
 
             if (cb.hasAttribute('data-applied') || isVisible) {
@@ -1143,7 +1109,6 @@ window.processBulkArchive = function() {
 
 window.processUnarchive = async function(btn) {
   const parent = btn.closest('[data-conv-id]');
-  // Agar parent mila (Card) toh wahan se, warna Detail View ke input se ID lo
   const convId = parent ? String(parent.dataset.convId).trim() : document.getElementById('detail-conv-id')?.value; 
   if(!convId) return;
   
@@ -1161,7 +1126,6 @@ window.processUnarchive = async function(btn) {
 
 window.processUnsnooze = async function(btn) {
     const parent = btn.closest('[data-conv-id]');
-    // Agar parent mila (Card) toh wahan se, warna Detail View ke input se ID lo
     const convId = parent ? String(parent.dataset.convId).trim() : document.getElementById('detail-conv-id')?.value; 
     if(!convId) return;
     
@@ -1192,7 +1156,6 @@ window.confirmSnooze = async function() {
     if(btn) { btn.innerText = "Snoozing..."; btn.disabled = true; }
 
     try {
-        // 🔥 API CALL (Matching exactly with Code.gs backend parameters)
         await apiCall('snoozeCase', { 
             id: caseId, 
             time: timestamp, 
@@ -1204,7 +1167,7 @@ window.confirmSnooze = async function() {
         setTimeout(() => {
             loadConversations();
             if(!document.getElementById('caseDetailView').classList.contains('hidden')) { 
-                closeCaseDetail(); // Detail view close karke wapas live feed me bhej dega
+                closeCaseDetail(); 
             }
         }, 500);
     } catch (e) {
@@ -1215,11 +1178,6 @@ window.confirmSnooze = async function() {
     }
 };
 
-// ==========================================
-// ⏰ SNOOZE MODAL OPENERS (BOTH INNER & OUTER)
-// ==========================================
-
-// 1. Andar Wale Button Ke Liye (Detail View)
 window.openSnoozeModal = function(btn) { 
     const convId = document.getElementById('detail-conv-id')?.value;
     if(!convId) {
@@ -1230,7 +1188,6 @@ window.openSnoozeModal = function(btn) {
     document.getElementById('snoozeModal').classList.remove('hidden');
 };
 
-// 2. Bahar Wale Button Ke Liye (Dashboard Card)
 window.openSnoozeModalFromCard = function(btn) {
     const parent = btn.closest('[data-conv-id]');
     if(!parent) {
@@ -1340,10 +1297,8 @@ window.saveManagedMembers = async function() {
 };
 
 // ==========================================
-// MENTIONS & COMPOSER LOGIC
+// 🎙️ AUDIO RECORDING LOGIC (GLOBAL)
 // ==========================================
-
-// ✅ AUDIO RECORDING LOGIC
 let mediaRecorder;
 let audioChunks = [];
 window.toggleAudioRecording = async function() {
@@ -1362,11 +1317,11 @@ window.toggleAudioRecording = async function() {
         mediaRecorder.onstop = () => {
             const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
             const audioFile = new File([audioBlob], `VoiceNote_${new Date().toLocaleTimeString().replace(/:/g,'-')}.webm`, { type: 'audio/webm' });
-            if(pendingReplyFiles.length < 10) {
+            if(pendingReplyFiles && pendingReplyFiles.length < 10) {
                 pendingReplyFiles.push(audioFile);
                 if(typeof renderReplyFileList === 'function') renderReplyFileList();
             }
-            stream.getTracks().forEach(track => track.stop()); // Free mic
+            stream.getTracks().forEach(track => track.stop());
         };
         mediaRecorder.start();
         micBtn.classList.remove('text-slate-500');
@@ -1376,6 +1331,39 @@ window.toggleAudioRecording = async function() {
     }
 };
 
+window.toggleInlineAudioRecording = async function(btn) {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+        btn.classList.remove('text-red-500', 'animate-pulse');
+        btn.classList.add('text-slate-600');
+        return;
+    }
+    try {
+        activeInlineBox = btn.closest('[data-id="inline-reply-box"]');
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            const audioFile = new File([audioBlob], `VoiceNote_${new Date().toLocaleTimeString().replace(/:/g,'-')}.webm`, { type: 'audio/webm' });
+            if(inlinePendingFiles && inlinePendingFiles.length < 10) {
+                inlinePendingFiles.push(audioFile);
+                if(typeof renderInlineFileList === 'function') renderInlineFileList();
+            }
+            stream.getTracks().forEach(track => track.stop());
+        };
+        mediaRecorder.start();
+        btn.classList.remove('text-slate-600');
+        btn.classList.add('text-red-500', 'animate-pulse');
+    } catch(e) {
+        showCustomDialog("Microphone Error", "Could not access microphone.", false);
+    }
+};
+
+// ==========================================
+// MENTIONS & COMPOSER LOGIC
+// ==========================================
 window.openAssignTask = function() {
     if (!currentUser || !currentUser.email) {
         showCustomDialog("Notice", "User not logged in properly. Cannot find email.", false);
@@ -1535,7 +1523,7 @@ window.setReplyUserText = function(idx, text) { replyComposerState.recipients[id
 // ==========================================
 window.openEditCaseModal = function() {
     document.getElementById('edit_subject').value = document.getElementById('detail-subject').innerText;
-    document.getElementById('edit_details').value = document.getElementById('detail-details').innerText;
+    document.getElementById('edit_details_rich').innerHTML = document.getElementById('detail-details').innerHTML;
     currentEditLabels = new Set(Array.from(document.getElementById('detail-labels').children).map(span => span.innerText));
     renderEditLabels();
     
@@ -1574,7 +1562,7 @@ window.saveCaseEdits = async function() {
                 if(result && result.url) finalUrls.push(result.url);
             }
         }
-        await apiCall('updateCaseDetails', { id: document.getElementById('detail-conv-id').value, subject: document.getElementById('edit_subject').value.trim(), details: document.getElementById('edit_details').value.trim(), labels: Array.from(currentEditLabels), attachments: finalUrls, userEmail: currentUser.email });
+        await apiCall('updateCaseDetails', { id: document.getElementById('detail-conv-id').value, subject: document.getElementById('edit_subject').value.trim(), details: document.getElementById('edit_details_rich').innerHTML.trim(), labels: Array.from(currentEditLabels), attachments: finalUrls, userEmail: currentUser.email });
         document.getElementById('editCaseModal').classList.add('hidden');
         loadConversations(); closeCaseDetail(); 
     } catch(e) { showCustomDialog("Error", "Failed to save edits.", false); } finally { btn.innerText = "Save Changes"; btn.disabled = false; }
@@ -1626,7 +1614,6 @@ window.openCaseDetail = function(cardEl) {
 
       const dataset = card.dataset; 
       const convId = String(dataset.convId || "").trim();
-      // 🔥 AUTO-UNSNOOZE: Agar Reply aane par case Live hua tha, toh open karte hi hamesha ke liye Unsnooze kar do
       const rawSnooze = parseInt(dataset.snoozeRaw || 0, 10);
       const currentSafeSnooze = parseInt(dataset.snooze || 0, 10);
       
@@ -1640,10 +1627,13 @@ window.openCaseDetail = function(cardEl) {
       const creatorName = card.querySelector('[data-id="author"]').innerText;
       document.getElementById('detail-author').innerText = creatorName; 
       document.getElementById('detail-timestamp').innerText = card.querySelector('[data-id="timestamp"]').innerText;
-      document.getElementById('detail-details').innerText = card.querySelector('[data-id="details"]').innerText;
       
-      // ✅ APPLY FORMATTING & CLICKABLE LINKS TO INITIAL MESSAGE
-      document.getElementById('detail-message').innerHTML = window.makeLinksClickable(card.querySelector('[data-id="message"]').innerHTML);
+      // ✅ FORMAT FETCHING AND CLICKABLE LINKS FOR DETAILS & MESSAGE
+      const rawDetails = card.querySelector('[data-id="details"]').innerHTML;
+      const rawMsg = card.querySelector('[data-id="message"]').innerHTML;
+      
+      document.getElementById('detail-details').innerHTML = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(rawDetails) : rawDetails;
+      document.getElementById('detail-message').innerHTML = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(rawMsg) : rawMsg;
       
       document.getElementById('detail-labels').innerHTML = card.querySelector('[data-id="labels-container"]').innerHTML; 
       document.getElementById('detail-status-badge').innerHTML = card.querySelector('[data-id="status-badge"]').outerHTML;
@@ -1680,12 +1670,10 @@ window.openCaseDetail = function(cardEl) {
       
       unarchiveBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden'); snoozeBtn.classList.add('hidden');
       
-      // 1. Archive Button: SIRF ADMIN ke liye
       if (status === 'Archived') { 
           unarchiveBtn.classList.remove('hidden');
       }
       
-      // 2. Snooze / Un-Snooze: SABKE LIYE (Kyunki ye ab personal hai)
       if (status !== 'Archived') {
           if (isSnoozed) { unsnoozeBtn.classList.remove('hidden'); } 
           else { snoozeBtn.classList.remove('hidden'); }
@@ -1939,7 +1927,7 @@ function renderThreadHTML(list, level = 0) {
                         <span class="text-[10px] text-slate-500 font-medium ml-auto">${new Date(c.timestamp).toLocaleString()}</span>
                     </div>
                     
-                    <div class="rich-text text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">${makeLinksClickable(c.text)}</div>
+                    <div class="rich-text text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">${typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(c.text) : c.text}</div>
                     ${attachmentPreviewHtml}
                     
                     <div class="mt-3 flex gap-3 items-center text-xs border-t border-slate-200/50 pt-2">
@@ -1963,6 +1951,9 @@ function renderThreadHTML(list, level = 0) {
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
                                     <input type="file" multiple class="hidden inline-file-input" onchange="handleInlineFileSelect(event, this)">
                                 </label>
+                                <button type="button" class="text-slate-600 hover:text-red-600 transition-colors p-1 rounded hover:bg-white/50 inline-mic-btn" onclick="toggleInlineAudioRecording(this)" title="Record Voice Note">
+                                    <i class="fas fa-microphone"></i>
+                                </button>
                                 <button type="button" class="px-4 py-1.5 bg-indigo-600 text-white text-[11px] font-bold rounded-lg hover:bg-indigo-700 shadow-sm transition-colors" onclick="submitInlineReply(this)">Send</button>
                             </div>
                         </div>
@@ -2232,7 +2223,6 @@ window.submitInlineReply = async function(btn) {
     if(!msgHTML && inlinePendingFiles.length === 0) return showCustomDialog("Notice", "Please write a message or attach a file.", false);
     const caseId = document.getElementById('detail-conv-id').value;
     
-    // 🔥 FIX: Extract all tagged emails to send to backend as receivers
     const mentionedEmails = Array.from(inputDiv.querySelectorAll('.mention-badge'))
         .map(badge => badge.dataset.email)
         .filter(Boolean)
@@ -2254,7 +2244,6 @@ window.submitInlineReply = async function(btn) {
         }
 
         const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
-        // 🔥 FIX: Added 'receiver: mentionedEmails' to payload
         const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, receiver: mentionedEmails, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId };
         
         // ⚡ 1. INSTANT LOCAL UI RENDER
@@ -2265,7 +2254,7 @@ window.submitInlineReply = async function(btn) {
              caseId: String(caseId).trim(),
              timestamp: new Date().getTime(),
              sender: localSenderName,
-             receiver: mentionedEmails, // 🔥 FIX: Set local receiver
+             receiver: mentionedEmails, 
              text: msgHTML,
              attachmentUrl: fileUrl,
              attachmentFileName: fileName,
@@ -2278,7 +2267,6 @@ window.submitInlineReply = async function(btn) {
              threadColor: payload.threadColor || '#f8fafc'
          });
 
-        // 🔥 Clear the Ask notification once replied
         if (payload.parentAskId) {
             notifications = notifications.filter(n => n.askId !== payload.parentAskId && n.id !== payload.parentAskId);
             unreadCount = notifications.length;
@@ -2381,12 +2369,10 @@ window.createNewLabel = async function() { const val = document.getElementById('
 
 window.openModal = function() { 
     document.getElementById('appModal').classList.remove('hidden'); 
-    pendingFiles = []; 
-    renderFileList(); 
+    pendingFiles = []; renderFileList(); 
     
-    // ✅ CLEAR NEW RICH TEXT AREA
-    const richEl = document.getElementById('f_message_rich');
-    if(richEl) richEl.innerHTML = ''; 
+    if(document.getElementById('f_message_rich')) document.getElementById('f_message_rich').innerHTML = ''; 
+    if(document.getElementById('f_details_rich')) document.getElementById('f_details_rich').innerHTML = ''; 
     
     document.getElementById('new_case_member_search').value = '';
     composerRecipients = []; composerRecipients.push({ name: currentUser.name || currentUser.email, email: currentUser.email, role: 'Admin' }); 
@@ -2407,12 +2393,12 @@ window.handleFormSubmit = async function(e) {
             } 
         } 
         
-        // ✅ FETCH TEXT FROM NEW RICH TEXT DIV
+        // ✅ FETCH TEXT FROM NEW RICH TEXT DIVS
         const payload = { 
             createdBy: currentUser.email || currentUser.name, 
             subject: document.getElementById('f_subject').value, 
-            details: document.getElementById('f_details').value, 
-            message: document.getElementById('f_message_rich').innerHTML || '', 
+            details: document.getElementById('f_details_rich') ? document.getElementById('f_details_rich').innerHTML : '', 
+            message: document.getElementById('f_message_rich') ? document.getElementById('f_message_rich').innerHTML : '', 
             labels: Array.from(selectedLabels), 
             adminEmails: composerRecipients.filter(r => r.role === 'Admin').map(r => r.email), 
             userEmails: composerRecipients.filter(r => r.role === 'User').map(r => r.email), 
@@ -2435,6 +2421,7 @@ async function loadConversations() {
     // ✅ CALCULATE TAB COUNTS
     let counts = { Live: 0, Snooze: 0, Archive: 0 };
     const uEmail = (currentUser.email || '').toLowerCase();
+    const uName = (currentUser.name || '').toLowerCase();
     
     allCasesData.forEach(c => {
         let originalSnoozeMs = parseInt(c.snoozeTime || "0", 10);
@@ -2457,7 +2444,6 @@ async function loadConversations() {
 
     if(allCasesData.length === 0) { feed.innerHTML = `<p class="text-center py-10 text-slate-500 font-medium">No cases found.</p>`; return; }
     
-    const uName = (currentUser.name || '').toLowerCase();
     const fragment = document.createDocumentFragment();
 
     allCasesData.forEach(conv => {
@@ -2538,10 +2524,10 @@ async function loadConversations() {
       
       cardDiv.querySelector('[data-id="conv-id"]').textContent = conv.id; 
       cardDiv.querySelector('[data-id="subject"]').textContent = conv.subject; 
-      cardDiv.querySelector('[data-id="details"]').textContent = conv.details;
       
-      // ✅ APPLY CLICKABLE LINKS & FORMATTING TO HIDDEN MESSAGE DATA
-      cardDiv.querySelector('[data-id="message"]').innerHTML = window.makeLinksClickable(conv.message); 
+      // ✅ APPLY FORMATTING & CLICKABLE LINKS TO CARD PREVIEWS
+      cardDiv.querySelector('[data-id="details"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.details) : conv.details;
+      cardDiv.querySelector('[data-id="message"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.message) : conv.message; 
       
       cardDiv.querySelector('[data-id="author"]').textContent = creatorName; 
       cardDiv.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString(); 
