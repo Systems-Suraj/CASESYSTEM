@@ -11,7 +11,8 @@ document.addEventListener('focusin', (e) => {
       e.target.tagName === 'TEXTAREA' || 
       e.target.tagName === 'INPUT' ||
       e.target.id === 'f_details_rich' ||
-      e.target.id === 'f_message_rich'
+      e.target.id === 'f_message_rich' ||
+      e.target.id === 'edit_details_rich'
   )) {
     window.isUserTypingGlobal = true;
     activeInputElement = e.target;
@@ -24,7 +25,8 @@ document.addEventListener('focusout', (e) => {
       e.target.tagName === 'TEXTAREA' || 
       e.target.tagName === 'INPUT' ||
       e.target.id === 'f_details_rich' ||
-      e.target.id === 'f_message_rich'
+      e.target.id === 'f_message_rich' ||
+      e.target.id === 'edit_details_rich'
   )) {
     setTimeout(() => {
       window.isUserTypingGlobal = false;
@@ -36,7 +38,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v32";
+const APP_VERSION = "v33";
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -49,7 +51,6 @@ function checkAppUpdate() {
     console.log("🔄 New version detected");
     localStorage.setItem("app_version", APP_VERSION);
 
-    // 🔥 FORCE CLEAN RELOAD (WITH TYPING PROTECTION)
     setTimeout(() => {
       if (!window.isUserTypingGlobal) {
           window.location.reload(true);
@@ -95,7 +96,6 @@ if (firebase.messaging && firebase.messaging.isSupported && firebase.messaging.i
           const receivers = data.receiver.split(',').map(e => e.toLowerCase().trim());
           const myEmail = currentUser.email.toLowerCase().trim();
           if (!receivers.includes(myEmail)) {
-              console.log("🔕 Ignored: Notification is for someone else.");
               return; 
           }
       }
@@ -112,15 +112,11 @@ if (firebase.messaging && firebase.messaging.isSupported && firebase.messaging.i
 
       if (typeof showToast === "function") {
         showToast(title, body, caseId);
-      } else {
-        console.log("🔔 " + title + " - " + body);
       }
-
     } catch (err) {
       console.error("❌ Foreground notification error:", err);
     }
   });
-
 } else {
   console.log("⚠️ Firebase messaging not supported on this device");
 }
@@ -203,13 +199,8 @@ async function apiCall(action, params = {}, retries = 2) {
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'text/plain;charset=utf-8' 
-            },
-            body: JSON.stringify({
-                action: action,
-                params: params
-            }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: action, params: params }),
             credentials: 'omit' 
         });
         const text = await response.text();
@@ -280,16 +271,12 @@ let locallySeenNotifications = new Set();
 const tingSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
 function addNotification(msg) {
 
-  if (msg.status && String(msg.status).toLowerCase().trim() === 'closed') {
-    return;
-  }
+  if (msg.status && String(msg.status).toLowerCase().trim() === 'closed') return;
 
   if (msg.seen && currentUser?.email && msg.type !== 'Ask') {
       const seenArr = String(msg.seen).toLowerCase().split(',').map(e => e.trim());
       const myEmail = currentUser.email.toLowerCase().trim();
-      if (seenArr.includes(myEmail)) {
-          return;
-      }
+      if (seenArr.includes(myEmail)) return;
   }
 
   if (msg.sender && currentUser?.email && msg.sender.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return;
@@ -298,21 +285,14 @@ function addNotification(msg) {
   if (msg.receiver && currentUser?.email) {
       const receivers = msg.receiver.split(',').map(e => e.toLowerCase().trim());
       const myEmail = currentUser.email.toLowerCase().trim();
-      if (!receivers.includes(myEmail)) {
-          return;
-      }
+      if (!receivers.includes(myEmail)) return;
   }
 
   const activeCaseId = document.getElementById('detail-conv-id')?.value;
-  const isCaseViewOpen = document.getElementById('caseDetailView') && 
-                         !document.getElementById('caseDetailView').classList.contains('hidden');
+  const isCaseViewOpen = document.getElementById('caseDetailView') && !document.getElementById('caseDetailView').classList.contains('hidden');
   const msgCaseId = msg.caseId || msg.id || "";
 
-  if (isCaseViewOpen && 
-      String(activeCaseId).trim().toLowerCase() === String(msgCaseId).trim().toLowerCase() && 
-      msg.type !== 'Ask') {
-      return;
-  }
+  if (isCaseViewOpen && String(activeCaseId).trim().toLowerCase() === String(msgCaseId).trim().toLowerCase() && msg.type !== 'Ask') return;
 
   let cleanText = msg.text || msg.body || "New activity on your case";
   cleanText = cleanText.replace(/<[^>]*>?/gm, '');
@@ -374,8 +354,7 @@ function updateNotificationUI() {
             <div class="text-xs text-slate-600 line-clamp-2 w-full leading-relaxed">${escapeHTML(n.text)}</div>
           </div>
         `).join("")}
-    </div>
-`;
+    </div>`;
       }
   }
 }
@@ -396,33 +375,26 @@ window.openFromNotification = function(caseId, uniqueId) {
   const panel = document.getElementById("notifPanel");
   if (panel) panel.classList.add("hidden");
   if(!caseId || caseId === 'undefined') {
-      showCustomDialog("Notice", "Case ID missing hai.", false);
-      return;
+      showCustomDialog("Notice", "Case ID missing hai.", false); return;
   }
 
   const cleanCaseId = String(caseId).trim().toLowerCase();
-  
-  const card = [...document.querySelectorAll('[data-conv-id]')]
-      .find(el => String(el.dataset.convId).trim().toLowerCase() === cleanCaseId);
+  const card = [...document.querySelectorAll('[data-conv-id]')].find(el => String(el.dataset.convId).trim().toLowerCase() === cleanCaseId);
   if (uniqueId) {
       const notif = notifications.find(n => n.id === uniqueId);
-      if (notif && notif.type !== 'Ask') { 
-          locallySeenNotifications.add(uniqueId);
-      }
+      if (notif && notif.type !== 'Ask') locallySeenNotifications.add(uniqueId);
   }
 
   notifications = notifications.filter(n => n.id !== uniqueId || n.type === 'Ask');
   unreadCount = notifications.length;
   updateNotificationUI();
+  
   if (uniqueId && currentUser?.email) {
-          apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email, userName: currentUser.name || currentUser.email }).catch(e => console.log(e));
+      apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email, userName: currentUser.name || currentUser.email }).catch(e => console.log(e));
   }
 
-  if (card) {
-      window.openCaseDetail(card);
-  } else {
-      showCustomDialog("Notice", "Yeh case ID abhi screen par loaded nahi hai. Please search box use karein.", false);
-  }
+  if (card) window.openCaseDetail(card);
+  else showCustomDialog("Notice", "Yeh case ID abhi screen par loaded nahi hai. Please search box use karein.", false);
 };
 
 function clearAllNotifications() {
@@ -435,22 +407,18 @@ async function fetchGlobalNotifications() {
     if(!currentUser || !currentUser.email) return;
     try {
         const unread = await apiCall('getUnreadNotifications', { reqUserEmail: currentUser.email });
-        if(unread && unread.length > 0) {
-            unread.reverse().forEach(msg => addNotification(msg));
-        }
-    } catch(e) { console.log("Global fetch skipped", e);
-    }
+        if(unread && unread.length > 0) unread.reverse().forEach(msg => addNotification(msg));
+    } catch(e) {}
 }
 
 document.addEventListener('click', function(e) {
     const panel = document.getElementById('notifPanel');
     const wrapper = document.getElementById('notifWrapper');
-    if (panel && !panel.classList.contains('hidden')) {
-        if (wrapper && !wrapper.contains(e.target)) {
-            panel.classList.add('hidden');
-        }
+    if (panel && !panel.classList.contains('hidden') && wrapper && !wrapper.contains(e.target)) {
+        panel.classList.add('hidden');
     }
 });
+
 function debounce(func, wait) {
   let timeout;
   return function(...args) {
@@ -507,42 +475,28 @@ function checkComposerRestrictions(editor, type = 'main') {
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
   checkAppUpdate();
-
-  fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ action: "ping" })
-  }).catch(e => console.log("Cold start ping skipped."));
-
+  fetch(API_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "ping" }) }).catch(e => {});
   checkAuthStatus();
+  
   const tzoffset = (new Date()).getTimezoneOffset() * 60000;
   const localISOTime = (new Date(Date.now() - tzoffset)).toISOString().slice(0, 16);
   if(document.getElementById('snoozeDateTime')) document.getElementById('snoozeDateTime').min = localISOTime;
 
-  function handleScroll(e) {
-      if (document.getElementById("caseDetailView") && document.getElementById("caseDetailView").classList.contains('hidden')) return;
-      const convEl = document.getElementById("detail-conv-id");
-      
-      if(!convEl) return;
-      const caseId = convEl.value;
-      if (!caseId) return;
-
-      const el = e.target;
-      if (el === document || el === window) {
-          if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 100) {
-              loadCommentsPaginated(caseId);
-          }
-      } else if (el && el.classList && el.classList.contains('overflow-y-auto')) {
-          if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
-              loadCommentsPaginated(caseId);
-          }
-      }
-  }
-  
   let ticking = false;
   function optimizedScroll(e) {
     if (!ticking) {
-      window.requestAnimationFrame(() => { handleScroll(e); ticking = false; });
+      window.requestAnimationFrame(() => { 
+          if (document.getElementById("caseDetailView") && document.getElementById("caseDetailView").classList.contains('hidden')) return;
+          const convEl = document.getElementById("detail-conv-id");
+          if(!convEl || !convEl.value) return;
+          const el = e.target;
+          if (el === document || el === window) {
+              if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 100) loadCommentsPaginated(convEl.value);
+          } else if (el && el.classList && el.classList.contains('overflow-y-auto')) {
+              if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) loadCommentsPaginated(convEl.value);
+          }
+          ticking = false; 
+      });
       ticking = true;
     }
   }
@@ -556,6 +510,7 @@ document.addEventListener('click', function(e) {
         document.querySelectorAll('[id$="Dropdown"]').forEach(d => toggleDropdown(d.id, true));
     }
 });
+
 document.addEventListener('keydown', function(e) {
     const target = e.target;
     if (target && (target.id === 'detail-reply-input' || target.classList?.contains('inline-reply-input'))) {
@@ -586,32 +541,22 @@ document.addEventListener('keydown', function(e) {
         }
     }
 });
+
 document.addEventListener('paste', function(e) {
     const target = e.target;
     if (target && (target.id === 'detail-reply-input' || target.classList?.contains('inline-reply-input'))) {
         const editor = target;
         const hasInitialMention = !!editor.querySelector('.mention-badge');
-        
         if (!hasInitialMention) {
             e.preventDefault();
             showCustomDialog("Mention Required ⚠️", "Please @mention someone from the list before pasting anything.", false);
             return;
         }
-        
         e.preventDefault();
         const text = (e.clipboardData || window.clipboardData).getData('text/plain');
         document.execCommand('insertText', false, text);
     }
 });
-function setCursorToEnd(editor) {
-    editor.focus();
-    const sel = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(false);
-    sel.removeAllRanges();
-    sel.addRange(range);
-}
 
 function showCustomDialog(title, message, isConfirm, onConfirmCallback) {
     document.getElementById('dialogTitle').innerText = title;
@@ -636,63 +581,44 @@ function closeDialog() { document.getElementById('customDialog').classList.add('
 async function initDataLoad() {
     if (isInitialLoadDone) return;
     isInitialLoadDone = true;
-    
     await fetchUsersForMentions();
-    
     loadConversations();
     loadLabelsForForm();
 }
 
 window.onload = function() {
-    if (currentUser) {
-        initDataLoad();
-    }
+    if (currentUser) initDataLoad();
 };
 
 // ==========================================
-// 🔥 SIMPLE DIRECT LOGIN LOGIC
+// 🔥 LOGIN / LOGOUT LOGIC
 // ==========================================
 window.handleNextOrLogin = function() {
   const idVal = document.getElementById("email").value.trim();
   const pwd = document.getElementById("password").value.trim();
   const statusEl = document.getElementById("errorText");
   const loginBtn = document.getElementById("loginBtn");
-  if (!idVal) {
-    statusEl.style.display = "block";
-    statusEl.innerText = "Enter ID first";
-    return;
-  }
-
-  if (!pwd) {
-    statusEl.style.display = "block";
-    statusEl.innerText = "Enter Password";
-    return;
-  }
+  
+  if (!idVal) { statusEl.style.display = "block"; statusEl.innerText = "Enter ID first"; return; }
+  if (!pwd) { statusEl.style.display = "block"; statusEl.innerText = "Enter Password"; return; }
 
   loginBtn.disabled = true;
   statusEl.style.display = "block";
   statusEl.innerText = "Checking...";
-  apiCall('loginUser', { 
-    mobileOrEmail: idVal,
-    password: pwd,
-    isAutoLogin: false 
-  })
+  
+  apiCall('loginUser', { mobileOrEmail: idVal, password: pwd, isAutoLogin: false })
   .then(res => {
     loginBtn.disabled = false;
-
     if (res && res.user) {
       try {
         localStorage.setItem("user", JSON.stringify(res.user));
         sessionStorage.setItem("user", JSON.stringify(res.user));
-      } catch(e) {
-        console.log("Storage failed:", e);
-      }
+      } catch(e) {}
       showAppScreen(res.user);
     } else {
       statusEl.innerText = res.message || "Invalid Login";
     }
-  })
-  .catch(err => {
+  }).catch(err => {
     loginBtn.disabled = false;
     statusEl.innerText = "Server Error: Make sure API_URL is correct.";
   });
@@ -700,18 +626,9 @@ window.handleNextOrLogin = function() {
 
 function checkAuthStatus() {
   let user = null;
-  try {
-    user = JSON.parse(localStorage.getItem("user"));
-  } catch(e) {}
-  if (!user) {
-    try {
-      user = JSON.parse(sessionStorage.getItem("user"));
-    } catch(e) {}
-  }
-  if (user) {
-    showAppScreen(user);
-    return;
-  }
+  try { user = JSON.parse(localStorage.getItem("user")); } catch(e) {}
+  if (!user) { try { user = JSON.parse(sessionStorage.getItem("user")); } catch(e) {} }
+  if (user) showAppScreen(user);
 }
 
 window.logoutUser = function() { 
@@ -722,7 +639,6 @@ window.logoutUser = function() {
   document.getElementById("appView").classList.add("hidden"); 
   document.getElementById("loginView").classList.remove("hidden");
   document.getElementById("email").value = "";
-  document.getElementById("email").disabled = false;
   document.getElementById("password").value = "";
   document.getElementById("errorText").style.display = "none";
   checkAuthStatus();
@@ -730,9 +646,7 @@ window.logoutUser = function() {
 
 function showAppScreen(userObj) {
   currentUser = userObj;
-  if (document.getElementById("loggedInUserEmail")) {
-      document.getElementById("loggedInUserEmail").innerText = userObj.name || userObj.email;
-  }
+  if (document.getElementById("loggedInUserEmail")) document.getElementById("loggedInUserEmail").innerText = userObj.name || userObj.email;
   
   if (document.getElementById("loginView")) document.getElementById("loginView").classList.add("hidden");
   if (document.getElementById("appView")) document.getElementById("appView").classList.remove("hidden");
@@ -740,58 +654,27 @@ function showAppScreen(userObj) {
   fetchGlobalNotifications();
   if(globalNotifInterval) clearInterval(globalNotifInterval);
   globalNotifInterval = setInterval(fetchGlobalNotifications, 15000);
-  if (typeof initNotifications === 'function') {
-     initNotifications(userObj);
-  }
+  if (typeof initNotifications === 'function') initNotifications(userObj);
 
   initDataLoad();
-  setTimeout(() => {
-    if (window.Android && userObj.email) {
-      try { Android.sendUserEmail(userObj.email); } catch(e) {}
-    }
-  }, 2000);
+  setTimeout(() => { if (window.Android && userObj.email) { try { Android.sendUserEmail(userObj.email); } catch(e) {} } }, 2000);
 }
 
-// ==========================================
-// 🔥 FIREBASE TOKEN GENERATOR & MULTI-DEVICE SYNC
-// ==========================================
 async function initNotifications(user) {
   try {
-    console.log("🔥 Checking Web Token for:", user.email);
-    if (!('Notification' in window)) {
-        console.log("❌ This browser does not support desktop notification");
-        return;
-    }
-
+    if (!('Notification' in window)) return;
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") {
-      console.warn("❌ Web Push Permission Denied by User!");
-      alert("⚠️ Web Notifications Blocked: Please click the Lock 🔒 icon in the URL bar and ALLOW Notifications!");
-      return;
-    }
-
+    if (permission !== "granted") return;
     const registration = await navigator.serviceWorker.register('service-worker.js');
     await navigator.serviceWorker.ready;
-    console.log("✅ Service Worker Ready!");
     const token = await messaging.getToken({
       vapidKey: "BGF23YCUEVWA9ZKDyD0NduAyLU_Cijhc_ZsO2UMAb8kQTThWSEBMJjnE3Qq3Ad1ys4ms1vETk3KyBeffAx9lHEw",
       serviceWorkerRegistration: registration
     });
     if (token) {
-      console.log("✅ WEB TOKEN GENERATED:", token);
-      await apiCall('saveToken', {
-        person: user.name || user.email,
-        email: user.email,
-        token: token,
-        platform: "web" 
-      });
-      console.log("✅ Web Token Saved to Database!");
-    } else {
-      console.log("❌ No web token could be generated.");
+      await apiCall('saveToken', { person: user.name || user.email, email: user.email, token: token, platform: "web" });
     }
-  } catch (err) {
-    console.error("❌ Notification Error in app.js:", err);
-  }
+  } catch (err) { console.error("Notification Error:", err); }
 }
 
 // ==========================================
@@ -890,30 +773,17 @@ function renderLookerDropdown(containerId, items, type) {
 window.toggleDropdown = function(id, forceClose = false) {
     const drop = document.getElementById(id);
     if(!drop) return;
-    
     const revertCheckboxes = (dropdownEl) => {
-        dropdownEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-            cb.checked = cb.hasAttribute('data-applied');
-        });
+        dropdownEl.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = cb.hasAttribute('data-applied'); });
     };
     if (forceClose) { 
-        drop.classList.add('hidden'); 
-        revertCheckboxes(drop);
+        drop.classList.add('hidden'); revertCheckboxes(drop);
     } else {
-        const isClosing = !drop.classList.contains('hidden');
-        if (isClosing) { 
-            drop.classList.add('hidden'); 
-            revertCheckboxes(drop);
+        if (!drop.classList.contains('hidden')) { 
+            drop.classList.add('hidden'); revertCheckboxes(drop);
         } else {
-            document.querySelectorAll('[id$="Dropdown"]').forEach(d => { 
-                if(d.id !== id) {
-                    d.classList.add('hidden'); 
-                    revertCheckboxes(d);
-                }
-             });
-            drop.classList.remove('hidden');
-            revertCheckboxes(drop);
-            
+            document.querySelectorAll('[id$="Dropdown"]').forEach(d => { if(d.id !== id) { d.classList.add('hidden'); revertCheckboxes(d); } });
+            drop.classList.remove('hidden'); revertCheckboxes(drop);
             const search = drop.querySelector('input[type="text"]');
             if(search) { search.value = ''; searchInDropdown(search, id); }
         }
@@ -951,52 +821,29 @@ window.applyLookerFilters = function(containerId, type) {
 window.resetAllFilters = function() {
     const filterInput = document.getElementById('filterId');
     if (filterInput) filterInput.value = '';
-
-    document.querySelectorAll('.flabel').forEach(cb => {
-        cb.checked = false;
-        cb.removeAttribute('data-applied');
-    });
+    document.querySelectorAll('.flabel').forEach(cb => { cb.checked = false; cb.removeAttribute('data-applied'); });
     const labelsBtnText = document.getElementById('labelsDropdownText');
-    if (labelsBtnText) {
-        labelsBtnText.innerText = 'Filter Labels';
-        labelsBtnText.classList.remove('text-indigo-700', 'font-extrabold');
-    }
-
-    document.querySelectorAll('.fmember').forEach(cb => {
-        cb.checked = false;
-        cb.removeAttribute('data-applied');
-    });
+    if (labelsBtnText) { labelsBtnText.innerText = 'Filter Labels'; labelsBtnText.classList.remove('text-indigo-700', 'font-extrabold'); }
+    document.querySelectorAll('.fmember').forEach(cb => { cb.checked = false; cb.removeAttribute('data-applied'); });
     const membersBtnText = document.getElementById('membersDropdownText');
-    if (membersBtnText) {
-        membersBtnText.innerText = 'Filter Members';
-        membersBtnText.classList.remove('text-indigo-700', 'font-extrabold');
-    }
-
+    if (membersBtnText) { membersBtnText.innerText = 'Filter Members'; membersBtnText.classList.remove('text-indigo-700', 'font-extrabold'); }
     document.querySelectorAll('.dropdown-item').forEach(item => item.style.display = 'flex');
     document.querySelectorAll('[id$="Dropdown"] input[type="text"]').forEach(inp => inp.value = '');
-
     applyFilters();
 };
 
-// ==========================================
-// ADVANCED FILTER LOGIC
-// ==========================================
 window.applyFilters = debounce(function() {
     try {
         const filterInput = document.getElementById('filterId');
         if(!filterInput) return;
         const idQuery = filterInput.value.toLowerCase().trim();
-        
         const checkedLabels = Array.from(document.querySelectorAll('.flabel[data-applied="true"]')).map(cb => cb.value);
         const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => String(cb.value).toLowerCase().trim());
-        
-        let visibleLabels = new Set();
-        let visibleMembers = new Set();
+        let visibleLabels = new Set(); let visibleMembers = new Set();
 
         Array.from(document.getElementById('conversationFeed').children).forEach(wrapper => {
             const card = wrapper.classList.contains('card-main') ? wrapper : wrapper.querySelector('.card-main');
             if(!card || !card.dataset.convId) return; 
-            
             const isArchived = card.dataset.status === 'Archived';
             const isSnoozed = parseInt(card.dataset.snooze || 0) > Date.now();
             let showTab = false;
@@ -1006,12 +853,10 @@ window.applyFilters = debounce(function() {
 
             let cardLabels = card._cachedLabels || JSON.parse(card.dataset.labels || '[]');
             if(!Array.isArray(cardLabels)) cardLabels = [];
-            
             let cardMembers = card._cachedMembers || JSON.parse(card.dataset.members || '[]');
             if(!Array.isArray(cardMembers)) cardMembers = [];
             
             const matchesLabels = checkedLabels.length === 0 || checkedLabels.every(l => cardLabels.includes(l));
-            
             const matchesMembers = checkedMembers.length === 0 || checkedMembers.every(m => 
                 cardMembers.some(cm => {
                     if (!cm) return false;
@@ -1020,41 +865,23 @@ window.applyFilters = debounce(function() {
                     return cmEmail === m || cmName === m;
                 })
             );
-            const matchesId = !idQuery || 
-                              String(card.dataset.convId).toLowerCase().includes(idQuery) || 
-                              (card.dataset.subject && String(card.dataset.subject).toLowerCase().includes(idQuery));
-            
+            const matchesId = !idQuery || String(card.dataset.convId).toLowerCase().includes(idQuery) || (card.dataset.subject && String(card.dataset.subject).toLowerCase().includes(idQuery));
             const baseMatch = showTab && matchesId;
             
-            if (baseMatch && matchesLabels && matchesMembers) {
-                wrapper.style.display = 'block';
-            } else {
-                wrapper.style.display = 'none';
-            }
+            if (baseMatch && matchesLabels && matchesMembers) wrapper.style.display = 'block';
+            else wrapper.style.display = 'none';
 
-            if (baseMatch && matchesMembers) {
-                cardLabels.forEach(l => visibleLabels.add(String(l)));
-            }
-            if (baseMatch && matchesLabels) {
-                cardMembers.forEach(m => {
-                    if(m) {
-                        visibleMembers.add(String(m).toLowerCase().trim());
-                        visibleMembers.add(String(window.getUserNameByEmail(m)).toLowerCase().trim());
-                    }
-                });
-            }
+            if (baseMatch && matchesMembers) cardLabels.forEach(l => visibleLabels.add(String(l)));
+            if (baseMatch && matchesLabels) cardMembers.forEach(m => {
+                if(m) { visibleMembers.add(String(m).toLowerCase().trim()); visibleMembers.add(String(window.getUserNameByEmail(m)).toLowerCase().trim()); }
+            });
         });
 
         document.querySelectorAll('#labelsDropdown .dropdown-item').forEach(item => {
             const cb = item.querySelector('input[type="checkbox"]');
             if(!cb) return;
-            if (cb.hasAttribute('data-applied') || visibleLabels.has(cb.value)) {
-                item.style.display = 'flex';
-                item.dataset.available = 'true';
-            } else {
-                item.style.display = 'none';
-                item.dataset.available = 'false';
-            }
+            if (cb.hasAttribute('data-applied') || visibleLabels.has(cb.value)) { item.style.display = 'flex'; item.dataset.available = 'true'; } 
+            else { item.style.display = 'none'; item.dataset.available = 'false'; }
         });
         
         document.querySelectorAll('#membersDropdown .dropdown-item').forEach(item => {
@@ -1062,40 +889,23 @@ window.applyFilters = debounce(function() {
             if(!cb) return;
             const valLower = String(cb.value).toLowerCase().trim();
             const isVisible = visibleMembers.has(valLower);
-
-            if (cb.hasAttribute('data-applied') || isVisible) {
-                item.style.display = 'flex';
-                item.dataset.available = 'true';
-            } else {
-                item.style.display = 'none';
-                item.dataset.available = 'false';
-            }
+            if (cb.hasAttribute('data-applied') || isVisible) { item.style.display = 'flex'; item.dataset.available = 'true'; } 
+            else { item.style.display = 'none'; item.dataset.available = 'false'; }
         });
-    } catch(e) { console.error("Filter Error:", e); }
+    } catch(e) {}
 }, 150);
 
 // ==========================================
 // ACTIONS: ARCHIVE, SNOOZE
 // ==========================================
 window.processBulkArchive = function() {
-  const selectedIds = Array.from(document.querySelectorAll('.bulk-archive-cb:checked')).map(cb => {
-      const card = cb.closest('[data-conv-id]');
-      return card ? String(card.dataset.convId).trim() : null;
-  }).filter(Boolean);
+  const selectedIds = Array.from(document.querySelectorAll('.bulk-archive-cb:checked')).map(cb => { const card = cb.closest('[data-conv-id]'); return card ? String(card.dataset.convId).trim() : null; }).filter(Boolean);
   if(selectedIds.length === 0) return showCustomDialog("Notice", "Please select at least one case to archive.", false);
   showCustomDialog("Confirm Archive", `Are you sure you want to archive ${selectedIds.length} selected case(s)?\n\nCase IDs: \n${selectedIds.join('\n')}`, true, async () => {
-      const btn = document.getElementById('bulkArchiveBtn'); 
-      btn.innerText = "Archiving..."; 
-      btn.disabled = true;
-      try { 
-          await apiCall('bulkArchive', { ids: selectedIds, user: currentUser.email || currentUser.name }); 
-          await loadConversations(); 
-      } catch(e) { 
-          showCustomDialog("Error", "Failed to archive.", false); 
-      } finally {
-          btn.innerText = "Archive Selected";
-          btn.disabled = false;
-      }
+      const btn = document.getElementById('bulkArchiveBtn'); btn.innerText = "Archiving..."; btn.disabled = true;
+      try { await apiCall('bulkArchive', { ids: selectedIds, user: currentUser.email || currentUser.name }); await loadConversations(); } 
+      catch(e) { showCustomDialog("Error", "Failed to archive.", false); } 
+      finally { btn.innerText = "Archive Selected"; btn.disabled = false; }
   });
 };
 
@@ -1103,89 +913,52 @@ window.processUnarchive = async function(btn) {
   const parent = btn.closest('[data-conv-id]');
   const convId = parent ? String(parent.dataset.convId).trim() : document.getElementById('detail-conv-id')?.value; 
   if(!convId) return;
-  
   btn.innerText = "Unarchiving..."; btn.disabled = true;
-  try { 
-      await apiCall('unarchiveCaseServer', { id: convId, user: currentUser.email || currentUser.name }); 
-      loadConversations();
-      if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
-  } catch(e) { 
-      showCustomDialog("Error", "Failed to unarchive.", false); 
-      btn.innerText = "📂 Un-Archive";
-      btn.disabled = false; 
-  }
+  try { await apiCall('unarchiveCaseServer', { id: convId, user: currentUser.email || currentUser.name }); loadConversations(); if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail(); } 
+  catch(e) { showCustomDialog("Error", "Failed to unarchive.", false); btn.innerText = "📂 Un-Archive"; btn.disabled = false; }
 };
 
 window.processUnsnooze = async function(btn) {
     const parent = btn.closest('[data-conv-id]');
     const convId = parent ? String(parent.dataset.convId).trim() : document.getElementById('detail-conv-id')?.value; 
     if(!convId) return;
-    
     btn.innerText = "Un-snoozing..."; btn.disabled = true;
-    try { 
-        await apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }); 
-        loadConversations();
-        if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail();
-    } catch(e) { 
-        showCustomDialog("Error", "Failed to un-snooze.", false);
-        btn.innerText = "🔔 Un-Snooze"; btn.disabled = false; 
-    }
+    try { await apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }); loadConversations(); if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail(); } 
+    catch(e) { showCustomDialog("Error", "Failed to un-snooze.", false); btn.innerText = "🔔 Un-Snooze"; btn.disabled = false; }
 };
 
 window.confirmSnooze = async function() {
     const dt = document.getElementById('snoozeDateTime').value;
-    if (!dt) { return showCustomDialog("Notice", "Please select a date/time.", false); }
-    
+    if (!dt) return showCustomDialog("Notice", "Please select a date/time.", false);
     const timestamp = new Date(dt).getTime();
-    if (isNaN(timestamp)) { return showCustomDialog("Error", "Invalid date/time selected", false); }
-
+    if (isNaN(timestamp)) return showCustomDialog("Error", "Invalid date/time selected", false);
     const caseId = String(document.getElementById('snoozeConvId').value).trim();
-    if (!caseId) { return showCustomDialog("Error", "Missing Case ID", false); }
+    if (!caseId) return showCustomDialog("Error", "Missing Case ID", false);
 
     let btn = document.activeElement;
-    if (!btn || btn.tagName !== 'BUTTON') { btn = document.querySelector('#snoozeModal button:last-of-type'); }
+    if (!btn || btn.tagName !== 'BUTTON') btn = document.querySelector('#snoozeModal button:last-of-type');
     const origText = btn ? btn.innerText : 'Snooze Now';
     if(btn) { btn.innerText = "Snoozing..."; btn.disabled = true; }
 
     try {
-        await apiCall('snoozeCase', { 
-            id: caseId, 
-            time: timestamp, 
-            userEmail: currentUser.email 
-        });
+        await apiCall('snoozeCase', { id: caseId, time: timestamp, userEmail: currentUser.email });
         document.getElementById('snoozeModal').classList.add('hidden');
         showCustomDialog("Success ✅", "Case Snoozed for you.", false);
-        
-        setTimeout(() => {
-            loadConversations();
-            if(!document.getElementById('caseDetailView').classList.contains('hidden')) { 
-                closeCaseDetail(); 
-            }
-        }, 500);
-    } catch (e) {
-        console.error("Snooze Error:", e);
-        showCustomDialog("Error", "Failed to snooze.\n" + e.message, false);
-    } finally {
-        if(btn) { btn.innerText = origText; btn.disabled = false; }
-    }
+        setTimeout(() => { loadConversations(); if(!document.getElementById('caseDetailView').classList.contains('hidden')) closeCaseDetail(); }, 500);
+    } catch (e) { showCustomDialog("Error", "Failed to snooze.\n" + e.message, false); } 
+    finally { if(btn) { btn.innerText = origText; btn.disabled = false; } }
 };
 
 window.openSnoozeModal = function(btn) { 
     const convId = document.getElementById('detail-conv-id')?.value;
-    if(!convId) {
-        showCustomDialog("Error", "Case ID not found.", false);
-        return;
-    }
+    if(!convId) return showCustomDialog("Error", "Case ID not found.", false);
     document.getElementById('snoozeConvId').value = String(convId).trim();
     document.getElementById('snoozeModal').classList.remove('hidden');
 };
 
 window.openSnoozeModalFromCard = function(btn) {
     const parent = btn.closest('[data-conv-id]');
-    if(!parent) {
-        showCustomDialog("Error", "Card ID not found.", false);
-        return;
-    }
+    if(!parent) return showCustomDialog("Error", "Card ID not found.", false);
     document.getElementById('snoozeConvId').value = String(parent.dataset.convId).trim();
     document.getElementById('snoozeModal').classList.remove('hidden');
 };
@@ -1394,6 +1167,64 @@ window.toggleInlineAudioRecording = async function(btn) {
         
     } catch(e) {
         showCustomDialog("Microphone Error", "Could not access microphone.", false);
+    }
+};
+
+window.toggleNewCaseAudioRecording = async function(btn) {
+    const recordingUI = btn.nextElementSibling;
+    const timerEl = recordingUI.querySelector('.new-case-recording-timer');
+    const textSpan = btn.querySelector('span');
+
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+        btn.classList.remove('bg-red-600', 'text-white', 'border-red-700', 'animate-pulse');
+        btn.classList.add('bg-red-50', 'text-red-600');
+        textSpan.innerText = "Record Audio";
+        btn.querySelector('i').className = "fas fa-microphone";
+        
+        recordingUI.classList.add('hidden');
+        recordingUI.classList.remove('flex');
+        clearInterval(recordTimerInterval);
+        return;
+    }
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            const audioFile = new File([audioBlob], `VoiceNote_${new Date().toLocaleTimeString().replace(/:/g,'-')}.webm`, { type: 'audio/webm' });
+            
+            if(pendingFiles && pendingFiles.length < 10) {
+                pendingFiles.push(audioFile);
+                if(typeof renderFileList === 'function') renderFileList();
+            } else {
+                showCustomDialog("Notice", "Max 10 attachments allowed.", false);
+            }
+            stream.getTracks().forEach(track => track.stop());
+        };
+        mediaRecorder.start();
+        
+        btn.classList.remove('bg-red-50', 'text-red-600');
+        btn.classList.add('bg-red-600', 'text-white', 'border-red-700');
+        textSpan.innerText = "Stop Recording";
+        btn.querySelector('i').className = "fas fa-stop";
+        
+        recordingUI.classList.remove('hidden');
+        recordingUI.classList.add('flex');
+        
+        recordSeconds = 0;
+        timerEl.innerText = "00:00";
+        recordTimerInterval = setInterval(() => {
+            recordSeconds++;
+            const min = String(Math.floor(recordSeconds / 60)).padStart(2, '0');
+            const sec = String(recordSeconds % 60).padStart(2, '0');
+            timerEl.innerText = `${min}:${sec}`;
+        }, 1000);
+        
+    } catch(e) {
+        showCustomDialog("Microphone Error", "Could not access microphone. Allow permissions.", false);
     }
 };
 
@@ -1664,7 +1495,6 @@ window.openCaseDetail = function(cardEl) {
       document.getElementById('detail-author').innerText = creatorName; 
       document.getElementById('detail-timestamp').innerText = card.querySelector('[data-id="timestamp"]').innerText;
       
-      // ✅ FORMAT FETCHING AND CLICKABLE LINKS FOR DETAILS & MESSAGE
       const rawDetails = card.querySelector('[data-id="details"]').innerHTML;
       const rawMsg = card.querySelector('[data-id="message"]').innerHTML;
       
@@ -1852,7 +1682,6 @@ async function fetchNewMessages() {
     if (!caseId || document.getElementById("caseDetailView").classList.contains("hidden") || isLoading) return;
     
     if (window.isUserTypingGlobal) {
-        console.log("⛔ Skipped thread refresh (user typing)");
         return;
     }
 
@@ -1899,7 +1728,7 @@ async function fetchNewMessages() {
                         params: {
                             notificationId: msg.uniqueId,
                             userEmail: currentUser.email,
-                            userName: currentUser.name || currentUser.email
+                            userName: currentUser.name || currentUser.email 
                         }
                     })
                 }).catch(() => console.log("Silent background update failed."));
@@ -1942,7 +1771,6 @@ function renderThreadHTML(list, level = 0) {
         let attachmentPreviewHtml = '';
         if (c.attachmentUrl) {
             const cleanUrlForPreview = c.attachmentUrl.replace(/\/view.*/, '/preview');
-            // ✅ AUDIO HEIGHT ADJUSTMENT
             const isAudio = c.attachmentFileName && c.attachmentFileName.match(/\.(mp3|wav|ogg|m4a|webm)$/i);
             const previewHeight = isAudio ? '80' : '300';
             
@@ -1952,7 +1780,6 @@ function renderThreadHTML(list, level = 0) {
         const parentAskIdForBackend = (c.type === 'Ask') ? c.askId : (c.parentAskId || '');
         const senderName = window.getUserNameByEmail(c.sender || 'Unknown');
 
-        // ✅ APPLY RICH TEXT AND CLICKABLE LINKS HERE
         return `
             <div class="mb-4 group" style="${indentStyle}" data-id="reply-container">
                 <div class="p-4 rounded-xl shadow-sm transition-all border border-slate-200/50" style="background-color: ${tColor}; border-left: 4px solid rgba(0,0,0,0.1);">
@@ -2048,7 +1875,6 @@ window.submitDetailReply = async function() {
             payloadToSend = { caseId: caseId, text: msgHTML, mentionType: replyComposerState.globalType || 'Message', sender: currentUser.email, receiver: replyComposerState.recipients.map(r => r.email).join(','), parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId };
         }
 
-        // ⚡ 1. INSTANT LOCAL UI UPDATE (0ms lag)
         const localSenderName = currentUser.name || currentUser.email;
         const payloads = Array.isArray(payloadToSend) ? payloadToSend : [payloadToSend];
         payloads.forEach(p => {
@@ -2072,20 +1898,18 @@ window.submitDetailReply = async function() {
                  threadColor: p.threadColor || '#f8fafc'
              });
         });
-        // 2. Clear Composer UI Instantly
+        
         inputDiv.innerHTML = ''; pendingReplyFiles = [];
         if(document.getElementById('reply_file_list')) renderReplyFileList();
         replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' }; window.setReplyGlobalType('Message');
         checkComposerRestrictions(document.getElementById('detail-reply-input'), 'main');
         
-        // 3. Re-render the chat feed and scroll to bottom
         renderAllCommentsLocally();
         setTimeout(() => {
             const scrollArea = document.getElementById("detail-thread-container").parentElement;
             if(scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
         }, 50);
         
-        // 4. NOW hit backend silently in background
         await apiCall('addNewComment', payloadToSend);
     } catch(e) { 
         showCustomDialog("Error", "Failed to post reply. Reason: \n" + (e.message || e), false);
@@ -2292,7 +2116,6 @@ window.submitInlineReply = async function(btn) {
         const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
         const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, receiver: mentionedEmails, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId };
         
-        // ⚡ 1. INSTANT LOCAL UI RENDER
         const localSenderName = currentUser.name || currentUser.email;
         seenMessages.add(tempId); 
         
@@ -2319,14 +2142,11 @@ window.submitInlineReply = async function(btn) {
             updateNotificationUI();
         }
 
-        // 2. Clear UI instantly
         inputDiv.innerHTML = '';
         inlinePendingFiles = []; replyBox.querySelector('.inline-file-list').innerHTML = ''; replyBox.classList.add('hidden');
         
-        // 3. Render feed instantly
         renderAllCommentsLocally();
 
-        // 4. Send to backend silently
         await apiCall('addNewComment', payload);
     } catch(e) { 
         showCustomDialog("Error", "Failed to post inline reply.\n" + (e.message || e), false);
@@ -2439,7 +2259,6 @@ window.handleFormSubmit = async function(e) {
             } 
         } 
         
-        // ✅ FETCH TEXT FROM NEW RICH TEXT DIVS
         const payload = { 
             createdBy: currentUser.email || currentUser.name, 
             subject: document.getElementById('f_subject').value, 
@@ -2464,7 +2283,6 @@ async function loadConversations() {
   try {
     allCasesData = await apiCall('getConversations', currentUser); feed.innerHTML = '';
     
-    // ✅ CALCULATE TAB COUNTS
     let counts = { Live: 0, Snooze: 0, Archive: 0 };
     const uEmail = (currentUser.email || '').toLowerCase();
     const uName = (currentUser.name || '').toLowerCase();
@@ -2483,7 +2301,6 @@ async function loadConversations() {
         else counts.Live++;
     });
 
-    // UPDATE UI COUNTS
     if(document.getElementById('count-Live')) document.getElementById('count-Live').innerText = counts.Live;
     if(document.getElementById('count-Snooze')) document.getElementById('count-Snooze').innerText = counts.Snooze;
     if(document.getElementById('count-Archive')) document.getElementById('count-Archive').innerText = counts.Archive;
@@ -2502,9 +2319,6 @@ async function loadConversations() {
       
       const hasAdminRights = conv.createdBy.toLowerCase().includes(uEmail) || conv.createdBy.toLowerCase().includes(uName) || conv.admins.some(a => a.toLowerCase().includes(uEmail) || a.toLowerCase().includes(uName));
       
-     // ==========================================
-      // 🔥 PER-USER DASHBOARD LOGIC (SNOOZE & REASON)
-      // ==========================================
       let originalSnoozeMs = 0;
       const snoozeStr = String(conv.snoozeTime || "").trim();
       
@@ -2571,7 +2385,6 @@ async function loadConversations() {
       cardDiv.querySelector('[data-id="conv-id"]').textContent = conv.id; 
       cardDiv.querySelector('[data-id="subject"]').textContent = conv.subject; 
       
-      // ✅ APPLY FORMATTING & CLICKABLE LINKS TO CARD PREVIEWS
       cardDiv.querySelector('[data-id="details"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.details) : conv.details;
       cardDiv.querySelector('[data-id="message"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.message) : conv.message; 
       
