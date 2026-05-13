@@ -261,6 +261,114 @@ let realtimeInterval = null;
 let isInitialLoadDone = false;
 
 // ==========================================
+// 🚀 ADVANCED CHUNKED UPLOADER & BEAUTIFUL FILE CARDS
+// ==========================================
+function formatSize(bytes){
+  if(!bytes) return "0 KB";
+  const kb = bytes / 1024;
+  if(kb < 1024) return kb.toFixed(1) + " KB";
+  return (kb / 1024).toFixed(1) + " MB";
+}
+
+window.createBeautifulFileCard = function(file, index, removeFnName) {
+    let previewHTML = '';
+    
+    if (file.type.startsWith('image/')) {
+        const url = URL.createObjectURL(file);
+        previewHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+    } else if (file.type.startsWith('video/')) {
+        previewHTML = `<div class="w-full h-full bg-slate-800 flex items-center justify-center"><i class="fas fa-play text-white/70 text-xs"></i></div>`;
+    } else {
+        previewHTML = `<i class="fas fa-file-alt text-indigo-400 text-xl"></i>`;
+    }
+
+    return `
+        <div class="flex items-center gap-3 bg-white border border-slate-200 rounded-xl p-2 pr-8 relative shadow-sm w-60 max-w-full hover:border-indigo-300 transition-colors group">
+            <div class="w-10 h-10 rounded-lg bg-slate-50 shrink-0 flex items-center justify-center overflow-hidden border border-slate-100">
+                ${previewHTML}
+            </div>
+            <div class="flex flex-col min-w-0 flex-1">
+                <span class="text-xs font-bold text-slate-800 truncate block">${file.name}</span>
+                <span class="text-[10px] font-semibold text-slate-400 mt-0.5">${formatSize(file.size)}</span>
+            </div>
+            <button type="button" onclick="${removeFnName}(${index})" class="absolute top-2 right-2 w-5 h-5 bg-slate-100 hover:bg-red-500 text-slate-600 hover:text-white rounded-full flex items-center justify-center text-[10px] transition-all cursor-pointer opacity-80 hover:opacity-100 shadow-sm" title="Remove File">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+};
+
+function showUploadOverlay(title) {
+    document.getElementById('globalUploadTitle').innerText = title || 'Processing...';
+    document.getElementById('globalUploadText').innerText = 'Starting...';
+    document.getElementById('globalUploadBar').style.width = '0%';
+    document.getElementById('globalUploadSize').innerText = '';
+    const overlay = document.getElementById('globalUploadOverlay');
+    if (overlay) { overlay.classList.remove('hidden'); overlay.classList.add('flex'); }
+}
+
+function updateUploadOverlay(fileIndex, totalFiles, percent, loadedStr, totalStr) {
+    document.getElementById('globalUploadText').innerText = totalFiles > 1 ? `Uploading File ${fileIndex} of ${totalFiles} (${percent}%)` : `Uploading... ${percent}%`;
+    document.getElementById('globalUploadBar').style.width = `${percent}%`;
+    document.getElementById('globalUploadSize').innerText = `${loadedStr} / ${totalStr}`;
+}
+
+function hideUploadOverlay() {
+    const overlay = document.getElementById('globalUploadOverlay');
+    if (overlay) { overlay.classList.add('hidden'); overlay.classList.remove('flex'); }
+}
+
+async function uploadFileResumable(file, onProgress) {
+    const uploadUrl = await apiCall('getResumableUploadUrl', { fileName: file.name, mimeType: file.type });
+    const chunkSize = 2097152; 
+    let start = 0;
+
+    return new Promise((resolve, reject) => {
+        function uploadNext() {
+            let end = Math.min(start + chunkSize, file.size) - 1;
+            let blob = file.slice(start, end + 1);
+            let reader = new FileReader();
+            
+            reader.onload = async function(e) {
+                let base64Data = e.target.result.split(",")[1];
+                let percent = Math.round(((end + 1) / file.size) * 100);
+                if(onProgress) onProgress(percent, end + 1, file.size);
+
+                try {
+                    let res = await apiCall('uploadChunkToDrive', {
+                        uploadUrl: uploadUrl, base64Data: base64Data, start: start, end: end, totalSize: file.size
+                    });
+                    
+                    if (res.status === "incomplete") {
+                        start = end + 1;
+                        uploadNext();
+                    } else if (res.status === "done") {
+                        let pUrl = `https://drive.google.com/file/d/${res.fileId}/view`;
+                        if(file.type.startsWith('video/')) pUrl = `https://drive.google.com/file/d/${res.fileId}/preview`;
+                        else if(file.type.startsWith('image/')) pUrl = `https://drive.google.com/thumbnail?id=${res.fileId}&sz=w2000`;
+                        resolve({ url: pUrl, name: file.name, id: res.fileId });
+                    }
+                } catch(err) { reject(err); }
+            };
+            reader.readAsDataURL(blob);
+        }
+        uploadNext();
+    });
+}
+
+async function uploadMultipleFilesResumable(filesArray) {
+    let fileUrls = [];
+    for (let i = 0; i < filesArray.length; i++) {
+        const file = filesArray[i];
+        const result = await uploadFileResumable(file, (percent, loaded, total) => {
+            updateUploadOverlay(i + 1, filesArray.length, percent, formatSize(loaded), formatSize(total));
+        });
+        fileUrls.push(result.url); 
+    }
+    return fileUrls;
+}
+
+// ==========================================
 // 🔥 GLOBAL UNREAD FETCHER & NOTIFICATIONS
 // ==========================================
 let notifications = [];
@@ -1411,12 +1519,12 @@ window.toggleEditLabel = function(label) { currentEditLabels.has(label) ? curren
 
 function renderEditAttachments() {
     document.getElementById('edit_current_attachments').innerHTML = currentEditAttachments.map((url, i) => `<span class="bg-blue-50 text-blue-700 border border-blue-100 text-[10px] px-2 py-1 rounded flex gap-1 items-center font-bold shadow-sm">🔗 File ${i+1} <button type="button" onclick="removeCurrentEditAttachment(${i})" class="text-blue-400 hover:text-blue-700 ml-1 leading-none">&times;</button></span>`).join('');
-    document.getElementById('edit_new_file_list').innerHTML = newEditPendingFiles.map((f, i) => `<span class="bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] px-2 py-1 rounded flex gap-1 items-center font-bold shadow-sm">${f.name} <button type="button" onclick="removeNewEditFile(${i})" class="text-indigo-400 hover:text-indigo-700 ml-1 leading-none">&times;</button></span>`).join('');
+    renderEditFileList();
 }
 
 window.removeCurrentEditAttachment = function(index) { currentEditAttachments.splice(index, 1); renderEditAttachments(); };
 window.handleEditFileSelect = function(e) { Array.from(e.target.files).forEach(f => { if(newEditPendingFiles.length < 10) newEditPendingFiles.push(f); }); renderEditAttachments(); };
-window.removeNewEditFile = function(index) { newEditPendingFiles.splice(index, 1); renderEditAttachments(); };
+window.removeEditNewFile = function(index) { newEditPendingFiles.splice(index, 1); renderEditAttachments(); };
 
 window.saveCaseEdits = async function() {
     const btn = document.getElementById('saveEditBtn'); 
@@ -1622,10 +1730,16 @@ window.handleReplyFileSelect = function(e) {
     renderReplyFileList();
 };
 
-function renderReplyFileList() { 
-    const fileListEl = document.getElementById('reply_file_list');
-    if(fileListEl) fileListEl.innerHTML = pendingReplyFiles.map((f, i) => `<span class="bg-indigo-50 text-indigo-700 border border-indigo-100 text-[11px] px-2 py-1 rounded-md flex gap-1 items-center font-bold shadow-sm">${f.name} <button type="button" onclick="removeReplyFile(${i})" class="text-indigo-400 hover:text-indigo-700 ml-1 font-extrabold">&times;</button></span>`).join('');
-}
+window.renderReplyFileList = function() {
+    const list = document.getElementById('reply_file_list');
+    if(list) {
+        list.innerHTML = '';
+        pendingReplyFiles.forEach((file, index) => {
+            list.innerHTML += createBeautifulFileCard(file, index, 'removeReplyFile');
+        });
+    }
+};
+
 window.removeReplyFile = function(index) { pendingReplyFiles.splice(index, 1); renderReplyFileList(); };
 
 // ==========================================
@@ -1865,14 +1979,15 @@ function renderThreadHTML(list, level = 0) {
 window.submitDetailReply = async function() {
     const inputDiv = document.getElementById('detail-reply-input');
     const msgHTML = inputDiv.innerHTML.trim();
-    if (!inputDiv.querySelector('.mention-badge')) return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
+    if (!inputDiv.querySelector('.mention-badge')) {
+        return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
+    }
     if(!msgHTML && pendingReplyFiles.length === 0) return showCustomDialog("Notice", "Please write a message or attach a file.", false);
-    
     const caseId = document.getElementById('detail-conv-id').value;
     const submitBtn = document.getElementById('detailSubmitBtn');
     const originalText = submitBtn.innerText;
-    submitBtn.innerText = 'Posting...'; submitBtn.disabled = true;
-
+    submitBtn.innerText = 'Posting...';
+    submitBtn.disabled = true;
     try {
         let fileUrl = ''; let fileName = '';
         
@@ -1885,69 +2000,53 @@ window.submitDetailReply = async function() {
         }
 
         let payloadToSend;
-        
         if (replyComposerState.mode === 'DIFFERENT' && replyComposerState.recipients.length > 0) {
             payloadToSend = replyComposerState.recipients.map(r => {
                 const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); 
                 return {
-                    caseId: caseId, 
-                    text: (r.customText && r.customText.trim() !== '') ? r.customText.trim() : msgHTML, 
-                    mentionType: r.type || 'Message', 
-                    sender: currentUser.email, 
-                    receiver: r.email, 
-                    parentAskId: '', 
-                    threadId: '', 
-                    attachmentUrl: fileUrl, 
-                    attachmentFileName: fileName, 
+                    caseId: caseId, text: (r.customText && r.customText.trim() !== '') ? r.customText.trim() : msgHTML, mentionType: r.type || 'Message', sender: currentUser.email, receiver: r.email, parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName,
                     uniqueId: tempId 
                 };
             });
         } else {
             const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
-            payloadToSend = { 
-                caseId: caseId, 
-                text: msgHTML, 
-                mentionType: replyComposerState.globalType || 'Message', 
-                sender: currentUser.email, 
-                receiver: replyComposerState.recipients.map(r => r.email).join(','), 
-                parentAskId: '', 
-                threadId: '', 
-                attachmentUrl: fileUrl, 
-                attachmentFileName: fileName, 
-                uniqueId: tempId 
-            };
+            payloadToSend = { caseId: caseId, text: msgHTML, mentionType: replyComposerState.globalType || 'Message', sender: currentUser.email, receiver: replyComposerState.recipients.map(r => r.email).join(','), parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId };
         }
 
-        // --- OPTIMISTIC UI UPDATE ---
-        const tempComments = Array.isArray(payloadToSend) ? payloadToSend : [payloadToSend];
-        tempComments.forEach(c => {
-            allLoadedComments.push({
-                caseId: c.caseId,
-                timestamp: new Date().getTime(),
-                sender: c.sender,
-                receiver: c.receiver,
-                text: c.text,
-                type: c.mentionType,
-                askId: c.parentAskId,
-                threadId: c.threadId,
-                attachment: c.attachmentUrl ? c.attachmentUrl + '|' + c.attachmentFileName : '',
-                isPending: true,
-                uniqueId: c.uniqueId
-            });
+        const localSenderName = currentUser.name || currentUser.email;
+        const payloads = Array.isArray(payloadToSend) ? payloadToSend : [payloadToSend];
+        payloads.forEach(p => {
+             const tempId = p.uniqueId; 
+             seenMessages.add(tempId); 
+             
+             allLoadedComments.push({
+                 caseId: String(p.caseId).trim(),
+                 timestamp: new Date().getTime(),
+                 sender: localSenderName,
+                 receiver: p.receiver || '',
+                 text: p.text,
+                 attachmentUrl: p.attachmentUrl || '',
+                 attachmentFileName: p.attachmentFileName || '',
+                 type: p.mentionType,
+                 askId: '', 
+                 status: '',
+                 parentAskId: p.parentAskId || '',
+                 uniqueId: tempId, 
+                 threadId: p.threadId || 'LOCAL-T-' + Math.random(),
+                 threadColor: p.threadColor || '#f8fafc'
+             });
         });
-        renderThreadUI(allLoadedComments);
-        setTimeout(() => {
-            const scrollContainer = document.getElementById('detail-thread-container').parentElement;
-            scrollContainer.scrollTop = scrollContainer.scrollHeight;
-        }, 100);
-
-        // Clean UI
-        inputDiv.innerHTML = ''; 
-        pendingReplyFiles = [];
+        
+        inputDiv.innerHTML = ''; pendingReplyFiles = [];
         if(document.getElementById('reply_file_list')) renderReplyFileList();
-        replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' }; 
-        window.setReplyGlobalType('Message');
+        replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' }; window.setReplyGlobalType('Message');
         checkComposerRestrictions(document.getElementById('detail-reply-input'), 'main');
+        
+        renderAllCommentsLocally();
+        setTimeout(() => {
+            const scrollArea = document.getElementById("detail-thread-container").parentElement;
+            if(scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
+        }, 50);
         
         await apiCall('addNewComment', payloadToSend);
         
@@ -1998,7 +2097,11 @@ window.handleInlineFileSelect = function(e, inputEl) {
 
 function renderInlineFileList() {
     if(!activeInlineBox) return;
-    activeInlineBox.querySelector('.inline-file-list').innerHTML = inlinePendingFiles.map((f, i) => `<span class="bg-indigo-50 text-indigo-700 border border-indigo-100 text-[9px] px-1.5 py-0.5 rounded flex gap-1 items-center font-bold shadow-sm">${f.name} <button type="button" onclick="removeInlineFile(${i})" class="text-indigo-400 hover:text-indigo-700 ml-1">&times;</button></span>`).join('');
+    const fileList = activeInlineBox.querySelector('.inline-file-list');
+    fileList.innerHTML = '';
+    inlinePendingFiles.forEach((file, idx) => {
+        fileList.innerHTML += createBeautifulFileCard(file, idx, 'removeInlineFile');
+    });
 }
 window.removeInlineFile = function(index) { inlinePendingFiles.splice(index, 1); renderInlineFileList(); };
 
@@ -2132,22 +2235,25 @@ window.submitInlineReply = async function(btn) {
     const replyBox = container.querySelector('[data-id="inline-reply-box"]');
     const inputDiv = replyBox.querySelector('.inline-reply-input');
     const msgHTML = inputDiv.innerHTML.trim();
+    if (!inputDiv.querySelector('.mention-badge')) {
+        return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
+    }
     
-    if (!inputDiv.querySelector('.mention-badge')) return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
     if(!msgHTML && inlinePendingFiles.length === 0) return showCustomDialog("Notice", "Please write a message or attach a file.", false);
-    
     const caseId = document.getElementById('detail-conv-id').value;
-    const mentionedEmails = Array.from(inputDiv.querySelectorAll('.mention-badge')).map(badge => badge.dataset.email).filter(Boolean).join(',');
+    
+    const mentionedEmails = Array.from(inputDiv.querySelectorAll('.mention-badge'))
+        .map(badge => badge.dataset.email)
+        .filter(Boolean)
+        .join(',');
     const toggleBtn = container.querySelector('.inline-reply-toggle-btn');
     const typeVal = replyBox.querySelector('.inline-type-val').value;
-    
-    btn.disabled = true; 
-    const originalText = btn.innerText; 
+    btn.disabled = true;
+    const originalText = btn.innerText;
     btn.innerText = '...';
-    
     try {
-        let fileUrl = ''; let fileName = '';
-        
+        let fileUrl = '';
+        let fileName = '';
         if(inlinePendingFiles.length > 0) { 
             showUploadOverlay("Uploading Attachment");
             const file = inlinePendingFiles[0];
@@ -2157,43 +2263,39 @@ window.submitInlineReply = async function(btn) {
         }
 
         const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
-        const payload = { 
-            caseId: caseId, 
-            text: msgHTML, 
-            mentionType: typeVal, 
-            sender: currentUser.email, 
-            receiver: mentionedEmails, 
-            parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', 
-            threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', 
-            threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', 
-            attachmentUrl: fileUrl, 
-            attachmentFileName: fileName, 
-            uniqueId: tempId 
-        };
+        const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, receiver: mentionedEmails, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId };
         
-        // --- OPTIMISTIC UI UPDATE ---
+        const localSenderName = currentUser.name || currentUser.email;
+        seenMessages.add(tempId); 
+        
         allLoadedComments.push({
-            caseId: payload.caseId,
-            timestamp: new Date().getTime(),
-            sender: payload.sender,
-            receiver: payload.receiver,
-            text: payload.text,
-            type: payload.mentionType,
-            askId: payload.parentAskId,
-            threadId: payload.threadId,
-            threadColor: payload.threadColor,
-            attachment: payload.attachmentUrl ? payload.attachmentUrl + '|' + payload.attachmentFileName : '',
-            isPending: true,
-            uniqueId: payload.uniqueId
-        });
-        renderThreadUI(allLoadedComments);
+             caseId: String(caseId).trim(),
+             timestamp: new Date().getTime(),
+             sender: localSenderName,
+             receiver: mentionedEmails, 
+             text: msgHTML,
+             attachmentUrl: fileUrl,
+             attachmentFileName: fileName,
+             type: typeVal,
+             askId: '', 
+             status: '',
+             parentAskId: payload.parentAskId,
+             uniqueId: tempId, 
+             threadId: payload.threadId || 'LOCAL-T-' + Math.random(),
+             threadColor: payload.threadColor || '#f8fafc'
+         });
 
-        // Clean UI
-        inputDiv.innerHTML = ''; 
-        inlinePendingFiles = [];
-        replyBox.querySelector('.inline-file-list').innerHTML = ''; 
-        replyBox.classList.add('hidden');
+        if (payload.parentAskId) {
+            notifications = notifications.filter(n => n.askId !== payload.parentAskId && n.id !== payload.parentAskId);
+            unreadCount = notifications.length;
+            updateNotificationUI();
+        }
+
+        inputDiv.innerHTML = '';
+        inlinePendingFiles = []; replyBox.querySelector('.inline-file-list').innerHTML = ''; replyBox.classList.add('hidden');
         
+        renderAllCommentsLocally();
+
         await apiCall('addNewComment', payload);
         
         if(window.isMobileClient && window.isMobileClient()) {
@@ -2216,8 +2318,15 @@ async function fetchUsersForMentions() { try { allUsersList = await apiCall('get
 window.handleFileSelect = function(e) { addFiles(e.target.files); }; 
 window.handleDrop = function(e) { e.preventDefault(); addFiles(e.dataTransfer.files); };
 function addFiles(files) { Array.from(files).forEach(file => { if(pendingFiles.length >= 10) return; if(!pendingFiles.some(pf => pf.name === file.name)) pendingFiles.push(file); }); renderFileList(); } 
-function renderFileList() { document.getElementById('file_list').innerHTML = pendingFiles.map((f, i) => `<span class="bg-slate-200 text-xs px-2 py-1 rounded flex gap-1 items-center font-medium">${f.name} <button type="button" onclick="removeFile(${i})" class="text-red-500 hover:text-red-700 font-bold ml-1">&times;</button></span>`).join(''); } 
-window.removeFile = function(index) { pendingFiles.splice(index, 1); renderFileList(); };
+
+window.renderFileList = function() {
+    const list = document.getElementById('file_list');
+    list.innerHTML = '';
+    pendingFiles.forEach((file, index) => {
+        list.innerHTML += createBeautifulFileCard(file, index, 'removePendingFile');
+    });
+};
+window.removePendingFile = function(index) { pendingFiles.splice(index, 1); renderFileList(); };
 
 // ==========================================
 // NEW CASE MEMBER SEARCH & RENDER FIX
@@ -2299,86 +2408,6 @@ window.openModal = function() {
     window.renderNewCaseMembers(); 
 }; 
 window.closeModal = function() { document.getElementById('appModal').classList.add('hidden'); document.getElementById('convForm').reset(); };
-
-// ==========================================
-// 🚀 ADVANCED CHUNKED UPLOADER LOGIC
-// ==========================================
-function formatSize(bytes){
-  if(!bytes) return "0 KB";
-  const kb = bytes / 1024;
-  if(kb < 1024) return kb.toFixed(1) + " KB";
-  return (kb / 1024).toFixed(1) + " MB";
-}
-
-function showUploadOverlay(title) {
-    document.getElementById('globalUploadTitle').innerText = title || 'Processing...';
-    document.getElementById('globalUploadText').innerText = 'Starting...';
-    document.getElementById('globalUploadBar').style.width = '0%';
-    document.getElementById('globalUploadSize').innerText = '';
-    const overlay = document.getElementById('globalUploadOverlay');
-    if (overlay) { overlay.classList.remove('hidden'); overlay.classList.add('flex'); }
-}
-
-function updateUploadOverlay(fileIndex, totalFiles, percent, loadedStr, totalStr) {
-    document.getElementById('globalUploadText').innerText = totalFiles > 1 ? `Uploading File ${fileIndex} of ${totalFiles} (${percent}%)` : `Uploading... ${percent}%`;
-    document.getElementById('globalUploadBar').style.width = `${percent}%`;
-    document.getElementById('globalUploadSize').innerText = `${loadedStr} / ${totalStr}`;
-}
-
-function hideUploadOverlay() {
-    const overlay = document.getElementById('globalUploadOverlay');
-    if (overlay) { overlay.classList.add('hidden'); overlay.classList.remove('flex'); }
-}
-
-async function uploadFileResumable(file, onProgress) {
-    const uploadUrl = await apiCall('getResumableUploadUrl', { fileName: file.name, mimeType: file.type });
-    const chunkSize = 2097152; // 2MB Chunk Limit
-    let start = 0;
-
-    return new Promise((resolve, reject) => {
-        function uploadNext() {
-            let end = Math.min(start + chunkSize, file.size) - 1;
-            let blob = file.slice(start, end + 1);
-            let reader = new FileReader();
-            
-            reader.onload = async function(e) {
-                let base64Data = e.target.result.split(",")[1];
-                let percent = Math.round(((end + 1) / file.size) * 100);
-                if(onProgress) onProgress(percent, end + 1, file.size);
-
-                try {
-                    let res = await apiCall('uploadChunkToDrive', {
-                        uploadUrl: uploadUrl, base64Data: base64Data, start: start, end: end, totalSize: file.size
-                    });
-                    
-                    if (res.status === "incomplete") {
-                        start = end + 1;
-                        uploadNext();
-                    } else if (res.status === "done") {
-                        let pUrl = `https://drive.google.com/file/d/${res.fileId}/view`;
-                        if(file.type.startsWith('video/')) pUrl = `https://drive.google.com/file/d/${res.fileId}/preview`;
-                        else if(file.type.startsWith('image/')) pUrl = `https://drive.google.com/thumbnail?id=${res.fileId}&sz=w2000`;
-                        resolve({ url: pUrl, name: file.name, id: res.fileId });
-                    }
-                } catch(err) { reject(err); }
-            };
-            reader.readAsDataURL(blob);
-        }
-        uploadNext();
-    });
-}
-
-async function uploadMultipleFilesResumable(filesArray) {
-    let fileUrls = [];
-    for (let i = 0; i < filesArray.length; i++) {
-        const file = filesArray[i];
-        const result = await uploadFileResumable(file, (percent, loaded, total) => {
-            updateUploadOverlay(i + 1, filesArray.length, percent, formatSize(loaded), formatSize(total));
-        });
-        fileUrls.push(result.url); 
-    }
-    return fileUrls;
-}
 
 window.handleFormSubmit = async function(e) {
     e.preventDefault();
