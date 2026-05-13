@@ -38,7 +38,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v33";
+const APP_VERSION = "v34";
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -403,7 +403,7 @@ function addNotification(msg) {
   if (isCaseViewOpen && String(activeCaseId).trim().toLowerCase() === String(msgCaseId).trim().toLowerCase() && msg.type !== 'Ask') return;
 
   let cleanText = msg.text || msg.body || "New activity on your case";
-  cleanText = cleanText.replace(/<[^>]*>?/gm, '');
+  cleanText = String(cleanText).replace(/<[^>]*>?/gm, '');
 
   const notifId = msg.uniqueId || (msgCaseId + "_" + msg.timestamp + "_" + msg.sender);
 
@@ -796,10 +796,10 @@ function escapeHTML(str) {
 window.getUserNameByEmail = function(email) {
     if (!email) return 'Unknown';
     if (typeof allUsersList !== 'undefined' && allUsersList.length > 0) {
-        const user = allUsersList.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
+        const user = allUsersList.find(u => u && u.email && u.email.toLowerCase().trim() === String(email).toLowerCase().trim());
         if (user && user.name) return user.name;
     }
-    return email.split('@')[0];
+    return String(email).split('@')[0];
 };
 
 window.makeLinksClickable = function(html) {
@@ -815,7 +815,7 @@ window.makeLinksClickable = function(html) {
     }
     nodesToReplace.forEach(n => {
         const span = document.createElement('span');
-        span.innerHTML = n.nodeValue.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" class="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 shadow-sm mx-1 inline-flex items-center gap-1 font-extrabold text-[11px] hover:bg-indigo-100 transition-colors"><i class="fas fa-external-link-alt"></i> Open</a>');
+        span.innerHTML = String(n.nodeValue).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" class="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 shadow-sm mx-1 inline-flex items-center gap-1 font-extrabold text-[11px] hover:bg-indigo-100 transition-colors"><i class="fas fa-external-link-alt"></i> Open</a>');
         n.parentNode.replaceChild(span, n);
     });
     return tempDiv.innerHTML;
@@ -847,7 +847,7 @@ window.switchTab = function(tab) {
 
 function populateFilterDropdowns() {
     renderLookerDropdown('labelsDropdown', availableLabels, 'Label');
-    renderLookerDropdown('membersDropdown', allUsersList.map(u => u.name), 'Member');
+    renderLookerDropdown('membersDropdown', allUsersList.map(u => u.name || u.email).filter(Boolean), 'Member');
 }
 
 function renderLookerDropdown(containerId, items, type) {
@@ -864,7 +864,7 @@ function renderLookerDropdown(containerId, items, type) {
        </div>
        <div class="max-h-56 overflow-y-auto p-1.5 bg-white dropdown-list-container" style="-webkit-overflow-scrolling: touch;">
            ${items.map(item => `
-               <label class="flex items-center gap-3 p-2 text-sm cursor-pointer hover:bg-slate-50 rounded-lg dropdown-item" data-search="${item.toLowerCase()}">
+               <label class="flex items-center gap-3 p-2 text-sm cursor-pointer hover:bg-slate-50 rounded-lg dropdown-item" data-search="${String(item).toLowerCase()}">
                    <input type="checkbox" value="${item}" style="-webkit-appearance: auto; appearance: auto;" class="${inputClass} w-4 h-4 cursor-pointer accent-indigo-600"> 
                    <span class="truncate item-text text-slate-700 font-medium">${item}</span>
                </label>
@@ -1078,20 +1078,21 @@ function getFilteredUsersForMention(query) {
     const queryLower = query.toLowerCase().trim();
     let result = [];
     if (window.currentCaseHasAdminRights) {
-        result = [...allUsersList];
+        // Fix: Removed the bug that allowed users without an email address to crash the app
+        result = [...allUsersList].filter(u => u && u.email); 
     } else {
         const caseMembersLower = (window.currentCaseAllMembers || []).map(str => String(str).toLowerCase().trim());
         result = allUsersList.filter(u => {
             if(!u || !u.email) return false;
-            const uEmail = u.email.toLowerCase().trim();
-            const uName = (u.name || '').toLowerCase().trim();
+            const uEmail = String(u.email).toLowerCase().trim();
+            const uName = String(u.name || '').toLowerCase().trim();
             return caseMembersLower.includes(uEmail) || caseMembersLower.some(member => member.includes(uEmail) || member.includes(uName));
         });
     }
     if (queryLower) result = result.filter(u => {
         if(!u || !u.email) return false;
-        const uName = (u.name || '').toLowerCase();
-        const uEmail = u.email.toLowerCase();
+        const uName = String(u.name || '').toLowerCase();
+        const uEmail = String(u.email).toLowerCase();
         return uName.includes(queryLower) || uEmail.includes(queryLower);
     });
     return result.filter((u, index, self) => index === self.findIndex((t) => t.email === u.email));
@@ -1104,8 +1105,8 @@ window.searchNewMember = debounce(function(q) {
    
    const filtered = allUsersList.filter(u => {
        if(!u || !u.email) return false;
-       const uName = (u.name || '').toLowerCase();
-       const uEmail = u.email.toLowerCase();
+       const uName = String(u.name || '').toLowerCase();
+       const uEmail = String(u.email).toLowerCase();
        return (uName.includes(queryLower) || uEmail.includes(queryLower)) && !tempAdmins.includes(u.email) && !tempUsers.includes(u.email);
    });
    
@@ -1113,10 +1114,10 @@ window.searchNewMember = debounce(function(q) {
    else {
       dropdown.innerHTML = filtered.map(u => `
         <div class="p-3 hover:bg-indigo-50 border-b flex justify-between items-center">
-           <span class="text-sm font-medium text-slate-800">${escapeHTML(u.name || u.email)}</span>
+           <span class="text-sm font-medium text-slate-800">${escapeHTML(u.name || u.email || 'Unknown')}</span>
            <div class="flex gap-1">
-             <button type="button" onclick="addNewTempMember('${u.email.replace(/'/g, "\\'")}', 'Admin')" class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded font-bold">Admin</button>
-             <button type="button" onclick="addNewTempMember('${u.email.replace(/'/g, "\\'")}', 'User')" class="px-2 py-0.5 bg-slate-200 text-slate-700 text-[10px] rounded font-bold">User</button>
+             <button type="button" onclick="addNewTempMember('${String(u.email || '').replace(/'/g, "\\'")}', 'Admin')" class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded font-bold">Admin</button>
+             <button type="button" onclick="addNewTempMember('${String(u.email || '').replace(/'/g, "\\'")}', 'User')" class="px-2 py-0.5 bg-slate-200 text-slate-700 text-[10px] rounded font-bold">User</button>
            </div>
         </div>`).join('');
    }
@@ -1393,9 +1394,9 @@ function showReplyUserList() {
     dropdown.classList.remove('hidden');
     const filtered = getFilteredUsersForMention(mentionSearchQuery);
     dropdown.innerHTML = filtered.map(u => 
-        `<div onclick="selectReplyMentionUser('${(u.name||'').replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}')" class="p-2 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 text-left">
-            <div class="text-sm font-bold text-slate-800">${u.name||u.email}</div>
-            <div class="text-[11px] text-slate-500 truncate">${u.email}</div>
+        `<div onclick="selectReplyMentionUser('${String(u.name||'').replace(/'/g, "\\'")}', '${String(u.email||'').replace(/'/g, "\\'")}')" class="p-2 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 text-left">
+            <div class="text-sm font-bold text-slate-800">${u.name || u.email || 'Unknown'}</div>
+            <div class="text-[11px] text-slate-500 truncate">${u.email || ''}</div>
          </div>`
     ).join('');
     if(filtered.length === 0) dropdown.innerHTML = `<div class="p-3 text-[11px] text-slate-400 font-bold uppercase tracking-widest text-center">No match found</div>`;
@@ -1403,9 +1404,9 @@ function showReplyUserList() {
 
 window.selectReplyMentionUser = function(name, email) {
   const dropdown = document.getElementById('reply_mention_dropdown');
-  const emailLower = email.toLowerCase(); const nameLower = name.toLowerCase();
-  const isAdmin = currentCaseAdmins.some(a => a.toLowerCase().includes(emailLower) || a.toLowerCase().includes(nameLower));
-  const isUser = currentCaseUsers.some(u => u.toLowerCase().includes(emailLower) || u.toLowerCase().includes(nameLower));
+  const emailLower = String(email).toLowerCase(); const nameLower = String(name).toLowerCase();
+  const isAdmin = currentCaseAdmins.some(a => String(a).toLowerCase().includes(emailLower) || String(a).toLowerCase().includes(nameLower));
+  const isUser = currentCaseUsers.some(u => String(u).toLowerCase().includes(emailLower) || String(u).toLowerCase().includes(nameLower));
   const isCreator = (document.getElementById('detail-author').innerText || '').toLowerCase().includes(nameLower);
   
   if (isAdmin || isCreator) window.finalizeReplyMention(name, email, 'Admin');
@@ -1417,15 +1418,15 @@ window.selectReplyMentionUser = function(name, email) {
       }
       dropdown.innerHTML = `
         <div class="bg-slate-800 px-3 py-2 text-xs font-bold text-white">Select Role for ${name}</div>
-        <div onclick="finalizeReplyMention('${name}', '${email}', 'Admin')" class="p-2 hover:bg-blue-50 cursor-pointer border-b text-sm font-bold text-blue-700">👑 Admin</div>
-        <div onclick="finalizeReplyMention('${name}', '${email}', 'User')" class="p-2 hover:bg-slate-50 cursor-pointer text-sm font-medium text-slate-700">👤 User</div>`;
+        <div onclick="finalizeReplyMention('${String(name).replace(/'/g, "\\'")}', '${String(email).replace(/'/g, "\\'")}', 'Admin')" class="p-2 hover:bg-blue-50 cursor-pointer border-b text-sm font-bold text-blue-700">👑 Admin</div>
+        <div onclick="finalizeReplyMention('${String(name).replace(/'/g, "\\'")}', '${String(email).replace(/'/g, "\\'")}', 'User')" class="p-2 hover:bg-slate-50 cursor-pointer text-sm font-medium text-slate-700">👤 User</div>`;
   }
 };
 
 window.finalizeReplyMention = function(name, email, role) {
-  const emailLower = email.toLowerCase(); const nameLower = name.toLowerCase();
-  const isAdmin = currentCaseAdmins.some(a => a.toLowerCase() === emailLower || a.toLowerCase() === nameLower);
-  const isUser = currentCaseUsers.some(u => u.toLowerCase() === emailLower || u.toLowerCase() === nameLower);
+  const emailLower = String(email).toLowerCase(); const nameLower = String(name).toLowerCase();
+  const isAdmin = currentCaseAdmins.some(a => String(a).toLowerCase() === emailLower || String(a).toLowerCase() === nameLower);
+  const isUser = currentCaseUsers.some(u => String(u).toLowerCase() === emailLower || String(u).toLowerCase() === nameLower);
   const isCreator = (document.getElementById('detail-author').innerText || '').toLowerCase().includes(nameLower);
   if (!isAdmin && !isUser && !isCreator) {
       if (role === 'Admin') currentCaseAdmins.push(email); else currentCaseUsers.push(email);
@@ -1657,7 +1658,7 @@ window.openCaseDetail = function(cardEl) {
       const attContainer = document.getElementById('detail-attachments'); attContainer.innerHTML = '';
       JSON.parse(dataset.attachmentsData || '[]').forEach(url => { 
           if(url) {
-              const cleanUrl = url.replace(/\/view.*/, '/preview');
+              const cleanUrl = String(url).replace(/\/view.*/, '/preview');
               attContainer.innerHTML += `<div class="flex flex-col gap-2 mt-3 w-full max-w-sm"><div class="rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-50 relative w-full"><iframe src="${cleanUrl}" height="200" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe></div><a href="${url}" target="_blank" class="self-start inline-flex items-center gap-1 text-[11px] font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg shadow-sm border border-indigo-100">📎 Open Attachment</a></div>`;
           }
       });
@@ -1907,8 +1908,8 @@ function renderThreadHTML(list, level = 0) {
 
         let attachmentPreviewHtml = '';
         if (c.attachmentUrl) {
-            const cleanUrlForPreview = c.attachmentUrl.replace(/\/view.*/, '/preview');
-            const isAudio = c.attachmentFileName && c.attachmentFileName.match(/\.(mp3|wav|ogg|m4a|webm)$/i);
+            const cleanUrlForPreview = String(c.attachmentUrl).replace(/\/view.*/, '/preview');
+            const isAudio = c.attachmentFileName && String(c.attachmentFileName).match(/\.(mp3|wav|ogg|m4a|webm)$/i);
             const previewHeight = isAudio ? '80' : '300';
             
             attachmentPreviewHtml = `<div class="mt-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm inline-block w-full max-w-md"><div class="rounded-lg overflow-hidden bg-slate-50 relative w-full border border-slate-100"><iframe src="${cleanUrlForPreview}" height="${previewHeight}" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe></div><div class="mt-2 text-left"><a href="${c.attachmentUrl}" target="_blank" class="inline-flex items-center gap-1 text-[11px] font-extrabold text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-100">📎 ${escapeHTML(c.attachmentFileName || 'Open Full File')}</a></div></div>`;
@@ -2138,9 +2139,9 @@ window.handleInlineTyping = function(e) {
             dropdown.classList.remove('hidden');
             const filtered = getFilteredUsersForMention(inlineMentionSearchQuery);
             dropdown.innerHTML = filtered.map(u => 
-                `<div onclick="selectInlineMentionUser('${(u.name||'').replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}')" class="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-left">
-                    <div class="text-xs font-bold text-slate-800 leading-tight">${u.name || u.email}</div>
-                    <div class="text-[9px] text-slate-500 truncate mt-0.5">${u.email}</div>
+                `<div onclick="selectInlineMentionUser('${String(u.name||'').replace(/'/g, "\\'")}', '${String(u.email||'').replace(/'/g, "\\'")}')" class="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-left">
+                    <div class="text-xs font-bold text-slate-800 leading-tight">${u.name || u.email || 'Unknown'}</div>
+                    <div class="text-[9px] text-slate-500 truncate mt-0.5">${u.email || ''}</div>
                 </div>`
             ).join('');
             if(filtered.length === 0) {
@@ -2157,14 +2158,14 @@ window.handleInlineTyping = function(e) {
 window.selectInlineMentionUser = function(name, email) {
     if(!activeInlineBox) return;
     const dropdown = activeInlineBox.querySelector('.inline-mention-dropdown');
-    const emailLower = email.toLowerCase();
-    const nameLower = name.toLowerCase();
+    const emailLower = String(email).toLowerCase();
+    const nameLower = String(name).toLowerCase();
     const isAdmin = currentCaseAdmins.some(a => {
-        const aLower = a.toLowerCase();
+        const aLower = String(a).toLowerCase();
         return aLower === emailLower || aLower === nameLower || aLower.includes(nameLower) || nameLower.includes(aLower);
     });
     const isUser = currentCaseUsers.some(u => {
-        const uLower = u.toLowerCase();
+        const uLower = String(u).toLowerCase();
         return uLower === emailLower || uLower === nameLower || uLower.includes(nameLower) || nameLower.includes(uLower);
     });
     const isCreator = (document.getElementById('detail-author').innerText || '').toLowerCase().includes(nameLower);
@@ -2179,18 +2180,18 @@ window.selectInlineMentionUser = function(name, email) {
         }
         dropdown.innerHTML = `
           <div class="bg-slate-800 px-2 py-1 text-[10px] font-bold text-white uppercase tracking-wider">Role for ${name}</div>
-          <div onclick="finalizeInlineMention('${name}', '${email}', 'Admin')" class="p-2 hover:bg-blue-50 cursor-pointer border-b text-xs font-bold text-blue-700">👑 Admin</div>
-          <div onclick="finalizeInlineMention('${name}', '${email}', 'User')" class="p-2 hover:bg-slate-50 cursor-pointer text-xs font-medium text-slate-700">👤 User</div>`;
+          <div onclick="finalizeInlineMention('${String(name).replace(/'/g, "\\'")}', '${String(email).replace(/'/g, "\\'")}', 'Admin')" class="p-2 hover:bg-blue-50 cursor-pointer border-b text-xs font-bold text-blue-700">👑 Admin</div>
+          <div onclick="finalizeInlineMention('${String(name).replace(/'/g, "\\'")}', '${String(email).replace(/'/g, "\\'")}', 'User')" class="p-2 hover:bg-slate-50 cursor-pointer text-xs font-medium text-slate-700">👤 User</div>`;
     }
 };
 
 window.finalizeInlineMention = function(name, email, role) {
     if(!activeInlineBox) return;
 
-    const emailLower = email.toLowerCase();
-    const nameLower = name.toLowerCase();
-    const isAdmin = currentCaseAdmins.some(a => a.toLowerCase() === emailLower || a.toLowerCase() === nameLower);
-    const isUser = currentCaseUsers.some(u => u.toLowerCase() === emailLower || u.toLowerCase() === nameLower);
+    const emailLower = String(email).toLowerCase();
+    const nameLower = String(name).toLowerCase();
+    const isAdmin = currentCaseAdmins.some(a => String(a).toLowerCase() === emailLower || String(a).toLowerCase() === nameLower);
+    const isUser = currentCaseUsers.some(u => String(u).toLowerCase() === emailLower || String(u).toLowerCase() === nameLower);
     const isCreator = (document.getElementById('detail-author').innerText || '').toLowerCase().includes(nameLower);
     if (!isAdmin && !isUser && !isCreator) {
         if (role === 'Admin') currentCaseAdmins.push(email);
@@ -2360,8 +2361,8 @@ window.searchNewCaseMember = debounce(function(q) {
 
     const filtered = allUsersList.filter(u => {
         if(!u || !u.email) return false;
-        const uName = (u.name || '').toLowerCase();
-        const uEmail = u.email.toLowerCase();
+        const uName = String(u.name || '').toLowerCase();
+        const uEmail = String(u.email).toLowerCase();
         return (uName.includes(queryLower) || uEmail.includes(queryLower)) && !existingEmails.includes(u.email);
     });
 
@@ -2371,12 +2372,12 @@ window.searchNewCaseMember = debounce(function(q) {
         dropdown.innerHTML = filtered.map(u => `
             <div class="p-3 hover:bg-indigo-50 border-b flex justify-between items-center cursor-pointer">
                 <div class="flex flex-col">
-                    <span class="text-sm font-medium text-slate-800">${escapeHTML(u.name || u.email)}</span>
-                    <span class="text-[10px] text-slate-500">${escapeHTML(u.email)}</span>
+                    <span class="text-sm font-medium text-slate-800">${escapeHTML(u.name || u.email || 'Unknown')}</span>
+                    <span class="text-[10px] text-slate-500">${escapeHTML(u.email || '')}</span>
                 </div>
                 <div class="flex gap-1">
-                    <button type="button" onclick="addNewCaseMember('${(u.name || '').replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}', 'Admin')" class="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] rounded font-bold shadow-sm">Admin</button>
-                    <button type="button" onclick="addNewCaseMember('${(u.name || '').replace(/'/g, "\\'")}', '${u.email.replace(/'/g, "\\'")}', 'User')" class="px-2 py-1 bg-slate-200 text-slate-700 text-[10px] rounded font-bold shadow-sm">User</button>
+                    <button type="button" onclick="addNewCaseMember('${String(u.name || '').replace(/'/g, "\\'")}', '${String(u.email||'').replace(/'/g, "\\'")}', 'Admin')" class="px-2 py-1 bg-blue-100 text-blue-700 text-[10px] rounded font-bold shadow-sm">Admin</button>
+                    <button type="button" onclick="addNewCaseMember('${String(u.name || '').replace(/'/g, "\\'")}', '${String(u.email||'').replace(/'/g, "\\'")}', 'User')" class="px-2 py-1 bg-slate-200 text-slate-700 text-[10px] rounded font-bold shadow-sm">User</button>
                 </div>
             </div>
         `).join('');
@@ -2493,7 +2494,7 @@ async function loadConversations() {
       const wrapperDiv = cardFragment.firstElementChild;
       const cardDiv = wrapperDiv.classList.contains('card-main') ? wrapperDiv : wrapperDiv.querySelector('.card-main');
       
-      const hasAdminRights = conv.createdBy.toLowerCase().includes(uEmail) || conv.createdBy.toLowerCase().includes(uName) || conv.admins.some(a => a.toLowerCase().includes(uEmail) || a.toLowerCase().includes(uName));
+      const hasAdminRights = conv.createdBy.toLowerCase().includes(uEmail) || conv.createdBy.toLowerCase().includes(uName) || conv.admins.some(a => String(a).toLowerCase().includes(uEmail) || String(a).toLowerCase().includes(uName));
       
       let originalSnoozeMs = 0;
       const snoozeStr = String(conv.snoozeTime || "").trim();
@@ -2542,7 +2543,7 @@ async function loadConversations() {
       cardDiv._cachedMembers = [...conv.admins, ...conv.users, conv.createdBy];
       
       cardDiv.dataset.convId = String(conv.id).trim(); 
-      cardDiv.dataset.subject = conv.subject.toLowerCase(); 
+      cardDiv.dataset.subject = String(conv.subject).toLowerCase(); 
       cardDiv.dataset.status = conv.status;
       cardDiv.dataset.snooze = safeSnoozeMs; 
       cardDiv.dataset.snoozeRaw = originalSnoozeMs; 
@@ -2569,7 +2570,7 @@ async function loadConversations() {
       cardDiv.querySelector('[data-id="display-case-id"]').textContent = conv.id;
       
       const avatarEl = cardDiv.querySelector('[data-id="avatar-letter"]');
-      if(avatarEl) avatarEl.textContent = creatorName.charAt(0).toUpperCase();
+      if(avatarEl) avatarEl.textContent = String(creatorName).charAt(0).toUpperCase();
 
       const badge = cardDiv.querySelector('[data-id="status-badge"]');
       badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm";
