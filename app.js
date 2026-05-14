@@ -1662,11 +1662,10 @@ window.openCaseDetail = function(cardEl) {
       
       const attContainer = document.getElementById('detail-attachments'); attContainer.innerHTML = '';
       JSON.parse(dataset.attachmentsData || '[]').forEach(url => { 
-          if(url) {
-              const cleanUrl = String(url).replace(/\/view.*/, '/preview');
-              attContainer.innerHTML += `<div class="flex flex-col gap-2 mt-3 w-full max-w-sm"><div class="rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-50 relative w-full"><iframe src="${cleanUrl}" height="200" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe></div><a href="${url}" target="_blank" class="self-start inline-flex items-center gap-1 text-[11px] font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg shadow-sm border border-indigo-100">📎 Open Attachment</a></div>`;
-          }
-      });
+    if(url) {
+        attContainer.innerHTML += `<div class="flex flex-col gap-2 mt-3 w-full max-w-sm"><a href="${url}" target="_blank" class="self-start inline-flex items-center gap-1 text-[11px] font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg shadow-sm border border-indigo-100"><i class="fas fa-external-link-alt"></i> Open Attachment</a></div>`;
+    }
+});
       const status = dataset.status;
       const isSnoozed = parseInt(dataset.snooze) > Date.now();
       const unarchiveBtn = document.getElementById('detail-unarchive-btn'); const unsnoozeBtn = document.getElementById('detail-unsnooze-btn'); const snoozeBtn = document.getElementById('detail-snooze-btn');
@@ -1917,7 +1916,7 @@ function renderThreadHTML(list, level = 0) {
             const isAudio = c.attachmentFileName && String(c.attachmentFileName).match(/\.(mp3|wav|ogg|m4a|webm)$/i);
             const previewHeight = isAudio ? '80' : '300';
             
-            attachmentPreviewHtml = `<div class="mt-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm inline-block w-full max-w-md"><div class="rounded-lg overflow-hidden bg-slate-50 relative w-full border border-slate-100"><iframe src="${cleanUrlForPreview}" height="${previewHeight}" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe></div><div class="mt-2 text-left"><a href="${c.attachmentUrl}" target="_blank" class="inline-flex items-center gap-1 text-[11px] font-extrabold text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-100">📎 ${escapeHTML(c.attachmentFileName || 'Open Full File')}</a></div></div>`;
+            attachmentPreviewHtml = `<div class="mt-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm inline-block w-full max-w-md"><div class="mt-2 text-left"><a href="${c.attachmentUrl}" target="_blank" class="inline-flex items-center gap-1 text-[11px] font-extrabold text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-100">📎 ${escapeHTML(c.attachmentFileName || 'Open Full File')}</a></div></div>`;
         }
 
         const parentAskIdForBackend = (c.type === 'Ask') ? c.askId : (c.parentAskId || '');
