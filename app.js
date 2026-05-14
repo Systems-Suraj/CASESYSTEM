@@ -403,7 +403,12 @@ function addNotification(msg) {
   if (isCaseViewOpen && String(activeCaseId).trim().toLowerCase() === String(msgCaseId).trim().toLowerCase() && msg.type !== 'Ask') return;
 
   let cleanText = msg.text || msg.body || "New activity on your case";
+  
+  // 1. Remove HTML tags
   cleanText = String(cleanText).replace(/<[^>]*>?/gm, '');
+  
+  // 2. Replace &nbsp; (and any other common spaces) with a normal space
+  cleanText = cleanText.replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim();
 
   const notifId = msg.uniqueId || (msgCaseId + "_" + msg.timestamp + "_" + msg.sender);
 
