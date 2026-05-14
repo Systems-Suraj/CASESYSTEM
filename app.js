@@ -1784,6 +1784,7 @@ window.openCaseDetail = function(cardEl) {
       if(hasAdminRights) detAdm.innerHTML += `<button onclick="openManageMembers()" class="ml-1 text-blue-600 hover:text-blue-800 p-0.5 rounded-full hover:bg-blue-50 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>`;
       
       // ✅ SMART FIX: Top description images and iframe fix
+      // ✅ SMART FIX: Top description images and iframe fix
       const attContainer = document.getElementById('detail-attachments'); attContainer.innerHTML = '';
       JSON.parse(dataset.attachmentsData || '[]').forEach(url => { 
           if(url) {
@@ -1793,8 +1794,9 @@ window.openCaseDetail = function(cardEl) {
               if (isThumbnail) {
                   let fileIdMatch = String(url).match(/id=([^&]+)/);
                   let fileId = fileIdMatch ? fileIdMatch[1] : '';
-                  let imgSrc = fileId ? `https://drive.google.com/uc?export=view&id=${fileId}` : url;
-                  previewElement = `<img src="${imgSrc}" class="w-full h-auto max-h-64 object-contain rounded" alt="Attachment">`;
+                  // 🔥 Sabse stable image format
+                  let imgSrc = fileId ? `https://lh3.googleusercontent.com/d/${fileId}` : url;
+                  previewElement = `<img src="${imgSrc}" class="w-full h-auto max-h-64 object-contain rounded" alt="Attachment" onerror="this.onerror=null; this.src='${url}';">`;
               } else {
                   const cleanUrl = String(url).replace(/\/view.*/, '/preview');
                   previewElement = `<iframe src="${cleanUrl}" height="200" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe>`;
@@ -2055,6 +2057,7 @@ function renderThreadHTML(list, level = 0) {
         else badge = `<span class="bg-slate-500 text-white px-2 py-0.5 rounded text-[10px] font-extrabold shadow-sm uppercase">Message</span>`;
 
         // ✅ SMART FIX: Support multiple attachments & bypass 403 for images
+        // ✅ SMART FIX: Support multiple attachments & bypass 403 for images
         let attachmentPreviewHtml = '';
         if (c.attachmentUrl) {
             const urls = String(c.attachmentUrl).split(',').filter(String);
@@ -2071,8 +2074,10 @@ function renderThreadHTML(list, level = 0) {
                 if (isImage) {
                     let fileIdMatch = url.match(/id=([^&]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/);
                     let fileId = fileIdMatch ? fileIdMatch[1] : '';
-                    let imgSrc = fileId ? `https://drive.google.com/uc?export=view&id=${fileId}` : url.trim();
-                    previewElement = `<img src="${imgSrc}" class="w-full h-auto max-h-64 object-contain rounded" alt="Attachment">`;
+                    // 🔥 Sabse stable image format use kar rahe hain
+                    let imgSrc = fileId ? `https://lh3.googleusercontent.com/d/${fileId}` : url.trim();
+                    // onerror add kiya hai taaki fail hone par thumbnail fallback le le
+                    previewElement = `<img src="${imgSrc}" class="w-full h-auto max-h-64 object-contain rounded" alt="Attachment" onerror="this.onerror=null; this.src='${url.trim()}';">`;
                 } else {
                     previewElement = `<iframe src="${cleanUrlForPreview}" height="${previewHeight}" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe>`;
                 }
