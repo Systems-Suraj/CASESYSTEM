@@ -38,7 +38,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v34";
+const APP_VERSION = "v35";
 
 function checkAppUpdate() {
   const storedVersion = localStorage.getItem("app_version");
@@ -298,38 +298,121 @@ window.createBeautifulFileCard = function(file, index, removeFnName) {
     `;
 };
 
-function showUploadOverlay(title) {
+window.cancelUploadFlags = {};
+
+function showUploadOverlay(title, filesArray) {
     document.getElementById('globalUploadTitle').innerText = title || 'Processing...';
-    document.getElementById('globalUploadText').innerText = 'Starting...';
-    document.getElementById('globalUploadBar').style.width = '0%';
-    document.getElementById('globalUploadSize').innerText = '';
+    document.getElementById('globalUploadText').innerText = filesArray ? `0 of ${filesArray.length} Files Uploaded` : 'Starting...';
+    
+    if(document.getElementById('globalUploadBar')) document.getElementById('globalUploadBar').parentElement.style.display = 'none';
+    if(document.getElementById('globalUploadSize')) document.getElementById('globalUploadSize').style.display = 'none';
+
     const overlay = document.getElementById('globalUploadOverlay');
-    if (overlay) { overlay.classList.remove('hidden'); overlay.classList.add('flex'); }
+    if (overlay) {
+        let listContainer = document.getElementById('customUploadProgressList');
+        if (!listContainer) {
+            listContainer = document.createElement('div');
+            listContainer.id = 'customUploadProgressList';
+            listContainer.className = 'flex flex-col gap-2 max-h-48 overflow-y-auto w-full mt-4 pr-1';
+            
+            let cancelAllBtn = document.createElement('button');
+            cancelAllBtn.id = 'customUploadCancelAllBtn';
+            cancelAllBtn.className = 'mt-4 w-full py-2 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-red-50 hover:text-red-600 transition-colors border border-slate-200';
+            cancelAllBtn.innerText = 'Cancel All Remaining';
+            cancelAllBtn.onclick = window.cancelAllUploads;
+
+            const sizeEl = document.getElementById('globalUploadSize');
+            if (sizeEl && sizeEl.parentElement) {
+                sizeEl.parentElement.appendChild(listContainer);
+                sizeEl.parentElement.appendChild(cancelAllBtn);
+            } else {
+                const contentBox = overlay.querySelector('.bg-white') || overlay.firstElementChild || overlay;
+                contentBox.appendChild(listContainer);
+                contentBox.appendChild(cancelAllBtn);
+            }
+        }
+        
+        let html = '';
+        window.cancelUploadFlags = {};
+        if (filesArray && filesArray.length > 0) {
+            filesArray.forEach((f, i) => {
+                window.cancelUploadFlags[i] = false;
+                html += `
+                <div id="upload-item-${i}" class="flex items-center justify-between p-2.5 border border-slate-200 rounded-lg bg-slate-50 text-left relative overflow-hidden">
+                    <div id="upload-bg-${i}" class="absolute left-0 top-0 bottom-0 bg-indigo-50/50 transition-all w-0"></div>
+                    <div class="flex-1 min-w-0 pr-3 relative z-10">
+                        <div class="text-[11px] font-bold text-slate-700 truncate">${f.name}</div>
+                        <div class="w-full bg-slate-200 rounded-full h-1.5 mt-1.5 overflow-hidden shadow-inner">
+                            <div id="upload-bar-${i}" class="bg-indigo-500 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                        <div class="flex justify-between items-center mt-1">
+                            <div id="upload-status-${i}" class="text-[9px] text-slate-500 font-bold uppercase tracking-wide">Waiting in queue...</div>
+                            <div id="upload-pct-${i}" class="text-[9px] text-indigo-600 font-bold">0%</div>
+                        </div>
+                    </div>
+                    <button id="upload-cancel-${i}" onclick="cancelSpecificUpload(${i})" class="relative z-10 w-7 h-7 shrink-0 bg-white border border-slate-200 text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 rounded-full flex items-center justify-center text-xs transition-all shadow-sm" title="Cancel this file">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>`;
+            });
+        }
+        listContainer.innerHTML = html;
+        const btnAll = document.getElementById('customUploadCancelAllBtn');
+        if(btnAll) btnAll.style.display = (filesArray && filesArray.length > 0) ? 'block' : 'none';
+        
+        overlay.classList.remove('hidden'); 
+        overlay.classList.add('flex');
+    }
 }
 
-function updateUploadOverlay(fileIndex, totalFiles, percent, loadedStr, totalStr) {
-    document.getElementById('globalUploadText').innerText = totalFiles > 1 ? `Uploading File ${fileIndex} of ${totalFiles} (${percent}%)` : `Uploading... ${percent}%`;
-    document.getElementById('globalUploadBar').style.width = `${percent}%`;
-    document.getElementById('globalUploadSize').innerText = `${loadedStr} / ${totalStr}`;
-}
+window.cancelSpecificUpload = function(index) {
+    window.cancelUploadFlags[index] = true;
+    const statusEl = document.getElementById(`upload-status-${index}`);
+    if(statusEl) {
+        statusEl.innerText = "CANCELED ❌";
+        statusEl.className = "text-[9px] text-red-500 font-bold uppercase tracking-wide";
+    }
+    const bar = document.getElementById(`upload-bar-${index}`);
+    if(bar) bar.classList.replace('bg-indigo-500', 'bg-red-500');
+    const pct = document.getElementById(`upload-pct-${index}`);
+    if(pct) { pct.innerText = "X"; pct.classList.replace('text-indigo-600', 'text-red-500'); }
+    const btn = document.getElementById(`upload-cancel-${index}`);
+    if(btn) btn.classList.add('hidden');
+};
+
+window.cancelAllUploads = function() {
+    Object.keys(window.cancelUploadFlags).forEach(k => {
+        if(!window.cancelUploadFlags[k] && document.getElementById(`upload-status-${k}`) && document.getElementById(`upload-status-${k}`).innerText !== 'COMPLETED ✅') {
+            window.cancelSpecificUpload(k);
+        }
+    });
+};
 
 function hideUploadOverlay() {
     const overlay = document.getElementById('globalUploadOverlay');
     if (overlay) { overlay.classList.add('hidden'); overlay.classList.remove('flex'); }
 }
 
-async function uploadFileResumable(file, onProgress) {
+async function uploadFileResumable(file, fileIndex, onProgress) {
+    if (typeof fileIndex === 'function') {
+        onProgress = fileIndex;
+        fileIndex = -1;
+    }
     const uploadUrl = await apiCall('getResumableUploadUrl', { fileName: file.name, mimeType: file.type });
     const chunkSize = 2097152; 
     let start = 0;
 
     return new Promise((resolve, reject) => {
         function uploadNext() {
+            if (fileIndex >= 0 && window.cancelUploadFlags[fileIndex]) return reject(new Error("Canceled"));
+            
             let end = Math.min(start + chunkSize, file.size) - 1;
             let blob = file.slice(start, end + 1);
             let reader = new FileReader();
             
             reader.onload = async function(e) {
+                if (fileIndex >= 0 && window.cancelUploadFlags[fileIndex]) return reject(new Error("Canceled"));
+                
                 let base64Data = e.target.result.split(",")[1];
                 let percent = Math.round(((end + 1) / file.size) * 100);
                 if(onProgress) onProgress(percent, end + 1, file.size);
@@ -357,15 +440,57 @@ async function uploadFileResumable(file, onProgress) {
 }
 
 async function uploadMultipleFilesResumable(filesArray) {
-    let fileUrls = [];
+    let uploadedData = [];
     for (let i = 0; i < filesArray.length; i++) {
+        if (window.cancelUploadFlags[i]) continue; 
+        
         const file = filesArray[i];
-        const result = await uploadFileResumable(file, (percent, loaded, total) => {
-            updateUploadOverlay(i + 1, filesArray.length, percent, formatSize(loaded), formatSize(total));
-        });
-        fileUrls.push(result.url); 
+        const statusEl = document.getElementById(`upload-status-${i}`);
+        if (statusEl) {
+            statusEl.innerText = "Uploading...";
+            statusEl.classList.replace('text-slate-500', 'text-indigo-600');
+        }
+        
+        try {
+            const result = await uploadFileResumable(file, i, (percent, loaded, total) => {
+                const bar = document.getElementById(`upload-bar-${i}`);
+                if(bar) bar.style.width = `${percent}%`;
+                const bg = document.getElementById(`upload-bg-${i}`);
+                if(bg) bg.style.width = `${percent}%`;
+                const pct = document.getElementById(`upload-pct-${i}`);
+                if(pct) pct.innerText = `${percent}%`;
+                
+                const globalText = document.getElementById('globalUploadText');
+                if (globalText) globalText.innerText = `Uploading File ${i + 1} of ${filesArray.length}...`;
+            });
+            
+            if (result && result.url) {
+                uploadedData.push({ url: result.url, name: result.name });
+                if (statusEl) {
+                    statusEl.innerText = "COMPLETED ✅";
+                    statusEl.className = "text-[9px] text-green-600 font-bold uppercase tracking-wide";
+                }
+                const bar = document.getElementById(`upload-bar-${i}`);
+                if (bar) bar.classList.replace('bg-indigo-500', 'bg-green-500');
+                const pct = document.getElementById(`upload-pct-${i}`);
+                if (pct) { pct.innerText = "100%"; pct.classList.replace('text-indigo-600', 'text-green-600'); }
+                const btn = document.getElementById(`upload-cancel-${i}`);
+                if (btn) btn.classList.add('hidden');
+            }
+        } catch(e) {
+            if (statusEl) {
+                statusEl.innerText = e.message === "Canceled" ? "CANCELED ❌" : "FAILED ⚠️";
+                statusEl.className = "text-[9px] text-red-500 font-bold uppercase tracking-wide";
+            }
+            const bar = document.getElementById(`upload-bar-${i}`);
+            if (bar) bar.classList.replace('bg-indigo-500', 'bg-red-500');
+            const pct = document.getElementById(`upload-pct-${i}`);
+            if (pct) { pct.innerText = "Error"; pct.classList.replace('text-indigo-600', 'text-red-500'); }
+            const btn = document.getElementById(`upload-cancel-${i}`);
+            if (btn) btn.classList.add('hidden');
+        }
     }
-    return fileUrls;
+    return uploadedData;
 }
 
 // ==========================================
@@ -404,10 +529,8 @@ function addNotification(msg) {
 
   let cleanText = msg.text || msg.body || "New activity on your case";
   
-  // 1. Remove HTML tags
+  // Remove HTML tags & fixing NBSP bug properly
   cleanText = String(cleanText).replace(/<[^>]*>?/gm, '');
-  
-  // 2. Replace &nbsp; (and any other common spaces) with a normal space
   cleanText = cleanText.replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim();
 
   const notifId = msg.uniqueId || (msgCaseId + "_" + msg.timestamp + "_" + msg.sender);
@@ -638,7 +761,7 @@ document.addEventListener('keydown', function(e) {
                 showCustomDialog("Mention Required ⚠️", "Please click/select a user from the dropdown list before typing further.", false);
                 return;
             }
-           
+            
             const textContent = editor.textContent.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
             if (textContent.length === 0 && e.key !== '@' && !isFunctionalKey) {
                 e.preventDefault();
@@ -1083,7 +1206,6 @@ function getFilteredUsersForMention(query) {
     const queryLower = query.toLowerCase().trim();
     let result = [];
     if (window.currentCaseHasAdminRights) {
-        // Fix: Removed the bug that allowed users without an email address to crash the app
         result = [...allUsersList].filter(u => u && u.email); 
     } else {
         const caseMembersLower = (window.currentCaseAllMembers || []).map(str => String(str).toLowerCase().trim());
@@ -1540,8 +1662,9 @@ window.saveCaseEdits = async function() {
         let finalUrls = [...currentEditAttachments];
         
         if(newEditPendingFiles.length > 0) {
-            showUploadOverlay("Updating Attachments");
-            const newlyUploadedUrls = await uploadMultipleFilesResumable(newEditPendingFiles);
+            showUploadOverlay("Updating Attachments", newEditPendingFiles);
+            const newlyUploadedData = await uploadMultipleFilesResumable(newEditPendingFiles);
+            const newlyUploadedUrls = newlyUploadedData.map(d => d.url);
             finalUrls = finalUrls.concat(newlyUploadedUrls);
             hideUploadOverlay();
         }
@@ -1660,12 +1783,33 @@ window.openCaseDetail = function(cardEl) {
       currentCaseUsers.forEach(u => { if(u) detUsr.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${window.getUserNameByEmail(u)}</span>`; });
       if(hasAdminRights) detAdm.innerHTML += `<button onclick="openManageMembers()" class="ml-1 text-blue-600 hover:text-blue-800 p-0.5 rounded-full hover:bg-blue-50 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>`;
       
+      // ✅ SMART FIX: Top description images and iframe fix
       const attContainer = document.getElementById('detail-attachments'); attContainer.innerHTML = '';
       JSON.parse(dataset.attachmentsData || '[]').forEach(url => { 
-    if(url) {
-        attContainer.innerHTML += `<div class="flex flex-col gap-2 mt-3 w-full max-w-sm"><a href="${url}" target="_blank" class="self-start inline-flex items-center gap-1 text-[11px] font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg shadow-sm border border-indigo-100"><i class="fas fa-external-link-alt"></i> Open Attachment</a></div>`;
-    }
-});
+          if(url) {
+              const isThumbnail = String(url).includes('thumbnail');
+              let previewElement = '';
+              
+              if (isThumbnail) {
+                  let fileIdMatch = String(url).match(/id=([^&]+)/);
+                  let fileId = fileIdMatch ? fileIdMatch[1] : '';
+                  let imgSrc = fileId ? `https://drive.google.com/uc?export=view&id=${fileId}` : url;
+                  previewElement = `<img src="${imgSrc}" class="w-full h-auto max-h-64 object-contain rounded" alt="Attachment">`;
+              } else {
+                  const cleanUrl = String(url).replace(/\/view.*/, '/preview');
+                  previewElement = `<iframe src="${cleanUrl}" height="200" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe>`;
+              }
+
+              attContainer.innerHTML += `
+              <div class="flex flex-col gap-2 mt-3 w-full max-w-sm">
+                  <div class="rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-50 relative w-full flex justify-center">
+                      ${previewElement}
+                  </div>
+                  <a href="${url}" target="_blank" class="self-start inline-flex items-center gap-1 text-[11px] font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg shadow-sm border border-indigo-100">📎 Open Attachment</a>
+              </div>`;
+          }
+      });
+
       const status = dataset.status;
       const isSnoozed = parseInt(dataset.snooze) > Date.now();
       const unarchiveBtn = document.getElementById('detail-unarchive-btn'); const unsnoozeBtn = document.getElementById('detail-unsnooze-btn'); const snoozeBtn = document.getElementById('detail-snooze-btn');
@@ -1910,13 +2054,39 @@ function renderThreadHTML(list, level = 0) {
         else if (c.type === 'Reply') badge = `<span class="bg-indigo-500 text-white px-2 py-0.5 rounded text-[10px] font-extrabold shadow-sm uppercase">Reply ${c.parentAskId ? `to #${c.parentAskId}` : ''}</span>`;
         else badge = `<span class="bg-slate-500 text-white px-2 py-0.5 rounded text-[10px] font-extrabold shadow-sm uppercase">Message</span>`;
 
+        // ✅ SMART FIX: Support multiple attachments & bypass 403 for images
         let attachmentPreviewHtml = '';
         if (c.attachmentUrl) {
-            const cleanUrlForPreview = String(c.attachmentUrl).replace(/\/view.*/, '/preview');
-            const isAudio = c.attachmentFileName && String(c.attachmentFileName).match(/\.(mp3|wav|ogg|m4a|webm)$/i);
-            const previewHeight = isAudio ? '80' : '300';
+            const urls = String(c.attachmentUrl).split(',').filter(String);
+            const names = String(c.attachmentFileName || '').split(',').map(s => s.trim());
             
-            attachmentPreviewHtml = `<div class="mt-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm inline-block w-full max-w-md"><div class="mt-2 text-left"><a href="${c.attachmentUrl}" target="_blank" class="inline-flex items-center gap-1 text-[11px] font-extrabold text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-100">📎 ${escapeHTML(c.attachmentFileName || 'Open Full File')}</a></div></div>`;
+            attachmentPreviewHtml = urls.map((url, idx) => {
+                const fName = names[idx] || 'Attached File';
+                const cleanUrlForPreview = String(url).trim().replace(/\/view.*/, '/preview');
+                const isImage = fName.match(/\.(png|jpe?g|gif|webp)$/i);
+                const isAudio = fName.match(/\.(mp3|wav|ogg|m4a|webm)$/i);
+                const previewHeight = isAudio ? '80' : '300';
+                
+                let previewElement = '';
+                if (isImage) {
+                    let fileIdMatch = url.match(/id=([^&]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                    let fileId = fileIdMatch ? fileIdMatch[1] : '';
+                    let imgSrc = fileId ? `https://drive.google.com/uc?export=view&id=${fileId}` : url.trim();
+                    previewElement = `<img src="${imgSrc}" class="w-full h-auto max-h-64 object-contain rounded" alt="Attachment">`;
+                } else {
+                    previewElement = `<iframe src="${cleanUrlForPreview}" height="${previewHeight}" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe>`;
+                }
+
+                return `
+                <div class="mt-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm inline-block w-full max-w-md mr-2">
+                    <div class="rounded-lg overflow-hidden bg-slate-50 relative w-full border border-slate-100 flex justify-center">
+                        ${previewElement}
+                    </div>
+                    <div class="mt-2 text-left">
+                        <a href="${url.trim()}" target="_blank" class="inline-flex items-center gap-1 text-[11px] font-extrabold text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-100">📎 ${escapeHTML(fName)}</a>
+                    </div>
+                </div>`;
+            }).join('');
         }
 
         const parentAskIdForBackend = (c.type === 'Ask') ? c.askId : (c.parentAskId || '');
@@ -1996,11 +2166,12 @@ window.submitDetailReply = async function() {
     try {
         let fileUrl = ''; let fileName = '';
         
+        // ✅ SMART FIX: Multi-file handling with custom Progress UI
         if(pendingReplyFiles.length > 0) { 
-            showUploadOverlay("Uploading Attachment");
-            const file = pendingReplyFiles[0];
-            const result = await uploadFileResumable(file, (pct, l, t) => updateUploadOverlay(1, 1, pct, formatSize(l), formatSize(t)));
-            fileUrl = result.url; fileName = result.name;
+            showUploadOverlay("Uploading Attachments", pendingReplyFiles);
+            const uploadedData = await uploadMultipleFilesResumable(pendingReplyFiles);
+            fileUrl = uploadedData.map(d => d.url).join(',');
+            fileName = uploadedData.map(d => d.name).join(',');
             hideUploadOverlay();
         }
 
@@ -2259,11 +2430,13 @@ window.submitInlineReply = async function(btn) {
     try {
         let fileUrl = '';
         let fileName = '';
+        
+        // ✅ SMART FIX: Support multiple files with live progress
         if(inlinePendingFiles.length > 0) { 
-            showUploadOverlay("Uploading Attachment");
-            const file = inlinePendingFiles[0];
-            const result = await uploadFileResumable(file, (pct, l, t) => updateUploadOverlay(1, 1, pct, formatSize(l), formatSize(t)));
-            fileUrl = result.url; fileName = result.name;
+            showUploadOverlay("Uploading Attachments", inlinePendingFiles);
+            const uploadedData = await uploadMultipleFilesResumable(inlinePendingFiles);
+            fileUrl = uploadedData.map(d => d.url).join(',');
+            fileName = uploadedData.map(d => d.name).join(',');
             hideUploadOverlay();
         }
 
@@ -2422,9 +2595,12 @@ window.handleFormSubmit = async function(e) {
     
     try {
         let fileUrls = [];
+        
+        // ✅ SMART FIX: Multi-file handling with real-time UI
         if(pendingFiles.length > 0) { 
-            showUploadOverlay("Creating New Case");
-            fileUrls = await uploadMultipleFilesResumable(pendingFiles);
+            showUploadOverlay("Creating New Case", pendingFiles);
+            const uploadedData = await uploadMultipleFilesResumable(pendingFiles);
+            fileUrls = uploadedData.map(d => d.url);
             hideUploadOverlay();
         } 
         
