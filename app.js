@@ -1121,14 +1121,30 @@ let visibleLabels = new Set(); let visibleMembers = new Set();
 // ACTIONS: ARCHIVE, SNOOZE
 // ==========================================
 window.processBulkArchive = function() {
-const selectedIds = Array.from(document.querySelectorAll('.bulk-archive-cb')).map(cb => { const card = cb.closest('[data-conv-id]'); return card ? String(card.dataset.convId).trim() : null; }).filter(Boolean);
-if(selectedIds.length === 0) return showCustomDialog("Notice", "Please select at least one case to archive.", false);
-showCustomDialog("Confirm Archive", `Are you sure you want to archive ${selectedIds.length} selected case(s)?\n\nCase IDs: \n${selectedIds.join('\n')}`, true, async () => {
-const btn = document.getElementById('bulkArchiveBtn'); btn.innerText = "Archiving..."; btn.disabled = true;
-try { await apiCall('bulkArchive', { ids: selectedIds, user: currentUser.email || currentUser.name }); await loadConversations(); }
-catch(e) { showCustomDialog("Error", "Failed to archive.", false); }
-finally { btn.innerText = "Archive Selected"; btn.disabled = false; }
-});
+    // FIX: Added ':checked' pseudo-class to only get ticked checkboxes
+    const selectedIds = Array.from(document.querySelectorAll('.bulk-archive-cb:checked')).map(cb => { 
+        const card = cb.closest('[data-conv-id]'); 
+        return card ? String(card.dataset.convId).trim() : null; 
+    }).filter(Boolean);
+
+    if(selectedIds.length === 0) return showCustomDialog("Notice", "Please select at least one case to archive.", false);
+    
+    showCustomDialog("Confirm Archive", `Are you sure you want to archive ${selectedIds.length} selected case(s)?\n\nCase IDs: \n${selectedIds.join('\n')}`, true, async () => {
+        const btn = document.getElementById('bulkArchiveBtn'); 
+        btn.innerText = "Archiving..."; 
+        btn.disabled = true;
+        try { 
+            await apiCall('bulkArchive', { ids: selectedIds, user: currentUser.email || currentUser.name }); 
+            await loadConversations(); 
+        }
+        catch(e) { 
+            showCustomDialog("Error", "Failed to archive.", false); 
+        }
+        finally { 
+            btn.innerText = "Archive Selected"; 
+            btn.disabled = false; 
+        }
+    });
 };
 
 window.processUnarchive = async function(btn) {
