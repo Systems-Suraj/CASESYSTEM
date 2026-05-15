@@ -2147,12 +2147,27 @@ let fileUrl = ''; let fileName = '';
     if (replyComposerState.mode === 'DIFFERENT' && replyComposerState.recipients.length > 0) {
         payloadToSend = replyComposerState.recipients.map(r => {
             const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); 
+            
+            // 🔥 FIX: Automatically prepend the @Mention Badge HTML so the name shows perfectly in the chat for individual messages!
+            const badgeClass = r.role === 'Admin' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-800';
+            const badgeHtml = `<span class="mention-badge mx-1 shadow-sm px-1.5 py-0.5 rounded text-[10px] font-bold ${badgeClass}" data-email="${r.email}">@${r.name}</span>&nbsp;`;
+            
+            let finalCustomText = (r.customText && r.customText.trim() !== '') ? (badgeHtml + r.customText.trim()) : msgHTML;
+
             return {
-                caseId: caseId, text: (r.customText && r.customText.trim() !== '') ? r.customText.trim() : msgHTML, mentionType: r.type || 'Message', sender: currentUser.email, receiver: r.email, parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName,
+                caseId: caseId, 
+                text: finalCustomText, 
+                mentionType: r.type || 'Message', 
+                sender: currentUser.email, 
+                receiver: r.email, 
+                parentAskId: '', 
+                threadId: '', 
+                attachmentUrl: fileUrl, 
+                attachmentFileName: fileName,
                 uniqueId: tempId 
             };
         });
-    } else {
+    }else {
         const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
         payloadToSend = { caseId: caseId, text: msgHTML, mentionType: replyComposerState.globalType || 'Message', sender: currentUser.email, receiver: replyComposerState.recipients.map(r => r.email).join(','), parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId };
     }
