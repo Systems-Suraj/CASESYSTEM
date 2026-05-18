@@ -1,5 +1,5 @@
 // 🔥 CACHE VERSION UPDATED
-const CACHE_NAME = 'casesys-v35';
+const CACHE_NAME = 'casesys-v36';
 
 // 🔥 CACHE FILES
 const ASSETS_TO_CACHE = [
@@ -16,10 +16,11 @@ const ASSETS_TO_CACHE = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('✅ Cache Opened v11');
+      console.log('✅ Cache Opened v36');
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
+
   self.skipWaiting();
 });
 
@@ -39,38 +40,96 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
+
   self.clients.claim();
 });
 
 // ============================
-// 🔹 FETCH (🔥 THE MAIN FIX)
+// 🔹 FETCH (FIXED)
 // ============================
 self.addEventListener('fetch', (event) => {
-  const url = event.request.url;
 
-  // 🚀 DIRECT API CALL - NO CACHE, NO BLOCKING
-  if (url.includes('script.google.com')) {
-    event.respondWith(fetch(event.request)); // Fixed the broken 'return;'
+  // ✅ Only GET requests
+  if (event.request.method !== 'GET') return;
+
+  const requestUrl = new URL(event.request.url);
+
+  // =====================================================
+  // ❌ NEVER CACHE API / DYNAMIC CASE REQUESTS
+  // =====================================================
+  if (
+    requestUrl.hostname.includes('script.google.com') ||
+    requestUrl.pathname.includes('/exec') ||
+    requestUrl.search.includes('caseId=')
+  ) {
+
+    event.respondWith(
+      fetch(event.request, {
+        cache: 'no-store'
+      })
+    );
+
     return;
   }
 
-  // Only GET requests should be cached
-  if (event.request.method !== 'GET') return;
-
-  // NETWORK FIRST, FALLBACK TO CACHE
+  // =====================================================
+  // ✅ CACHE STATIC FILES ONLY
+  // =====================================================
   event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        const responseClone = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseClone);
+
+    caches.match(event.request).then((cachedResponse) => {
+
+      // ✅ Return cache first
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+
+      // ✅ Otherwise fetch from network
+      return fetch(event.request)
+
+        .then((networkResponse) => {
+
+          // ✅ Clone for cache
+          const responseClone = networkResponse.clone();
+
+          // =====================================================
+          // ✅ Cache only safe static assets
+          // =====================================================
+          if (
+            event.request.destination === 'script' ||
+            event.request.destination === 'style' ||
+            event.request.destination === 'image' ||
+            event.request.destination === 'document' ||
+            requestUrl.pathname.endsWith('.js') ||
+            requestUrl.pathname.endsWith('.css') ||
+            requestUrl.pathname.endsWith('.html') ||
+            requestUrl.pathname.endsWith('.png') ||
+            requestUrl.pathname.endsWith('.jpg') ||
+            requestUrl.pathname.endsWith('.jpeg') ||
+            requestUrl.pathname.endsWith('.webp')
+          ) {
+
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+
+          }
+
+          return networkResponse;
+
+        })
+
+        .catch(() => {
+
+          // Optional fallback
+          return caches.match('./index.html');
+
         });
-        return networkResponse;
-      })
-      .catch(() => {
-        return caches.match(event.request);
-      })
+
+    })
+
   );
+
 });
 
 // =======================================================
@@ -93,36 +152,87 @@ const messaging = firebase.messaging();
 // 🔥 BACKGROUND NOTIFICATION
 // =======================================================
 messaging.onBackgroundMessage(function(payload) {
+
+  console.log("📩 Background Notification:", payload);
+
   const title = payload.data?.title || "Case Update";
   const body = payload.data?.body || "📩 New activity";
   const caseId = payload.data?.caseId || "";
+  const uniqueId = payload.data?.uniqueId || "";
 
   self.registration.showNotification(title, {
     body: body,
+
     icon: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
+
     badge: 'https://i.ibb.co/bRBNnZP6/Case-system-checklist-icon-design.png',
-    data: { caseId },
-    tag: caseId,
-    renotify: true
+
+    data: {
+      caseId,
+      uniqueId
+    },
+
+    tag: uniqueId || caseId,
+
+    renotify: true,
+
+    requireInteraction: false
   });
+
 });
 
 // =======================================================
 // 🔥 NOTIFICATION CLICK
 // =======================================================
 self.addEventListener('notificationclick', function(event) {
+
   event.notification.close();
+
   const caseId = event.notification?.data?.caseId || "";
+  const uniqueId = event.notification?.data?.uniqueId || "";
 
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+
+    clients.matchAll({
+      type: "window",
+      includeUncontrolled: true
+    })
+
+    .then((clientList) => {
+
+      // =====================================================
+      // ✅ Reuse existing app window
+      // =====================================================
       for (let client of clientList) {
-        if (client.url.includes('CASESYSTEM') && 'focus' in client) {
-          client.postMessage({ caseId: caseId });
+
+        if (
+          client.url.includes('CASESYSTEM') &&
+          'focus' in client
+        ) {
+
+          client.postMessage({
+            action: 'OPEN_CASE',
+            caseId: caseId,
+            uniqueId: uniqueId,
+            forceRefresh: true
+          });
+
           return client.focus();
         }
       }
-      return clients.openWindow('./index.html?caseId=' + caseId);
+
+      // =====================================================
+      // ✅ Open fresh window if none exists
+      // =====================================================
+      return clients.openWindow(
+        './index.html?caseId=' +
+        encodeURIComponent(caseId) +
+        '&notification=1' +
+        '&t=' + Date.now()
+      );
+
     })
+
   );
+
 });
