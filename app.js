@@ -1,6 +1,13 @@
 // ==========================================
-// 🔒 UI PROTECTION STATE (NEW - MOVED TO TOP)
+// 🔒 UI PROTECTION STATE & GLOBAL HELPERS
 // ==========================================
+window.normalizeCaseId = function(id) {
+    return String(id || '')
+        .trim()
+        .replace(/\s+/g, '') // Removes accidental spaces
+        .toUpperCase();      // Strict uppercase match
+};
+
 window.isUserTypingGlobal = false;
 let activeInputElement = null;
 document.addEventListener('focusin', (e) => {
@@ -243,6 +250,7 @@ let lastTimestamp = 0;
 let seenMessages = new Set();
 let realtimeInterval = null;
 let isInitialLoadDone = false;
+let allLoadedComments = [];
 
 // ==========================================
 // 🔥 CASE OPEN PROTECTION
@@ -498,10 +506,10 @@ if (!receivers.includes(myEmail)) return;
 const activeCaseId = document.getElementById('detail-conv-id')?.value;
 const isCaseViewOpen = document.getElementById('caseDetailView') && !document.getElementById('caseDetailView').classList.contains('hidden');
 const msgCaseId = msg.caseId || msg.id || "";
-if (isCaseViewOpen && String(activeCaseId).trim().toLowerCase() === String(msgCaseId).trim().toLowerCase() && msg.type !== 'Ask') return;
+if (isCaseViewOpen && window.normalizeCaseId(activeCaseId) === window.normalizeCaseId(msgCaseId) && msg.type !== 'Ask') return;
 let cleanText = msg.text || msg.body || "New activity on your case";
 cleanText = String(cleanText).replace(/<[^>]*>?/gm, '');
-cleanText = cleanText.replace(/ /gi, ' ').replace(/\s+/g, ' ').trim();
+cleanText = cleanText.replace(/ /gi, ' ').replace(/\s+/g, ' ').trim();
 const notifId = msg.uniqueId || (msgCaseId + "" + msg.timestamp + "" + msg.sender);
 if (locallySeenNotifications.has(notifId)) return;
 if (notifications.some(n => n.id === notifId)) return;
@@ -561,13 +569,10 @@ updateNotificationUI();
 }
 
 window.openFromNotification = async function(caseId, uniqueId) {
-
   if (isOpeningCase) return;
-
   isOpeningCase = true;
 
   try {
-
     const panel = document.getElementById("notifPanel");
     if (panel) panel.classList.add("hidden");
 
@@ -576,33 +581,25 @@ window.openFromNotification = async function(caseId, uniqueId) {
       return;
     }
 
-    const cleanCaseId = String(caseId).trim().toLowerCase();
+    const cleanCaseId = window.normalizeCaseId(caseId);
 
     await new Promise(r => setTimeout(r, 150));
 
     const card = [...document.querySelectorAll('[data-conv-id]')]
-      .find(el =>
-        String(el.dataset.convId).trim().toLowerCase() === cleanCaseId
-      );
+      .find(el => window.normalizeCaseId(el.dataset.convId) === cleanCaseId);
 
     if (uniqueId) {
       const notif = notifications.find(n => n.id === uniqueId);
-
       if (notif && notif.type !== 'Ask') {
         locallySeenNotifications.add(uniqueId);
       }
     }
 
-    notifications = notifications.filter(
-      n => n.id !== uniqueId || n.type === 'Ask'
-    );
-
+    notifications = notifications.filter(n => n.id !== uniqueId || n.type === 'Ask');
     unreadCount = notifications.length;
-
     updateNotificationUI();
 
     if (uniqueId && currentUser?.email) {
-
       apiCall('markSeen', {
         notificationId: uniqueId,
         userEmail: currentUser.email,
@@ -611,40 +608,22 @@ window.openFromNotification = async function(caseId, uniqueId) {
     }
 
     if (!card) {
-
-      showCustomDialog(
-        "Loading...",
-        "Case is still loading in dashboard. Please wait 1 second and try again.",
-        false
-      );
-
+      showCustomDialog("Loading...", "Case is still loading in dashboard. Please wait 1 second and try again.", false);
       return;
     }
 
     const requestId = Date.now();
-
     currentOpenRequest = requestId;
-
     await window.openCaseDetail(card);
-
     if (currentOpenRequest !== requestId) return;
 
   } catch (err) {
-
     console.error("Notification Open Error:", err);
-
-    showCustomDialog(
-      "Error",
-      "Failed to load case properly.",
-      false
-    );
-
+    showCustomDialog("Error", "Failed to load case properly.", false);
   } finally {
-
     setTimeout(() => {
       isOpeningCase = false;
     }, 300);
-
   }
 };
 
@@ -1121,7 +1100,6 @@ let visibleLabels = new Set(); let visibleMembers = new Set();
 // ACTIONS: ARCHIVE, SNOOZE
 // ==========================================
 window.processBulkArchive = function() {
-    // FIX: Added ':checked' pseudo-class to only get ticked checkboxes
     const selectedIds = Array.from(document.querySelectorAll('.bulk-archive-cb:checked')).map(cb => { 
         const card = cb.closest('[data-conv-id]'); 
         return card ? String(card.dataset.convId).trim() : null; 
@@ -1666,6 +1644,7 @@ lastTimestamp = 0;
 seenMessages = new Set();
 page = 0;
 hasMore = true;
+allLoadedComments = []; // ✅ FIX: Wipes old comments from memory preventing bleed
 currentCaseAdmins = [];
 currentCaseUsers = [];
 const threadContainer = document.getElementById("detail-thread-container");
@@ -1807,7 +1786,7 @@ if (!card) card = cardEl.closest('[data-conv-id]');
   }
   ['Live', 'Snooze', 'Archive'].forEach(t => { if (t !== currentTab) document.getElementById(`tab-${t}`).style.display = 'none'; });
   
-  const caseNotifs = notifications.filter(n => String(n.caseId).trim() === convId);
+  const caseNotifs = notifications.filter(n => window.normalizeCaseId(n.caseId) === window.normalizeCaseId(convId));
   if (caseNotifs.length > 0) {
       caseNotifs.forEach(n => {
           apiCall('markSeen', { notificationId: n.id, userEmail: currentUser.email, userName: currentUser.name || currentUser.email }).catch(e => console.log(e));
@@ -1815,7 +1794,7 @@ if (!card) card = cardEl.closest('[data-conv-id]');
               locallySeenNotifications.add(n.id);
           }
       });
-      notifications = notifications.filter(n => String(n.caseId).trim() !== convId || n.type === 'Ask');
+      notifications = notifications.filter(n => window.normalizeCaseId(n.caseId) !== window.normalizeCaseId(convId) || n.type === 'Ask');
       unreadCount = notifications.length;
       updateNotificationUI();
   }
@@ -1875,8 +1854,6 @@ window.removeReplyFile = function(index) { pendingReplyFiles.splice(index, 1); r
 // ==========================================
 // ⚡ OPTIMISTIC UI: THREAD & COMMENT SYSTEM
 // ==========================================
-let allLoadedComments = [];
-
 function renderAllCommentsLocally() {
 const container = document.getElementById("detail-thread-container");
 const threadsMap = {};
@@ -1904,111 +1881,128 @@ container.innerHTML = finalHtml;
 }
 
 function loadCommentsPaginated(caseId, reset = false) {
-if (window.isOpeningDetailView) return;
-if (isLoading || !hasMore) return;
-isLoading = true;
-const container = document.getElementById("detail-thread-container");
-if (reset) { page = 0; hasMore = true; allLoadedComments = []; container.innerHTML = ''; }
-apiCall('getPaginatedComments', { caseId: caseId, page: page, limit: limit })
-    .then(data => {
-        isLoading = false;
-        if (!data || data.length === 0) {
-            if(reset) container.innerHTML = `<p class="text-center py-5 text-slate-400 font-medium tracking-wide">Start the discussion below.</p>`;
-            hasMore = false; return;
-        }
-        if (data.length < limit) hasMore = false;
+    // ✅ FIX: Allow reset to bypass the opening block!
+    if (window.isOpeningDetailView && !reset) return; 
+    
+    if (isLoading || !hasMore) return;
+    isLoading = true;
+    
+    const container = document.getElementById("detail-thread-container");
+    if (reset) { 
+        page = 0; 
+        hasMore = true; 
+        allLoadedComments = []; // ✅ FIX: Wipes old comments from memory
+        container.innerHTML = ''; 
+    }
+    
+    apiCall('getPaginatedComments', { caseId: caseId, page: page, limit: limit })
+        .then(data => {
+            isLoading = false;
+            if (!data || data.length === 0) {
+                if(reset) container.innerHTML = `<p class="text-center py-5 text-slate-400 font-medium tracking-wide">Start the discussion below.</p>`;
+                hasMore = false; return;
+            }
+            if (data.length < limit) hasMore = false;
+            
+            // ✅ FIX: Strictly normalize the active Case ID
+            const cleanActiveCaseId = window.normalizeCaseId(caseId);
+            
+            const validData = [];
+            data.forEach(msg => {
+                // ✅ FIX: Strictly compare incoming messages
+                if (window.normalizeCaseId(msg.caseId) !== cleanActiveCaseId) return;
+
+                const id = msg.uniqueId || (msg.timestamp + msg.sender);
+                
+                const isDuplicate = seenMessages.has(id) || allLoadedComments.some(c => 
+                    (c.uniqueId && msg.uniqueId && c.uniqueId === msg.uniqueId) || 
+                    (String(c.text || '').trim() === String(msg.text || '').trim() && 
+                     String(c.sender || '').trim() === String(msg.sender || '').trim() && 
+                     Math.abs(new Date(c.timestamp).getTime() - new Date(msg.timestamp).getTime()) < 60000)
+                );
+                
+                if (!isDuplicate) {
+                    if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp;
+                    seenMessages.add(id);
+                    validData.push(msg);
+                }
+            });
+
+            allLoadedComments = allLoadedComments.concat(validData);
+            renderAllCommentsLocally();
+            page++;
+        }).catch(err => { isLoading = false; console.error(err); });
+}
+
+async function fetchNewMessages() {
+    if (window.isOpeningDetailView) return;
+    const caseId = document.getElementById('detail-conv-id')?.value;
+    if (!caseId || document.getElementById("caseDetailView").classList.contains("hidden") || isLoading) return;
+    if (window.isUserTypingGlobal) {
+        return;
+    }
+
+    try {
+        const messages = await apiCall('getNewComments', {
+            caseId: caseId,
+            lastTimestamp: lastTimestamp
+        });
+        if (!messages || messages.length === 0) return;
+
+        let hasNew = false;
         
-        const cleanActiveCaseId = String(caseId).trim().toLowerCase();
+        // ✅ FIX: Strictly normalize the active Case ID
+        const cleanActiveCaseId = window.normalizeCaseId(caseId);
         
-        const validData = [];
-        data.forEach(msg => {
-            if (String(msg.caseId).trim().toLowerCase() !== cleanActiveCaseId) return;
+        messages.forEach(msg => {
+            // ✅ FIX: Strictly compare incoming messages
+            if (window.normalizeCaseId(msg.caseId) !== cleanActiveCaseId) return;
 
             const id = msg.uniqueId || (msg.timestamp + msg.sender);
-            
+
             const isDuplicate = seenMessages.has(id) || allLoadedComments.some(c => 
                 (c.uniqueId && msg.uniqueId && c.uniqueId === msg.uniqueId) || 
                 (String(c.text || '').trim() === String(msg.text || '').trim() && 
                  String(c.sender || '').trim() === String(msg.sender || '').trim() && 
                  Math.abs(new Date(c.timestamp).getTime() - new Date(msg.timestamp).getTime()) < 60000)
             );
-            if (!isDuplicate) {
+
+            if (isDuplicate) {
                 if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp;
-                seenMessages.add(id);
-                validData.push(msg);
+                return;
+            }
+
+            seenMessages.add(id);
+            allLoadedComments.push(msg);
+            hasNew = true;
+
+            if (msg.timestamp > lastTimestamp) {
+                lastTimestamp = msg.timestamp;
+            }
+
+            if (!msg.seen || !msg.seen.includes(currentUser.email)) {
+                fetch(API_URL, {
+                    method: "POST",
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({
+                        action: "markSeen",
+                        params: {
+                            notificationId: msg.uniqueId,
+                            userEmail: currentUser.email,
+                            userName: currentUser.name || currentUser.email 
+                        }
+                    })
+                }).catch(() => console.log("Silent background update failed."));
             }
         });
-
-        allLoadedComments = allLoadedComments.concat(validData);
-        renderAllCommentsLocally();
-        page++;
-    }).catch(err => { isLoading = false; console.error(err); });
-}
-
-async function fetchNewMessages() {
-if (window.isOpeningDetailView) return;
-const caseId = document.getElementById('detail-conv-id')?.value;
-if (!caseId || document.getElementById("caseDetailView").classList.contains("hidden") || isLoading) return;
-if (window.isUserTypingGlobal) {
-    return;
-}
-
-try {
-    const messages = await apiCall('getNewComments', {
-        caseId: caseId,
-        lastTimestamp: lastTimestamp
-    });
-    if (!messages || messages.length === 0) return;
-
-    let hasNew = false;
-    const cleanActiveCaseId = String(caseId).trim().toLowerCase();
-    messages.forEach(msg => {
-        if (String(msg.caseId).trim().toLowerCase() !== cleanActiveCaseId) return;
-
-        const id = msg.uniqueId || (msg.timestamp + msg.sender);
-
-        const isDuplicate = seenMessages.has(id) || allLoadedComments.some(c => 
-            (c.uniqueId && msg.uniqueId && c.uniqueId === msg.uniqueId) || 
-            (String(c.text || '').trim() === String(msg.text || '').trim() && 
-             String(c.sender || '').trim() === String(msg.sender || '').trim() && 
-             Math.abs(new Date(c.timestamp).getTime() - new Date(msg.timestamp).getTime()) < 60000)
-        );
-
-        if (isDuplicate) {
-            if (msg.timestamp > lastTimestamp) lastTimestamp = msg.timestamp;
-            return;
+        
+        if (hasNew) {
+            renderAllCommentsLocally();
         }
 
-        seenMessages.add(id);
-        allLoadedComments.push(msg);
-        hasNew = true;
-
-        if (msg.timestamp > lastTimestamp) {
-            lastTimestamp = msg.timestamp;
-        }
-
-        if (!msg.seen || !msg.seen.includes(currentUser.email)) {
-            fetch(API_URL, {
-                method: "POST",
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({
-                    action: "markSeen",
-                    params: {
-                        notificationId: msg.uniqueId,
-                        userEmail: currentUser.email,
-                        userName: currentUser.name || currentUser.email 
-                    }
-                })
-            }).catch(() => console.log("Silent background update failed."));
-        }
-    });
-    if (hasNew) {
-        renderAllCommentsLocally();
+    } catch (err) {
+        console.error("Realtime fetch skipped due to network or sync:", err);
     }
-
-} catch (err) {
-    console.error("Realtime fetch skipped due to network or sync:", err);
-}
 }
 
 window.setInlineType = function(btn, type) {
