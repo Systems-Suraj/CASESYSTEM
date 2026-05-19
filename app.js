@@ -815,6 +815,107 @@ if (currentUser) initDataLoad();
 };
 
 // ==========================================
+// 🔥 AUTO LOGIN FROM MAIN PORTAL
+// ==========================================
+(function () {
+
+  function startAutoLogin() {
+
+    const params =
+      new URLSearchParams(window.location.search);
+
+    const mobile =
+      params.get("mobileno") ||
+      params.get("mobile") ||
+      "";
+
+    const autoLogin =
+      params.get("autologin");
+
+    if (!mobile || autoLogin !== "1") {
+      return;
+    }
+
+    let attempts = 0;
+
+    const timer = setInterval(() => {
+
+      attempts++;
+
+      const emailField =
+        document.getElementById("email");
+
+      const passwordField =
+        document.getElementById("password");
+
+      const loginBtn =
+        document.getElementById("loginBtn");
+
+      // WAIT UNTIL FULL LOGIN UI READY
+      if (
+        emailField &&
+        passwordField &&
+        loginBtn &&
+        !loginBtn.disabled
+      ) {
+
+        clearInterval(timer);
+
+        console.log("✅ Login UI Found");
+
+        // SAME MOBILE IN BOTH
+        emailField.value = mobile;
+        passwordField.value = mobile;
+
+        // TRIGGER INPUT EVENTS
+        emailField.dispatchEvent(
+          new Event("input", { bubbles: true })
+        );
+
+        passwordField.dispatchEvent(
+          new Event("input", { bubbles: true })
+        );
+
+        // SMALL DELAY
+        setTimeout(() => {
+
+          console.log("🚀 Auto Clicking Login");
+
+          loginBtn.click();
+
+        }, 1000);
+
+      }
+
+      // STOP AFTER 20 SEC
+      if (attempts > 40) {
+
+        clearInterval(timer);
+
+        console.log("❌ Auto Login Timeout");
+
+      }
+
+    }, 500);
+
+  }
+
+  // RUN AFTER FULL PAGE READY
+  if (document.readyState === "complete") {
+
+    startAutoLogin();
+
+  } else {
+
+    window.addEventListener(
+      "load",
+      startAutoLogin
+    );
+
+  }
+
+})();
+// ==========================================
 // 🔥 LOGIN / LOGOUT LOGIC
 // ==========================================
 window.handleNextOrLogin = function() {
