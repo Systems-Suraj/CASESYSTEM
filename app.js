@@ -814,6 +814,69 @@ window.onload = function() {
 if (currentUser) initDataLoad();
 };
 
+
+// ==========================================
+// 🔥 AUTO LOGIN FROM MAIN PORTAL
+// ==========================================
+window.addEventListener("load", function () {
+
+  const params = new URLSearchParams(window.location.search);
+
+  const mobile =
+    params.get("mobileno") ||
+    params.get("mobile") ||
+    "";
+
+  const autoLogin =
+    params.get("autologin");
+
+  // LOGIN INPUTS
+  const emailField =
+    document.getElementById("email");
+
+  const passwordField =
+    document.getElementById("password");
+
+  // AUTO FILL
+  if (mobile) {
+
+    if (emailField) {
+      emailField.value = mobile;
+      emailField.dispatchEvent(
+        new Event("input", { bubbles: true })
+      );
+    }
+
+    if (passwordField) {
+      passwordField.value = mobile;
+      passwordField.dispatchEvent(
+        new Event("input", { bubbles: true })
+      );
+    }
+
+  }
+
+  // AUTO LOGIN
+  if (
+    autoLogin === "1" &&
+    mobile
+  ) {
+
+    setTimeout(() => {
+
+      if (
+        typeof window.handleNextOrLogin === "function"
+      ) {
+
+        window.handleNextOrLogin();
+
+      }
+
+    }, 1200);
+
+  }
+
+});
 // ==========================================
 // 🔥 LOGIN / LOGOUT LOGIC
 // ==========================================
