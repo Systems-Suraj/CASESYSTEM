@@ -44,7 +44,7 @@ activeInputElement = null;
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v39";
+const APP_VERSION = "v40";
 function checkAppUpdate() {
 const storedVersion = localStorage.getItem("app_version");
 if (!storedVersion) {
@@ -826,7 +826,7 @@ if (currentUser) initDataLoad();
 
 function startAutoLoginAndOpenCase() {
 
-```
+
 const params =
   new URLSearchParams(window.location.search);
 
@@ -908,110 +908,143 @@ const timer = setInterval(() => {
       loginBtn.click();
 
       // ------------------------------------------
-      // AUTO OPEN CASE AFTER LOGIN
-      // ------------------------------------------
+// AUTO OPEN CASE AFTER LOGIN
+// ------------------------------------------
 
-      if (caseId) {
+if (caseId) {
+
+console.log(
+"⏳ Waiting For Cases Data..."
+);
+
+let openAttempts = 0;
+
+const openTimer =
+setInterval(async () => {
+
+
+openAttempts++;
+
+try {
+
+  // WAIT UNTIL DATA FULLY LOADED
+  if (
+    typeof allCasesData !== "undefined" &&
+    Array.isArray(allCasesData) &&
+    allCasesData.length > 0
+  ) {
+
+    console.log(
+      "✅ Cases Loaded:",
+      allCasesData.length
+    );
+
+    // FIND MATCHING CASE
+    const matchingCase =
+      allCasesData.find(c => {
+
+        const dataId =
+          String(
+            c.id ||
+            c.caseId ||
+            c.caseid ||
+            ''
+          ).trim();
+
+        const urlId =
+          String(caseId).trim();
 
         console.log(
-          "⏳ Waiting For Cases To Render..."
+          "Checking:",
+          dataId,
+          urlId
         );
 
-        let openAttempts = 0;
+        return (
+          dataId === urlId
+        );
 
-        const openTimer =
-          setInterval(async () => {
+      });
 
-          openAttempts++;
+    console.log(
+      "🎯 MATCH:",
+      matchingCase
+    );
 
-          try {
+    if (matchingCase) {
 
-            // FIND CARDS DIRECTLY FROM DOM
-            const allCards =
-              [
-                ...document.querySelectorAll(
-                  '[data-conv-id]'
-                )
-              ];
+      clearInterval(openTimer);
 
-            console.log(
-              "Cards Found:",
-              allCards.length
+      console.log(
+        "🚀 Opening Case"
+      );
+
+      // WAIT FOR DOM RENDER
+      setTimeout(async () => {
+
+        try {
+
+          // FIND REAL CARD AFTER RENDER
+          const card =
+            document.querySelector(
+              `[data-conv-id="${matchingCase.id}"]`
             );
 
-            if (allCards.length > 0) {
+          console.log(
+            "CARD:",
+            card
+          );
 
-              const matchingCard =
-                allCards.find(el => {
+          if (card) {
 
-                  return (
-                    window.normalizeCaseId(
-                      el.dataset.convId
-                    ) ===
-                    window.normalizeCaseId(
-                      caseId
-                    )
+            await window.openCaseDetail(
+              card
+            );
 
-                  );
+          } else {
 
-                });
-
-              if (matchingCard) {
-
-                clearInterval(openTimer);
-
-                console.log(
-                  "🚀 Opening Case:",
-                  caseId
-                );
-
-                // SMALL DELAY FOR UI STABILITY
-                setTimeout(async () => {
-
-                  try {
-
-                    await window.openCaseDetail(
-                      matchingCard
-                    );
-
-                  } catch(err) {
-
-                    console.error(
-                      "❌ Final Open Error:",
-                      err
-                    );
-
-                  }
-
-                }, 500);
-
-              }
-
-            }
-
-          } catch(err) {
-
-            console.error(
-              "❌ Auto Open Error:",
-              err
+            console.log(
+              "❌ Card not found in DOM"
             );
 
           }
 
-          // STOP AFTER 60 SECONDS
-          if (openAttempts > 60) {
+        } catch(err) {
 
-            clearInterval(openTimer);
+          console.error(err);
 
-            console.log(
-              "❌ Auto Open Timeout"
-            );
+        }
 
-          }
+      }, 2000);
 
-        }, 1000);
+    }
 
-      }
+  }
+
+} catch(err) {
+
+  console.error(
+    "❌ Auto Open Error:",
+    err
+  );
+
+}
+
+// TIMEOUT
+if (openAttempts > 90) {
+
+  clearInterval(openTimer);
+
+  console.log(
+    "❌ Auto Open Timeout"
+  );
+
+}
+
+
+}, 1000);
+
+}
 
     }, 1200);
 
@@ -1029,7 +1062,7 @@ const timer = setInterval(() => {
   }
 
 }, 500);
-```
+
 
 }
 
@@ -1039,18 +1072,18 @@ const timer = setInterval(() => {
 
 if (document.readyState === "complete") {
 
-```
+
 startAutoLoginAndOpenCase();
-```
+
 
 } else {
 
-```
+
 window.addEventListener(
   "load",
   startAutoLoginAndOpenCase
 );
-```
+
 
 }
 
