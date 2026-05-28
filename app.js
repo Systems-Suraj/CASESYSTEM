@@ -819,102 +819,209 @@ if (currentUser) initDataLoad();
 // ==========================================
 (function () {
 
-  function startAutoLogin() {
+// ==========================================
+// 🚀 AUTO LOGIN + AUTO OPEN CASE
+// ==========================================
 
-    const params =
-      new URLSearchParams(window.location.search);
+function startAutoLoginAndOpenCase() {
 
-    const mobile =
-      params.get("mobileno") ||
-      params.get("mobile") ||
-      "";
+```
+const params =
+  new URLSearchParams(window.location.search);
 
-    const autoLogin =
-      params.get("autologin");
+// ------------------------------------------
+// LOGIN PARAMS
+// ------------------------------------------
 
-    if (!mobile || autoLogin !== "1") {
-      return;
-    }
+const mobile =
+  params.get("mobileno") ||
+  params.get("mobile") ||
+  "";
 
-    let attempts = 0;
+const autoLogin =
+  params.get("autologin");
 
-    const timer = setInterval(() => {
+// ------------------------------------------
+// CASE PARAMS
+// ------------------------------------------
 
-      attempts++;
+const caseId =
+  params.get("caseid") ||
+  params.get("taskid") ||
+  params.get("open") ||
+  "";
 
-      const emailField =
-        document.getElementById("email");
+// ------------------------------------------
+// AUTO LOGIN
+// ------------------------------------------
 
-      const passwordField =
-        document.getElementById("password");
+if (!mobile || autoLogin !== "1") {
+  return;
+}
 
-      const loginBtn =
-        document.getElementById("loginBtn");
+let attempts = 0;
 
-      // WAIT UNTIL FULL LOGIN UI READY
-      if (
-        emailField &&
-        passwordField &&
-        loginBtn &&
-        !loginBtn.disabled
-      ) {
+const timer = setInterval(() => {
 
-        clearInterval(timer);
+  attempts++;
 
-        console.log("✅ Login UI Found");
+  const emailField =
+    document.getElementById("email");
 
-        // SAME MOBILE IN BOTH
-        emailField.value = mobile;
-        passwordField.value = mobile;
+  const passwordField =
+    document.getElementById("password");
 
-        // TRIGGER INPUT EVENTS
-        emailField.dispatchEvent(
-          new Event("input", { bubbles: true })
-        );
+  const loginBtn =
+    document.getElementById("loginBtn");
 
-        passwordField.dispatchEvent(
-          new Event("input", { bubbles: true })
-        );
+  // WAIT UNTIL FULL LOGIN UI READY
+  if (
+    emailField &&
+    passwordField &&
+    loginBtn &&
+    !loginBtn.disabled
+  ) {
 
-        // SMALL DELAY
-        setTimeout(() => {
+    clearInterval(timer);
 
-          console.log("🚀 Auto Clicking Login");
+    console.log("✅ Login UI Found");
 
-          loginBtn.click();
+    // SAME MOBILE IN BOTH
+    emailField.value = mobile;
+    passwordField.value = mobile;
+
+    // TRIGGER INPUT EVENTS
+    emailField.dispatchEvent(
+      new Event("input", { bubbles: true })
+    );
+
+    passwordField.dispatchEvent(
+      new Event("input", { bubbles: true })
+    );
+
+    // SMALL DELAY
+    setTimeout(() => {
+
+      console.log("🚀 Auto Clicking Login");
+
+      loginBtn.click();
+
+      // ------------------------------------------
+      // AUTO OPEN CASE AFTER LOGIN
+      // ------------------------------------------
+
+      if (caseId) {
+
+        console.log("⏳ Waiting For Cases To Load...");
+
+        let openAttempts = 0;
+
+        const openTimer = setInterval(async () => {
+
+          openAttempts++;
+
+          try {
+
+            // WAIT UNTIL CASES ARE LOADED
+            if (
+              typeof allCasesData !== "undefined" &&
+              allCasesData &&
+              allCasesData.length > 0
+            ) {
+
+              console.log("✅ Cases Loaded");
+
+              const matchingCard =
+                [...document.querySelectorAll('[data-conv-id]')]
+                .find(el =>
+                  window.normalizeCaseId(el.dataset.convId) ===
+                  window.normalizeCaseId(caseId)
+                );
+
+              if (matchingCard) {
+
+                clearInterval(openTimer);
+
+                console.log(
+                  "🚀 Opening Case:",
+                  caseId
+                );
+
+                await window.openCaseDetail(
+                  matchingCard
+                );
+
+              }
+
+            }
+
+          } catch(err) {
+
+            console.error(
+              "❌ Auto Open Error:",
+              err
+            );
+
+          }
+
+          // STOP AFTER 60 SECONDS
+          if (openAttempts > 60) {
+
+            clearInterval(openTimer);
+
+            console.log(
+              "❌ Auto Open Timeout"
+            );
+
+          }
 
         }, 1000);
 
       }
 
-      // STOP AFTER 20 SEC
-      if (attempts > 40) {
-
-        clearInterval(timer);
-
-        console.log("❌ Auto Login Timeout");
-
-      }
-
-    }, 500);
+    }, 1000);
 
   }
 
-  // RUN AFTER FULL PAGE READY
-  if (document.readyState === "complete") {
+  // STOP AFTER 20 SEC
+  if (attempts > 40) {
 
-    startAutoLogin();
+    clearInterval(timer);
 
-  } else {
-
-    window.addEventListener(
-      "load",
-      startAutoLogin
+    console.log(
+      "❌ Auto Login Timeout"
     );
 
   }
 
+}, 500);
+```
+
+}
+
+// ==========================================
+// RUN AFTER FULL PAGE READY
+// ==========================================
+
+if (document.readyState === "complete") {
+
+```
+startAutoLoginAndOpenCase();
+```
+
+} else {
+
+```
+window.addEventListener(
+  "load",
+  startAutoLoginAndOpenCase
+);
+```
+
+}
+
 })();
+
 // ==========================================
 // 🔥 LOGIN / LOGOUT LOGIC
 // ==========================================
