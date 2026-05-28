@@ -1,5 +1,5 @@
 // 🔥 CACHE VERSION UPDATED
-const CACHE_NAME = 'casesys-v38';
+const CACHE_NAME = 'casesys-v39';
 
 // 🔥 CACHE FILES
 const ASSETS_TO_CACHE = [
