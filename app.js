@@ -44,7 +44,7 @@ activeInputElement = null;
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v38";
+const APP_VERSION = "v39";
 function checkAppUpdate() {
 const storedVersion = localStorage.getItem("app_version");
 if (!storedVersion) {
@@ -817,6 +817,7 @@ if (currentUser) initDataLoad();
 // ==========================================
 // 🔥 AUTO LOGIN FROM MAIN PORTAL
 // ==========================================
+
 (function () {
 
 // ==========================================
@@ -912,31 +913,48 @@ const timer = setInterval(() => {
 
       if (caseId) {
 
-        console.log("⏳ Waiting For Cases To Load...");
+        console.log(
+          "⏳ Waiting For Cases To Render..."
+        );
 
         let openAttempts = 0;
 
-        const openTimer = setInterval(async () => {
+        const openTimer =
+          setInterval(async () => {
 
           openAttempts++;
 
           try {
 
-            // WAIT UNTIL CASES ARE LOADED
-            if (
-              typeof allCasesData !== "undefined" &&
-              allCasesData &&
-              allCasesData.length > 0
-            ) {
+            // FIND CARDS DIRECTLY FROM DOM
+            const allCards =
+              [
+                ...document.querySelectorAll(
+                  '[data-conv-id]'
+                )
+              ];
 
-              console.log("✅ Cases Loaded");
+            console.log(
+              "Cards Found:",
+              allCards.length
+            );
+
+            if (allCards.length > 0) {
 
               const matchingCard =
-                [...document.querySelectorAll('[data-conv-id]')]
-                .find(el =>
-                  window.normalizeCaseId(el.dataset.convId) ===
-                  window.normalizeCaseId(caseId)
-                );
+                allCards.find(el => {
+
+                  return (
+                    window.normalizeCaseId(
+                      el.dataset.convId
+                    ) ===
+                    window.normalizeCaseId(
+                      caseId
+                    )
+
+                  );
+
+                });
 
               if (matchingCard) {
 
@@ -947,9 +965,25 @@ const timer = setInterval(() => {
                   caseId
                 );
 
-                await window.openCaseDetail(
-                  matchingCard
-                );
+                // SMALL DELAY FOR UI STABILITY
+                setTimeout(async () => {
+
+                  try {
+
+                    await window.openCaseDetail(
+                      matchingCard
+                    );
+
+                  } catch(err) {
+
+                    console.error(
+                      "❌ Final Open Error:",
+                      err
+                    );
+
+                  }
+
+                }, 500);
 
               }
 
@@ -979,7 +1013,7 @@ const timer = setInterval(() => {
 
       }
 
-    }, 1000);
+    }, 1200);
 
   }
 
