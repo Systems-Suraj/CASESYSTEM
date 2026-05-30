@@ -44,7 +44,7 @@ activeInputElement = null;
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v40";
+const APP_VERSION = "v41";
 function checkAppUpdate() {
 const storedVersion = localStorage.getItem("app_version");
 if (!storedVersion) {
@@ -826,6 +826,7 @@ if (currentUser) initDataLoad();
 
 function startAutoLoginAndOpenCase() {
 
+document.getElementById("loginView")?.classList.add("hidden");
 
 const params =
   new URLSearchParams(window.location.search);
@@ -907,6 +908,24 @@ const timer = setInterval(() => {
 
       loginBtn.click();
 
+      setTimeout(async () => {
+
+        try {
+      
+          await loadConversations();
+      
+          console.log(
+            "✅ Conversations Loaded For Auto Open"
+          );
+      
+        } catch(err) {
+      
+          console.error(err);
+      
+        }
+      
+      }, 3000);
+
       // ------------------------------------------
 // AUTO OPEN CASE AFTER LOGIN
 // ------------------------------------------
@@ -940,7 +959,7 @@ try {
     );
 
     // FIND MATCHING CASE
-    const matchingCase =
+    let matchingCase =
       allCasesData.find(c => {
 
         const dataId =
@@ -965,6 +984,26 @@ try {
         );
 
       });
+
+    if (!matchingCase) {
+
+      try {
+    
+        await loadConversations();
+    
+        matchingCase =
+          allCasesData.find(c => {
+            const dataId = String(c.id || c.caseId || c.caseid || '').trim();
+            const urlId = String(caseId).trim();
+            return (dataId === urlId);
+          });
+    
+      } catch(err) {
+    
+        console.error(err);
+    
+      }
+    }
 
     console.log(
       "🎯 MATCH:",
@@ -1031,6 +1070,14 @@ try {
 }
 
 // TIMEOUT
+if (
+  openAttempts % 5 === 0
+) {
+
+  await loadConversations();
+
+}
+
 if (openAttempts > 90) {
 
   clearInterval(openTimer);
