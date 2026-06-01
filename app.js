@@ -44,7 +44,7 @@ activeInputElement = null;
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v42";
+const APP_VERSION = "v43";
 function checkAppUpdate() {
 const storedVersion = localStorage.getItem("app_version");
 if (!storedVersion) {
@@ -252,7 +252,7 @@ let realtimeInterval = null;
 let isInitialLoadDone = false;
 let allLoadedComments = [];
 
-// ⚡ MASTER VIEW STATE & TOGGLE (ADDED)
+// ⚡ MASTER VIEW STATE & TOGGLE
 window.masterViewMode = 'ME'; // Default pre-selected mode
 
 window.toggleMasterView = function(mode) {
@@ -835,88 +835,103 @@ if (currentUser) initDataLoad();
 };
 
 // ==========================================
-// 🔥 AUTO LOGIN FROM MAIN PORTAL
+// 🔥 AUTO LOGIN FROM MAIN PORTAL (FIXED)
 // ==========================================
-
 (function () {
-function startAutoLoginAndOpenCase() {
-document.getElementById("loginView")?.classList.add("hidden");
-const params = new URLSearchParams(window.location.search);
-const mobile = params.get("mobileno") || params.get("mobile") || "";
-const autoLogin = params.get("autologin");
-const caseId = params.get("caseid") || params.get("taskid") || params.get("open") || "";
+  function startAutoLoginAndOpenCase() {
+    const params = new URLSearchParams(window.location.search);
+    const mobile = params.get("mobileno") || params.get("mobile") || "";
+    const autoLogin = params.get("autologin");
+    const caseId = params.get("caseid") || params.get("taskid") || params.get("open") || "";
 
-if (!mobile || autoLogin !== "1") { return; }
-
-let attempts = 0;
-const timer = setInterval(() => {
-  attempts++;
-  const emailField = document.getElementById("email");
-  const passwordField = document.getElementById("password");
-  const loginBtn = document.getElementById("loginBtn");
-
-  if (emailField && passwordField && loginBtn && !loginBtn.disabled) {
-    clearInterval(timer);
-    emailField.value = mobile;
-    passwordField.value = mobile;
-    emailField.dispatchEvent(new Event("input", { bubbles: true }));
-    passwordField.dispatchEvent(new Event("input", { bubbles: true }));
-
-    setTimeout(() => {
-      loginBtn.click();
-      setTimeout(async () => {
-        try { await loadConversations(); } catch(err) { console.error(err); }
-      }, 3000);
-
-if (caseId) {
-let openAttempts = 0;
-const openTimer = setInterval(async () => {
-openAttempts++;
-try {
-  if (typeof allCasesData !== "undefined" && Array.isArray(allCasesData) && allCasesData.length > 0) {
-    let matchingCase = allCasesData.find(c => {
-        const dataId = String(c.id || c.caseId || c.caseid || '').trim();
-        const urlId = String(caseId).trim();
-        return (dataId === urlId);
-      });
-    if (!matchingCase) {
-      try {
-        await loadConversations();
-        matchingCase = allCasesData.find(c => {
-            const dataId = String(c.id || c.caseId || c.caseid || '').trim();
-            const urlId = String(caseId).trim();
-            return (dataId === urlId);
-          });
-      } catch(err) { console.error(err); }
+    // ✅ Normal Visit (No auto-login params) -> Stop script immediately so login screen stays visible
+    if (!mobile || autoLogin !== "1") { 
+        return; 
     }
-    if (matchingCase) {
-      clearInterval(openTimer);
-      setTimeout(async () => {
-        try {
-          const card = document.querySelector(`[data-conv-id="${matchingCase.id}"]`);
-          if (card) { await window.openCaseDetail(card); }
-        } catch(err) { console.error(err); }
-      }, 2000);
+
+    // ✅ Auto Login Detected -> Optionally fade out the login screen slightly
+    const loginView = document.getElementById("loginView");
+    if(loginView) {
+        loginView.style.opacity = '0'; // Hide visually while script types
+        loginView.style.pointerEvents = 'none';
     }
+
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts++;
+      const emailField = document.getElementById("email");
+      const passwordField = document.getElementById("password");
+      const loginBtn = document.getElementById("loginBtn");
+
+      if (emailField && passwordField && loginBtn && !loginBtn.disabled) {
+        clearInterval(timer);
+        
+        emailField.value = mobile;
+        passwordField.value = mobile;
+        emailField.dispatchEvent(new Event("input", { bubbles: true }));
+        passwordField.dispatchEvent(new Event("input", { bubbles: true }));
+
+        setTimeout(() => {
+          loginBtn.click();
+          
+          // Restore opacity just in case login fails and user needs to see error
+          setTimeout(() => {
+              if(loginView) {
+                  loginView.style.opacity = '1';
+                  loginView.style.pointerEvents = 'auto';
+              }
+          }, 1500);
+
+          if (caseId) {
+            let openAttempts = 0;
+            const openTimer = setInterval(async () => {
+              openAttempts++;
+              try {
+                if (typeof allCasesData !== "undefined" && Array.isArray(allCasesData) && allCasesData.length > 0) {
+                  let matchingCase = allCasesData.find(c => {
+                      const dataId = String(c.id || c.caseId || c.caseid || '').trim();
+                      const urlId = String(caseId).trim();
+                      return (dataId === urlId);
+                    });
+                  
+                  if (!matchingCase) {
+                      try { await loadConversations(); } catch(e){}
+                      matchingCase = allCasesData.find(c => {
+                          const dataId = String(c.id || c.caseId || c.caseid || '').trim();
+                          const urlId = String(caseId).trim();
+                          return (dataId === urlId);
+                        });
+                  }
+
+                  if (matchingCase) {
+                    clearInterval(openTimer);
+                    setTimeout(async () => {
+                      try {
+                        const card = document.querySelector(`[data-conv-id="${matchingCase.id}"]`);
+                        if (card) { await window.openCaseDetail(card); }
+                      } catch(err) { console.error(err); }
+                    }, 2000);
+                  }
+                }
+              } catch(err) { console.error("❌ Auto Open Error:", err); }
+
+              if (openAttempts % 5 === 0) { await loadConversations(); }
+              if (openAttempts > 90) { clearInterval(openTimer); }
+
+            }, 1000);
+          }
+        }, 800);
+      }
+      
+      if (attempts > 40) { clearInterval(timer); }
+    }, 500);
   }
-} catch(err) { console.error("❌ Auto Open Error:", err); }
 
-if (openAttempts % 5 === 0) { await loadConversations(); }
-if (openAttempts > 90) { clearInterval(openTimer); }
-
-}, 1000);
-}
-    }, 1200);
+  if (document.readyState === "complete") {
+    startAutoLoginAndOpenCase();
+  } else {
+    window.addEventListener("load", startAutoLoginAndOpenCase);
   }
-  if (attempts > 40) { clearInterval(timer); }
-}, 500);
-}
-
-if (document.readyState === "complete") {
-startAutoLoginAndOpenCase();
-} else {
-window.addEventListener("load", startAutoLoginAndOpenCase);
-}
 })();
 
 // ==========================================
