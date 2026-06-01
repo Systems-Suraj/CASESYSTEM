@@ -44,7 +44,7 @@ activeInputElement = null;
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v41";
+const APP_VERSION = "v42";
 function checkAppUpdate() {
 const storedVersion = localStorage.getItem("app_version");
 if (!storedVersion) {
@@ -251,6 +251,26 @@ let seenMessages = new Set();
 let realtimeInterval = null;
 let isInitialLoadDone = false;
 let allLoadedComments = [];
+
+// ⚡ MASTER VIEW STATE & TOGGLE (ADDED)
+window.masterViewMode = 'ME'; // Default pre-selected mode
+
+window.toggleMasterView = function(mode) {
+    window.masterViewMode = mode;
+    const btnMe = document.getElementById('btn_view_me');
+    const btnNotMe = document.getElementById('btn_view_not_me');
+
+    if (btnMe && btnNotMe) {
+        if (mode === 'ME') {
+            btnMe.className = "px-4 py-1.5 text-xs font-bold rounded-md bg-indigo-600 text-white shadow-sm transition-all";
+            btnNotMe.className = "px-4 py-1.5 text-xs font-bold rounded-md bg-white text-slate-600 hover:bg-slate-50 transition-all";
+        } else {
+            btnNotMe.className = "px-4 py-1.5 text-xs font-bold rounded-md bg-indigo-600 text-white shadow-sm transition-all";
+            btnMe.className = "px-4 py-1.5 text-xs font-bold rounded-md bg-white text-slate-600 hover:bg-slate-50 transition-all";
+        }
+    }
+    applyFilters();
+};
 
 // ==========================================
 // 🔥 CASE OPEN PROTECTION
@@ -819,321 +839,84 @@ if (currentUser) initDataLoad();
 // ==========================================
 
 (function () {
-
-// ==========================================
-// 🚀 AUTO LOGIN + AUTO OPEN CASE
-// ==========================================
-
 function startAutoLoginAndOpenCase() {
-
 document.getElementById("loginView")?.classList.add("hidden");
+const params = new URLSearchParams(window.location.search);
+const mobile = params.get("mobileno") || params.get("mobile") || "";
+const autoLogin = params.get("autologin");
+const caseId = params.get("caseid") || params.get("taskid") || params.get("open") || "";
 
-const params =
-  new URLSearchParams(window.location.search);
-
-// ------------------------------------------
-// LOGIN PARAMS
-// ------------------------------------------
-
-const mobile =
-  params.get("mobileno") ||
-  params.get("mobile") ||
-  "";
-
-const autoLogin =
-  params.get("autologin");
-
-// ------------------------------------------
-// CASE PARAMS
-// ------------------------------------------
-
-const caseId =
-  params.get("caseid") ||
-  params.get("taskid") ||
-  params.get("open") ||
-  "";
-
-// ------------------------------------------
-// AUTO LOGIN
-// ------------------------------------------
-
-if (!mobile || autoLogin !== "1") {
-  return;
-}
+if (!mobile || autoLogin !== "1") { return; }
 
 let attempts = 0;
-
 const timer = setInterval(() => {
-
   attempts++;
+  const emailField = document.getElementById("email");
+  const passwordField = document.getElementById("password");
+  const loginBtn = document.getElementById("loginBtn");
 
-  const emailField =
-    document.getElementById("email");
-
-  const passwordField =
-    document.getElementById("password");
-
-  const loginBtn =
-    document.getElementById("loginBtn");
-
-  // WAIT UNTIL FULL LOGIN UI READY
-  if (
-    emailField &&
-    passwordField &&
-    loginBtn &&
-    !loginBtn.disabled
-  ) {
-
+  if (emailField && passwordField && loginBtn && !loginBtn.disabled) {
     clearInterval(timer);
-
-    console.log("✅ Login UI Found");
-
-    // SAME MOBILE IN BOTH
     emailField.value = mobile;
     passwordField.value = mobile;
+    emailField.dispatchEvent(new Event("input", { bubbles: true }));
+    passwordField.dispatchEvent(new Event("input", { bubbles: true }));
 
-    // TRIGGER INPUT EVENTS
-    emailField.dispatchEvent(
-      new Event("input", { bubbles: true })
-    );
-
-    passwordField.dispatchEvent(
-      new Event("input", { bubbles: true })
-    );
-
-    // SMALL DELAY
     setTimeout(() => {
-
-      console.log("🚀 Auto Clicking Login");
-
       loginBtn.click();
-
       setTimeout(async () => {
-
-        try {
-      
-          await loadConversations();
-      
-          console.log(
-            "✅ Conversations Loaded For Auto Open"
-          );
-      
-        } catch(err) {
-      
-          console.error(err);
-      
-        }
-      
+        try { await loadConversations(); } catch(err) { console.error(err); }
       }, 3000);
 
-      // ------------------------------------------
-// AUTO OPEN CASE AFTER LOGIN
-// ------------------------------------------
-
 if (caseId) {
-
-console.log(
-"⏳ Waiting For Cases Data..."
-);
-
 let openAttempts = 0;
-
-const openTimer =
-setInterval(async () => {
-
-
+const openTimer = setInterval(async () => {
 openAttempts++;
-
 try {
-
-  // WAIT UNTIL DATA FULLY LOADED
-  if (
-    typeof allCasesData !== "undefined" &&
-    Array.isArray(allCasesData) &&
-    allCasesData.length > 0
-  ) {
-
-    console.log(
-      "✅ Cases Loaded:",
-      allCasesData.length
-    );
-
-    // FIND MATCHING CASE
-    let matchingCase =
-      allCasesData.find(c => {
-
-        const dataId =
-          String(
-            c.id ||
-            c.caseId ||
-            c.caseid ||
-            ''
-          ).trim();
-
-        const urlId =
-          String(caseId).trim();
-
-        console.log(
-          "Checking:",
-          dataId,
-          urlId
-        );
-
-        return (
-          dataId === urlId
-        );
-
+  if (typeof allCasesData !== "undefined" && Array.isArray(allCasesData) && allCasesData.length > 0) {
+    let matchingCase = allCasesData.find(c => {
+        const dataId = String(c.id || c.caseId || c.caseid || '').trim();
+        const urlId = String(caseId).trim();
+        return (dataId === urlId);
       });
-
     if (!matchingCase) {
-
       try {
-    
         await loadConversations();
-    
-        matchingCase =
-          allCasesData.find(c => {
+        matchingCase = allCasesData.find(c => {
             const dataId = String(c.id || c.caseId || c.caseid || '').trim();
             const urlId = String(caseId).trim();
             return (dataId === urlId);
           });
-    
-      } catch(err) {
-    
-        console.error(err);
-    
-      }
+      } catch(err) { console.error(err); }
     }
-
-    console.log(
-      "🎯 MATCH:",
-      matchingCase
-    );
-
     if (matchingCase) {
-
       clearInterval(openTimer);
-
-      console.log(
-        "🚀 Opening Case"
-      );
-
-      // WAIT FOR DOM RENDER
       setTimeout(async () => {
-
         try {
-
-          // FIND REAL CARD AFTER RENDER
-          const card =
-            document.querySelector(
-              `[data-conv-id="${matchingCase.id}"]`
-            );
-
-          console.log(
-            "CARD:",
-            card
-          );
-
-          if (card) {
-
-            await window.openCaseDetail(
-              card
-            );
-
-          } else {
-
-            console.log(
-              "❌ Card not found in DOM"
-            );
-
-          }
-
-        } catch(err) {
-
-          console.error(err);
-
-        }
-
+          const card = document.querySelector(`[data-conv-id="${matchingCase.id}"]`);
+          if (card) { await window.openCaseDetail(card); }
+        } catch(err) { console.error(err); }
       }, 2000);
-
     }
-
   }
+} catch(err) { console.error("❌ Auto Open Error:", err); }
 
-} catch(err) {
-
-  console.error(
-    "❌ Auto Open Error:",
-    err
-  );
-
-}
-
-// TIMEOUT
-if (
-  openAttempts % 5 === 0
-) {
-
-  await loadConversations();
-
-}
-
-if (openAttempts > 90) {
-
-  clearInterval(openTimer);
-
-  console.log(
-    "❌ Auto Open Timeout"
-  );
-
-}
-
+if (openAttempts % 5 === 0) { await loadConversations(); }
+if (openAttempts > 90) { clearInterval(openTimer); }
 
 }, 1000);
-
 }
-
     }, 1200);
-
   }
-
-  // STOP AFTER 20 SEC
-  if (attempts > 40) {
-
-    clearInterval(timer);
-
-    console.log(
-      "❌ Auto Login Timeout"
-    );
-
-  }
-
+  if (attempts > 40) { clearInterval(timer); }
 }, 500);
-
-
 }
-
-// ==========================================
-// RUN AFTER FULL PAGE READY
-// ==========================================
 
 if (document.readyState === "complete") {
-
-
 startAutoLoginAndOpenCase();
-
-
 } else {
-
-
-window.addEventListener(
-  "load",
-  startAutoLoginAndOpenCase
-);
-
-
+window.addEventListener("load", startAutoLoginAndOpenCase);
 }
-
 })();
 
 // ==========================================
@@ -1198,6 +981,30 @@ globalNotifInterval = setInterval(fetchGlobalNotifications, 15000);
 if (typeof initNotifications === 'function') initNotifications(userObj);
 initDataLoad();
 setTimeout(() => { if (window.Android && userObj.email) { try { Android.sendUserEmail(userObj.email); } catch(e) {} } }, 2000);
+
+// ⚡ INJECT MASTER VIEW TOGGLE IF MASTER
+if (userObj.isMaster) {
+    let toggleContainer = document.getElementById('masterViewToggleContainer');
+    if (!toggleContainer) {
+        const filterInput = document.getElementById('filterId');
+        if (filterInput) {
+            const parent = filterInput.closest('.flex') || filterInput.parentElement;
+            if (parent) {
+                toggleContainer = document.createElement('div');
+                toggleContainer.id = 'masterViewToggleContainer';
+                toggleContainer.className = 'flex bg-slate-100 rounded-lg p-1 border border-slate-200 ml-auto shadow-sm ml-2 shrink-0';
+                toggleContainer.innerHTML = `
+                    <button id="btn_view_me" onclick="toggleMasterView('ME')" class="px-4 py-1.5 text-xs font-bold rounded-md bg-indigo-600 text-white shadow-sm transition-all">Me</button>
+                    <button id="btn_view_not_me" onclick="toggleMasterView('NOT_ME')" class="px-4 py-1.5 text-xs font-bold rounded-md bg-white text-slate-600 hover:bg-slate-50 transition-all">Not Me</button>
+                `;
+                parent.appendChild(toggleContainer);
+            }
+        }
+    } else {
+        toggleContainer.classList.remove('hidden');
+    }
+    window.toggleMasterView('ME'); // Force default selection
+}
 }
 
 async function initNotifications(user) {
@@ -1378,6 +1185,26 @@ let visibleLabels = new Set(); let visibleMembers = new Set();
         if(!Array.isArray(cardLabels)) cardLabels = [];
         let cardMembers = card._cachedMembers || JSON.parse(card.dataset.members || '[]');
         if(!Array.isArray(cardMembers)) cardMembers = [];
+
+        // ⚡ --- BEGIN MASTER FILTER LOGIC ---
+        if (currentUser && currentUser.isMaster) {
+            const myEmail = currentUser.email.toLowerCase().trim();
+            const myName = (currentUser.name || '').toLowerCase().trim();
+            let isMyCase = false;
+            
+            cardMembers.forEach(m => {
+                if(!m) return;
+                const em = String(m).toLowerCase().trim();
+                const nm = String(window.getUserNameByEmail(m)).toLowerCase().trim();
+                if(em === myEmail || nm === myName || em.includes(myEmail) || nm.includes(myName)) isMyCase = true;
+            });
+            const creatorName = (card.querySelector('[data-id="author"]')?.innerText || '').toLowerCase().trim();
+            if(creatorName === myName || creatorName === myEmail || creatorName.includes(myName)) isMyCase = true;
+
+            if (window.masterViewMode === 'ME' && !isMyCase) showTab = false;
+            if (window.masterViewMode === 'NOT_ME' && isMyCase) showTab = false;
+        }
+        // ⚡ --- END MASTER FILTER LOGIC ---
         
         const matchesLabels = checkedLabels.length === 0 || checkedLabels.every(l => cardLabels.includes(l));
         const matchesMembers = checkedMembers.length === 0 || checkedMembers.every(m => 
@@ -3099,6 +2926,26 @@ allCasesData.forEach(conv => {
   if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) showInitial = true;
   if (currentTab === 'Archive' && conv.status === 'Archived') showInitial = true;
   if (currentTab === 'Snooze' && conv.status !== 'Archived' && isSnoozed) showInitial = true;
+
+  // ⚡ --- BEGIN MASTER FILTER LOGIC ---
+  if (currentUser && currentUser.isMaster) {
+      const myEmail = currentUser.email.toLowerCase().trim();
+      const myName = (currentUser.name || '').toLowerCase().trim();
+      let isMyCase = false;
+      
+      cardDiv._cachedMembers.forEach(m => {
+          if(!m) return;
+          const em = String(m).toLowerCase().trim();
+          const nm = String(window.getUserNameByEmail(m)).toLowerCase().trim();
+          if(em === myEmail || nm === myName || em.includes(myEmail) || nm.includes(myName)) isMyCase = true;
+      });
+      const cName = creatorName.toLowerCase().trim();
+      if(cName === myName || cName === myEmail || cName.includes(myName)) isMyCase = true;
+
+      if (window.masterViewMode === 'ME' && !isMyCase) showInitial = false;
+      if (window.masterViewMode === 'NOT_ME' && isMyCase) showInitial = false;
+  }
+  // ⚡ --- END MASTER FILTER LOGIC ---
   
   wrapperDiv.style.display = showInitial ? 'block' : 'none';
 
