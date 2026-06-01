@@ -102,6 +102,12 @@
                <span class="hidden sm:inline text-slate-900">Cases</span>
             </h1>
             <div class="flex gap-2">
+              
+              <div id="masterViewToggleContainer" class="hidden flex bg-slate-100 rounded-lg p-1 border border-slate-200 shadow-sm mr-1">
+                  <button id="btn_view_me" onclick="toggleMasterView('ME')" class="px-4 py-1.5 text-xs font-bold rounded-md bg-indigo-600 text-white shadow-sm transition-all">Me</button>
+                  <button id="btn_view_not_me" onclick="toggleMasterView('NOT_ME')" class="px-4 py-1.5 text-xs font-bold rounded-md bg-white text-slate-600 hover:bg-slate-50 transition-all">Not Me</button>
+              </div>
+
               <button onclick="processBulkArchive()" id="bulkArchiveBtn" class="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2 rounded-xl text-sm font-bold transition-all shadow-sm hover:shadow-md hidden">Archive Selected</button>
               <button onclick="openModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-sm font-bold transition-all shadow-sm hover:shadow-md flex items-center gap-1">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path></svg> New Case
