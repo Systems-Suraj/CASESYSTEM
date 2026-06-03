@@ -1,4 +1,4 @@
-// ==========================================
+    // ==========================================
 // 🔒 UI PROTECTION STATE & GLOBAL HELPERS
 // ==========================================
 window.normalizeCaseId = function(id) {
@@ -44,7 +44,7 @@ activeInputElement = null;
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v44";
+const APP_VERSION = "v45";
 function checkAppUpdate() {
 const storedVersion = localStorage.getItem("app_version");
 if (!storedVersion) {
@@ -1218,12 +1218,11 @@ let newCounts = { Live: 0, Snooze: 0, Archive: 0 };
         // 2. Tab Routing & Counting Logic
         let isArchived, isSnoozed, isLive;
         let currentRecordStatus = String(card.dataset.status || '').trim();
-
-        if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
-            // ✅ UPDATE ONLY NOT ME CASES LOGIC
-            isLive = (currentRecordStatus === 'Live');
-            isSnoozed = (currentRecordStatus === 'Snooze');
+           if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
+            // ✅ FIX: Backend sends 'Active' not 'Live', and Snooze is a timestamp
             isArchived = (currentRecordStatus === 'Archive' || currentRecordStatus === 'Archived');
+            isSnoozed = parseInt(card.dataset.snooze || 0) > Date.now();
+            isLive = !isArchived && !isSnoozed; 
             
             if (isLive) newCounts.Live++;
             if (isSnoozed) newCounts.Snooze++;
@@ -2857,8 +2856,8 @@ allCasesData.forEach(c => {
     if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
         const s = String(c.status || '').trim();
         if (s === 'Archive' || s === 'Archived') counts.Archive++;
-        else if (s === 'Snooze') counts.Snooze++;
-        else if (s === 'Live') counts.Live++;
+        else if (isSnoozed && !hasUnread) counts.Snooze++;
+        else counts.Live++; // Fallback handles 'Active' seamlessly
     } else if (window.masterViewMode === 'ME' && isMyCase) {
         if (c.status === 'Archived') counts.Archive++;
         else if (isSnoozed && !hasUnread) counts.Snooze++;
@@ -3019,9 +3018,9 @@ allCasesData.forEach(conv => {
   let recStatus = String(conv.status || '').trim();
 
   if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
-      isRecLive = (recStatus === 'Live');
-      isRecSnoozed = (recStatus === 'Snooze');
       isRecArchived = (recStatus === 'Archive' || recStatus === 'Archived');
+      isRecSnoozed = isSnoozed; // Uses the parsed timestamp logic
+      isRecLive = !isRecArchived && !isRecSnoozed; // Treats 'Active' as Live automatically
   } else {
       isRecArchived = conv.status === 'Archived';
       isRecSnoozed = isSnoozed; 
