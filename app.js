@@ -1,4 +1,4 @@
-    // ==========================================
+// ==========================================
 // 🔒 UI PROTECTION STATE & GLOBAL HELPERS
 // ==========================================
 window.normalizeCaseId = function(id) {
@@ -44,7 +44,7 @@ activeInputElement = null;
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v45";
+const APP_VERSION = "v46";
 function checkAppUpdate() {
 const storedVersion = localStorage.getItem("app_version");
 if (!storedVersion) {
@@ -1218,7 +1218,8 @@ let newCounts = { Live: 0, Snooze: 0, Archive: 0 };
         // 2. Tab Routing & Counting Logic
         let isArchived, isSnoozed, isLive;
         let currentRecordStatus = String(card.dataset.status || '').trim();
-           if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
+
+        if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
             // ✅ FIX: Backend sends 'Active' not 'Live', and Snooze is a timestamp
             isArchived = (currentRecordStatus === 'Archive' || currentRecordStatus === 'Archived');
             isSnoozed = parseInt(card.dataset.snooze || 0) > Date.now();
