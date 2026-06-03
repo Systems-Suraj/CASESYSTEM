@@ -44,7 +44,7 @@ activeInputElement = null;
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v43";
+const APP_VERSION = "v44";
 function checkAppUpdate() {
 const storedVersion = localStorage.getItem("app_version");
 if (!storedVersion) {
@@ -1186,26 +1186,22 @@ const idQuery = filterInput.value.toLowerCase().trim();
 const checkedLabels = Array.from(document.querySelectorAll('.flabel[data-applied="true"]')).map(cb => cb.value);
 const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => String(cb.value).toLowerCase().trim());
 let visibleLabels = new Set(); let visibleMembers = new Set();
+let newCounts = { Live: 0, Snooze: 0, Archive: 0 }; 
+
     Array.from(document.getElementById('conversationFeed').children).forEach(wrapper => {
         const card = wrapper.classList.contains('card-main') ? wrapper : wrapper.querySelector('.card-main');
         if(!card || !card.dataset.convId) return; 
-        const isArchived = card.dataset.status === 'Archived';
-        const isSnoozed = parseInt(card.dataset.snooze || 0) > Date.now();
-        let showTab = false;
-        if (currentTab === 'Live' && !isArchived && !isSnoozed) showTab = true; 
-        if (currentTab === 'Archive' && isArchived) showTab = true;
-        if (currentTab === 'Snooze' && !isArchived && isSnoozed) showTab = true;
 
         let cardLabels = card._cachedLabels || JSON.parse(card.dataset.labels || '[]');
         if(!Array.isArray(cardLabels)) cardLabels = [];
         let cardMembers = card._cachedMembers || JSON.parse(card.dataset.members || '[]');
         if(!Array.isArray(cardMembers)) cardMembers = [];
 
-        // ⚡ --- BEGIN MASTER FILTER LOGIC ---
+        // 1. Determine Ownership (isMyCase)
+        let isMyCase = false;
         if (currentUser && currentUser.isMaster) {
             const myEmail = currentUser.email.toLowerCase().trim();
             const myName = (currentUser.name || '').toLowerCase().trim();
-            let isMyCase = false;
             
             cardMembers.forEach(m => {
                 if(!m) return;
@@ -1215,7 +1211,43 @@ let visibleLabels = new Set(); let visibleMembers = new Set();
             });
             const creatorName = (card.querySelector('[data-id="author"]')?.innerText || '').toLowerCase().trim();
             if(creatorName === myName || creatorName === myEmail || creatorName.includes(myName)) isMyCase = true;
+        } else {
+            isMyCase = true; 
+        }
 
+        // 2. Tab Routing & Counting Logic
+        let isArchived, isSnoozed, isLive;
+        let currentRecordStatus = String(card.dataset.status || '').trim();
+
+        if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
+            // ✅ UPDATE ONLY NOT ME CASES LOGIC
+            isLive = (currentRecordStatus === 'Live');
+            isSnoozed = (currentRecordStatus === 'Snooze');
+            isArchived = (currentRecordStatus === 'Archive' || currentRecordStatus === 'Archived');
+            
+            if (isLive) newCounts.Live++;
+            if (isSnoozed) newCounts.Snooze++;
+            if (isArchived) newCounts.Archive++;
+        } else {
+            // 🔒 PRESERVE ME CASES COMPLETELY
+            isArchived = currentRecordStatus === 'Archived';
+            isSnoozed = parseInt(card.dataset.snooze || 0) > Date.now();
+            isLive = !isArchived && !isSnoozed;
+            
+            if (window.masterViewMode === 'ME' && isMyCase) {
+                if (isArchived) newCounts.Archive++;
+                else if (isSnoozed) newCounts.Snooze++;
+                else newCounts.Live++;
+            }
+        }
+
+        let showTab = false;
+        if (currentTab === 'Live' && isLive) showTab = true;
+        if (currentTab === 'Archive' && isArchived) showTab = true;
+        if (currentTab === 'Snooze' && isSnoozed) showTab = true;
+
+        // ⚡ --- BEGIN MASTER FILTER LOGIC ---
+        if (currentUser && currentUser.isMaster) {
             if (window.masterViewMode === 'ME' && !isMyCase) showTab = false;
             if (window.masterViewMode === 'NOT_ME' && isMyCase) showTab = false;
         }
@@ -1241,6 +1273,11 @@ let visibleLabels = new Set(); let visibleMembers = new Set();
             if(m) { visibleMembers.add(String(m).toLowerCase().trim()); visibleMembers.add(String(window.getUserNameByEmail(m)).toLowerCase().trim()); }
         });
     });
+
+    // UPDATE COUNTS IN DOM ACCURATELY AFTER APPLYING NOT ME CASES FILTER
+    if(document.getElementById('count-Live')) document.getElementById('count-Live').innerText = newCounts.Live;
+    if(document.getElementById('count-Snooze')) document.getElementById('count-Snooze').innerText = newCounts.Snooze;
+    if(document.getElementById('count-Archive')) document.getElementById('count-Archive').innerText = newCounts.Archive;
 
     document.querySelectorAll('#labelsDropdown .dropdown-item').forEach(item => {
         const cb = item.querySelector('input[type="checkbox"]');
@@ -2800,10 +2837,33 @@ allCasesData.forEach(c => {
     
     const hasUnread = notifications.filter(n => String(n.caseId).trim() === String(c.id).trim()).length > 0;
     const isSnoozed = originalSnoozeMs > Date.now();
-    
-    if (c.status === 'Archived') counts.Archive++;
-    else if (isSnoozed && !hasUnread) counts.Snooze++;
-    else counts.Live++;
+
+    // Determine ownership for count bifurcation 
+    let isMyCase = false;
+    if (currentUser && currentUser.isMaster) {
+        const members = [...(c.admins||[]), ...(c.users||[]), c.createdBy];
+        members.forEach(m => {
+            if(!m) return;
+            const em = String(m).toLowerCase().trim();
+            const nm = String(window.getUserNameByEmail(m)).toLowerCase().trim();
+            if(em === uEmail || nm === uName || em.includes(uEmail) || nm.includes(uName)) isMyCase = true;
+        });
+        const cName = String(window.getUserNameByEmail(c.createdBy)).toLowerCase().trim();
+        if(cName === uName || cName === uEmail || cName.includes(uName)) isMyCase = true;
+    } else {
+        isMyCase = true;
+    }
+
+    if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
+        const s = String(c.status || '').trim();
+        if (s === 'Archive' || s === 'Archived') counts.Archive++;
+        else if (s === 'Snooze') counts.Snooze++;
+        else if (s === 'Live') counts.Live++;
+    } else if (window.masterViewMode === 'ME' && isMyCase) {
+        if (c.status === 'Archived') counts.Archive++;
+        else if (isSnoozed && !hasUnread) counts.Snooze++;
+        else counts.Live++;
+    }
 });
 
 if(document.getElementById('count-Live')) document.getElementById('count-Live').innerText = counts.Live;
@@ -2936,17 +2996,12 @@ allCasesData.forEach(conv => {
   const usrCont = cardDiv.querySelector('[data-id="users-container"]');
   conv.admins.forEach(a => { if(a) admCont.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${window.getUserNameByEmail(a)}</span>`; });
   conv.users.forEach(u => { if(u) usrCont.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${window.getUserNameByEmail(u)}</span>`; });
-  
-  let showInitial = false;
-  if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) showInitial = true;
-  if (currentTab === 'Archive' && conv.status === 'Archived') showInitial = true;
-  if (currentTab === 'Snooze' && conv.status !== 'Archived' && isSnoozed) showInitial = true;
 
-  // ⚡ --- BEGIN MASTER FILTER LOGIC ---
+  // ⚡ --- BEGIN MASTER FILTER LOGIC (Initial Routing) ---
+  let isMyCase = false;
   if (currentUser && currentUser.isMaster) {
       const myEmail = currentUser.email.toLowerCase().trim();
       const myName = (currentUser.name || '').toLowerCase().trim();
-      let isMyCase = false;
       
       cardDiv._cachedMembers.forEach(m => {
           if(!m) return;
@@ -2956,7 +3011,29 @@ allCasesData.forEach(conv => {
       });
       const cName = creatorName.toLowerCase().trim();
       if(cName === myName || cName === myEmail || cName.includes(myName)) isMyCase = true;
+  } else {
+      isMyCase = true;
+  }
 
+  let isRecArchived, isRecSnoozed, isRecLive;
+  let recStatus = String(conv.status || '').trim();
+
+  if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
+      isRecLive = (recStatus === 'Live');
+      isRecSnoozed = (recStatus === 'Snooze');
+      isRecArchived = (recStatus === 'Archive' || recStatus === 'Archived');
+  } else {
+      isRecArchived = conv.status === 'Archived';
+      isRecSnoozed = isSnoozed; 
+      isRecLive = !isRecArchived && !isRecSnoozed;
+  }
+
+  let showInitial = false;
+  if (currentTab === 'Live' && isRecLive) showInitial = true;
+  if (currentTab === 'Archive' && isRecArchived) showInitial = true;
+  if (currentTab === 'Snooze' && isRecSnoozed) showInitial = true;
+
+  if (currentUser && currentUser.isMaster) {
       if (window.masterViewMode === 'ME' && !isMyCase) showInitial = false;
       if (window.masterViewMode === 'NOT_ME' && isMyCase) showInitial = false;
   }
