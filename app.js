@@ -1352,9 +1352,9 @@ window.processSingleArchive = function(btn) {
         `Are you sure you want to archive this case? \n\nCase ID: ${convId}`, 
         true, 
         async () => {
-            const originalText = btn.innerText;
             btn.innerText = "Archiving..."; 
             btn.disabled = true;
+            
             try { 
                 // We reuse your existing bulkArchive API, just passing an array with one ID
                 await apiCall('bulkArchive', { 
@@ -1368,7 +1368,10 @@ window.processSingleArchive = function(btn) {
             }
             catch(e) { 
                 showCustomDialog("Error", "Failed to archive.", false); 
-                btn.innerText = originalText; 
+            }
+            finally {
+                // 👇 Yeh block hamesha chalega aur button ko reset karega 👇
+                btn.innerText = "📦 Archive"; 
                 btn.disabled = false; 
             }
         }
