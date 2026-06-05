@@ -1338,6 +1338,42 @@ window.processBulkArchive = function() {
     });
 };
 
+// ==========================================
+// ACTIONS: ARCHIVE, UNARCHIVE, SNOOZE
+// ==========================================
+
+window.processSingleArchive = function(btn) {
+    const convId = document.getElementById('detail-conv-id')?.value;
+    if(!convId) return;
+
+    // Show confirmation dialog before archiving
+    showCustomDialog(
+        "Confirm Archive", 
+        `Are you sure you want to archive this case? \n\nCase ID: ${convId}`, 
+        true, 
+        async () => {
+            const originalText = btn.innerText;
+            btn.innerText = "Archiving..."; 
+            btn.disabled = true;
+            try { 
+                // We reuse your existing bulkArchive API, just passing an array with one ID
+                await apiCall('bulkArchive', { 
+                    ids: [convId], 
+                    user: currentUser.email || currentUser.name 
+                }); 
+                
+                // Reload dashboard and close the detail view automatically
+                loadConversations(); 
+                closeCaseDetail(); 
+            }
+            catch(e) { 
+                showCustomDialog("Error", "Failed to archive.", false); 
+                btn.innerText = originalText; 
+                btn.disabled = false; 
+            }
+        }
+    );
+};
 window.processUnarchive = async function(btn) {
 const parent = btn.closest('[data-conv-id]');
 const convId = parent ? String(parent.dataset.convId).trim() : document.getElementById('detail-conv-id')?.value;
@@ -1985,15 +2021,22 @@ if (!card) card = cardEl.closest('[data-conv-id]');
 
   const status = dataset.status;
   const isSnoozed = parseInt(dataset.snooze) > Date.now();
-  const unarchiveBtn = document.getElementById('detail-unarchive-btn'); const unsnoozeBtn = document.getElementById('detail-unsnooze-btn'); const snoozeBtn = document.getElementById('detail-snooze-btn');
+  const unarchiveBtn = document.getElementById('detail-unarchive-btn'); 
+  const unsnoozeBtn = document.getElementById('detail-unsnooze-btn'); 
+  const snoozeBtn = document.getElementById('detail-snooze-btn');
+  const archiveBtn = document.getElementById('detail-archive-btn'); // 👈 Add this
   
-  unarchiveBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden'); snoozeBtn.classList.add('hidden');
+  unarchiveBtn.classList.add('hidden'); 
+  unsnoozeBtn.classList.add('hidden'); 
+  snoozeBtn.classList.add('hidden');
+  archiveBtn.classList.add('hidden'); // 👈 Add this
   
   if (status === 'Archived') { 
       unarchiveBtn.classList.remove('hidden');
   }
   
   if (status !== 'Archived') {
+      archiveBtn.classList.remove('hidden'); // 👈 Show Archive if not already archived
       if (isSnoozed) { unsnoozeBtn.classList.remove('hidden'); } 
       else { snoozeBtn.classList.remove('hidden'); }
   }
