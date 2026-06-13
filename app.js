@@ -44,7 +44,7 @@ activeInputElement = null;
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v51";
+const APP_VERSION = "v52";
 function checkAppUpdate() {
 const storedVersion = localStorage.getItem("app_version");
 if (!storedVersion) {
