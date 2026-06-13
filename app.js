@@ -45,7 +45,7 @@ activeInputElement = null;
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v50";
+const APP_VERSION = "v51";
 function checkAppUpdate() {
 const storedVersion = localStorage.getItem("app_version");
 if (!storedVersion) {
@@ -3316,7 +3316,7 @@ let newCounts = { Live: 0, Snooze: 0, Archive: 0 };
 
         // ⚡ --- BEGIN MASTER FILTER LOGIC ---
         if (currentUser && currentUser.isMaster) {
-       if (window.masterViewMode === 'ME' && !isMyCase) showTab = false;
+            if (window.masterViewMode === 'ME' && !isMyCase) showTab = false;
             if (window.masterViewMode === 'NOT_ME' && isMyCase) showTab = false;
         }
         // ⚡ --- END MASTER FILTER LOGIC ---
