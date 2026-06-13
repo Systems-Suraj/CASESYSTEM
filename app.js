@@ -648,9 +648,12 @@ window.openFromNotification = async function(caseId, uniqueId) {
 };
 
 function clearAllNotifications() {
-notifications = notifications.filter(n => n.type === 'Ask');
-unreadCount = notifications.length;
-updateNotificationUI();
+    notifications.forEach(n => {
+        if (n.type !== 'Ask') locallySeenNotifications.add(n.id);
+    });
+    notifications = notifications.filter(n => n.type === 'Ask');
+    unreadCount = notifications.length;
+    updateNotificationUI();
 }
 
 window.removeAskNotificationInstantly = function(askId) {
@@ -2252,19 +2255,28 @@ async function fetchNewMessages() {
             }
 
             if (!msg.seen || !msg.seen.includes(currentUser.email)) {
-                fetch(API_URL, {
-                    method: "POST",
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({
-                        action: "markSeen",
-                        params: {
-                            notificationId: msg.uniqueId,
-                            userEmail: currentUser.email,
-                            userName: currentUser.name || currentUser.email 
-                        }
-                    })
-                }).catch(() => console.log("Silent background update failed."));
+            fetch(API_URL, {
+                method: "POST",
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({
+                    action: "markSeen",
+                    params: {
+                        notificationId: msg.uniqueId,
+                        userEmail: currentUser.email,
+                        userName: currentUser.name || currentUser.email 
+                    }
+                })
+            }).catch(() => console.log("Silent background update failed."));
+            
+            // --- ADDED: Clear notification instantly so it doesn't wait for refresh ---
+            if (msg.type !== 'Ask') {
+                locallySeenNotifications.add(msg.uniqueId);
             }
+            notifications = notifications.filter(n => n.id !== msg.uniqueId || n.type === 'Ask');
+            unreadCount = notifications.length;
+            updateNotificationUI();
+            // ------------------------------------------------------------------------
+        }
         });
         
         if (hasNew) {
@@ -2425,33 +2437,58 @@ let fileUrl = ''; let fileName = '';
     }
 
     let payloadToSend;
-    if (replyComposerState.mode === 'DIFFERENT' && replyComposerState.recipients.length > 0) {
-        payloadToSend = replyComposerState.recipients.map(r => {
-            const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); 
-            
-            // 🔥 FIX: Automatically prepend the @Mention Badge HTML so the name shows perfectly in the chat for individual messages!
-            const badgeClass = r.role === 'Admin' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-800';
-            const badgeHtml = `<span class="mention-badge mx-1 shadow-sm px-1.5 py-0.5 rounded text-[10px] font-bold ${badgeClass}" data-email="${r.email}">@${r.name}</span>&nbsp;`;
-            
-            let finalCustomText = (r.customText && r.customText.trim() !== '') ? (badgeHtml + r.customText.trim()) : msgHTML;
+if (replyComposerState.mode === 'DIFFERENT' && replyComposerState.recipients.length > 0) {
+    payloadToSend = replyComposerState.recipients.map(r => {
+        const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000); 
+        
+        // 🔥 FIX: Automatically prepend the @Mention Badge HTML so the name shows perfectly in the chat for individual messages!
+        const badgeClass = r.role === 'Admin' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-800';
+        const badgeHtml = `<span class="mention-badge mx-1 shadow-sm px-1.5 py-0.5 rounded text-[10px] font-bold ${badgeClass}" data-email="${r.email}">@${r.name}</span>&nbsp;`;
+        
+        let finalCustomText = (r.customText && r.customText.trim() !== '') ? (badgeHtml + r.customText.trim()) : msgHTML;
 
-            const payload = {
-                caseId: caseId, 
-                text: finalCustomText, 
-                mentionType: r.type || 'Message', 
-                sender: currentUser.email, 
-                receiver: r.email, 
-                parentAskId: '', 
-                threadId: '', 
-                attachmentUrl: fileUrl, 
-                attachmentFileName: fileName,
-                uniqueId: tempId 
-            };
-            const isAsk = (payload.mentionType === 'Ask');
-            if (isAsk) {
-                payload.type = 'Ask';
-                payload.askId = tempId;
-            }
+        const payload = {
+            caseId: caseId, 
+            text: finalCustomText, 
+            mentionType: r.type || 'Message', 
+            sender: currentUser.email, 
+            receiver: r.email, 
+            parentAskId: '', 
+            threadId: '', 
+            attachmentUrl: fileUrl, 
+            attachmentFileName: fileName,
+            uniqueId: tempId 
+        };
+        
+        // --- FIX: Properly format Ask type so it renders correctly ---
+        const isAsk = (payload.mentionType === 'Ask');
+        if (isAsk) {
+            payload.type = 'Ask';
+            payload.askId = tempId;
+        }
+        
+        return payload;
+    });
+} else {
+    const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
+    payloadToSend = { 
+        caseId: caseId, 
+        text: msgHTML, 
+        mentionType: replyComposerState.globalType || 'Message', 
+        sender: currentUser.email, 
+        receiver: replyComposerState.recipients.map(r => r.email).join(','), 
+        parentAskId: '', 
+        threadId: '', 
+        attachmentUrl: fileUrl, 
+        attachmentFileName: fileName, 
+        uniqueId: tempId 
+    };
+    
+    // --- FIX: Apply the same Ask formatting for Same Action Mode ---
+    if (payloadToSend.mentionType === 'Ask') {
+        payloadToSend.type = 'Ask';
+        payloadToSend.askId = tempId;
+    }
             return payload;
         });
     }else {
@@ -2745,10 +2782,18 @@ try {
          threadColor: payload.threadColor || '#f8fafc'
      });
 
-    if (payload.parentAskId) {
-        removeAskNotificationInstantly(payload.parentAskId);
-    }
-
+   if (payload.parentAskId) {
+            // --- FIX: Permanently mark the answered Ask as seen locally ---
+            notifications.forEach(n => {
+                if (n.askId === payload.parentAskId || n.id === payload.parentAskId) {
+                    locallySeenNotifications.add(n.id);
+                }
+            });
+            // --------------------------------------------------------------
+            notifications = notifications.filter(n => n.askId !== payload.parentAskId && n.id !== payload.parentAskId);
+            unreadCount = notifications.length;
+            updateNotificationUI();
+        }
     inputDiv.innerHTML = '';
     inlinePendingFiles = []; replyBox.querySelector('.inline-file-list').innerHTML = ''; replyBox.classList.add('hidden');
     
