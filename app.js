@@ -1,3 +1,4 @@
+```javascript
 // ==========================================
 // 🔒 UI PROTECTION STATE & GLOBAL HELPERS
 // ==========================================
@@ -610,12 +611,12 @@ window.openFromNotification = async function(caseId, uniqueId) {
 
     if (uniqueId) {
       const notif = notifications.find(n => n.id === uniqueId);
-      if (notif && notif.type !== 'Ask') {
+      if (notif) {
         locallySeenNotifications.add(uniqueId);
       }
     }
 
-    notifications = notifications.filter(n => n.id !== uniqueId || n.type === 'Ask');
+    notifications = notifications.filter(n => n.id !== uniqueId);
     unreadCount = notifications.length;
     updateNotificationUI();
 
@@ -652,6 +653,20 @@ notifications = notifications.filter(n => n.type === 'Ask');
 unreadCount = notifications.length;
 updateNotificationUI();
 }
+
+window.removeAskNotificationInstantly = function(askId) {
+  if (!askId) return;
+
+  notifications = notifications.filter(n => {
+    return !(
+      n.type === 'Ask' &&
+      (n.askId === askId || n.id === askId)
+    );
+  });
+
+  unreadCount = notifications.length;
+  updateNotificationUI();
+};
 
 async function fetchGlobalNotifications() {
 if (window.isOpeningDetailView) return;
@@ -1220,22 +1235,20 @@ let newCounts = { Live: 0, Snooze: 0, Archive: 0 };
         let currentRecordStatus = String(card.dataset.status || '').trim();
 
         if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
-            // Evaluated based on CREATOR'S status!
+            // ✅ Evaluated based on CREATOR'S status!
             const creatorEmail = String(card.dataset.creatorEmail || '').trim();
             const creatorName = String(card.querySelector('[data-id="author"]')?.innerText || '').toLowerCase().trim();
             const archivedBy = String(card.dataset.archivedBy || '').toLowerCase();
             
-            // Check if creator archived
             isArchived = (creatorEmail && archivedBy.includes(creatorEmail)) || (creatorName && archivedBy.includes(creatorName));
             
-            // Check if creator snoozed
             let creatorSnoozeMs = 0;
             const snoozeStr = String(card.dataset.snoozeRawStr || '');
             if (snoozeStr.startsWith('{')) {
                 try { creatorSnoozeMs = parseInt(JSON.parse(snoozeStr)[creatorEmail], 10) || 0; } catch(e){}
             }
             isSnoozed = creatorSnoozeMs > Date.now();
-            isLive = !isArchived && !isSnoozed;
+            isLive = !isArchived && !isSnoozed; 
             
             if (isLive) newCounts.Live++;
             if (isSnoozed) newCounts.Snooze++;
@@ -2423,7 +2436,7 @@ let fileUrl = ''; let fileName = '';
             
             let finalCustomText = (r.customText && r.customText.trim() !== '') ? (badgeHtml + r.customText.trim()) : msgHTML;
 
-            return {
+            const payload = {
                 caseId: caseId, 
                 text: finalCustomText, 
                 mentionType: r.type || 'Message', 
@@ -2435,15 +2448,31 @@ let fileUrl = ''; let fileName = '';
                 attachmentFileName: fileName,
                 uniqueId: tempId 
             };
+            const isAsk = (payload.mentionType === 'Ask');
+            if (isAsk) {
+                payload.type = 'Ask';
+                payload.askId = tempId;
+            }
+            return payload;
         });
     }else {
         const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
-        payloadToSend = { caseId: caseId, text: msgHTML, mentionType: replyComposerState.globalType || 'Message', sender: currentUser.email, receiver: replyComposerState.recipients.map(r => r.email).join(','), parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId };
+        const payload = { caseId: caseId, text: msgHTML, mentionType: replyComposerState.globalType || 'Message', sender: currentUser.email, receiver: replyComposerState.recipients.map(r => r.email).join(','), parentAskId: '', threadId: '', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId };
+        const isAsk = (payload.mentionType === 'Ask');
+        if (isAsk) {
+            payload.type = 'Ask';
+            payload.askId = tempId;
+        }
+        payloadToSend = payload;
     }
 
     const localSenderName = currentUser.name || currentUser.email;
     const payloads = Array.isArray(payloadToSend) ? payloadToSend : [payloadToSend];
     payloads.forEach(p => {
+         if (p.parentAskId) {
+             removeAskNotificationInstantly(p.parentAskId);
+         }
+
          const tempId = p.uniqueId; 
          seenMessages.add(tempId); 
          
@@ -2455,8 +2484,8 @@ let fileUrl = ''; let fileName = '';
              text: p.text,
              attachmentUrl: p.attachmentUrl || '',
              attachmentFileName: p.attachmentFileName || '',
-             type: p.mentionType,
-             askId: '', 
+             type: p.type || p.mentionType,
+             askId: p.askId || '', 
              status: '',
              parentAskId: p.parentAskId || '',
              uniqueId: tempId, 
@@ -2691,6 +2720,12 @@ try {
     const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
     const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, receiver: mentionedEmails, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId };
     
+    const isAsk = (typeVal === 'Ask');
+    if (isAsk) {
+        payload.type = 'Ask';
+        payload.askId = tempId;
+    }
+
     const localSenderName = currentUser.name || currentUser.email;
     seenMessages.add(tempId); 
     
@@ -2702,8 +2737,8 @@ try {
          text: msgHTML,
          attachmentUrl: fileUrl,
          attachmentFileName: fileName,
-         type: typeVal,
-         askId: '', 
+         type: payload.type || typeVal,
+         askId: payload.askId || '', 
          status: '',
          parentAskId: payload.parentAskId,
          uniqueId: tempId, 
@@ -2712,9 +2747,7 @@ try {
      });
 
     if (payload.parentAskId) {
-        notifications = notifications.filter(n => n.askId !== payload.parentAskId && n.id !== payload.parentAskId);
-        unreadCount = notifications.length;
-        updateNotificationUI();
+        removeAskNotificationInstantly(payload.parentAskId);
     }
 
     inputDiv.innerHTML = '';
@@ -3283,7 +3316,7 @@ let newCounts = { Live: 0, Snooze: 0, Archive: 0 };
 
         // ⚡ --- BEGIN MASTER FILTER LOGIC ---
         if (currentUser && currentUser.isMaster) {
-            if (window.masterViewMode === 'ME' && !isMyCase) showTab = false;
+       if (window.masterViewMode === 'ME' && !isMyCase) showTab = false;
             if (window.masterViewMode === 'NOT_ME' && isMyCase) showTab = false;
         }
         // ⚡ --- END MASTER FILTER LOGIC ---
