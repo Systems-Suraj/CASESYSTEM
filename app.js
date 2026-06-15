@@ -42,7 +42,7 @@ activeInputElement = null;
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v53";
+const APP_VERSION = "v54";
 function checkAppUpdate() {
 const storedVersion = localStorage.getItem("app_version");
 if (!storedVersion) {
@@ -553,59 +553,49 @@ updateNotificationUI();
 }
 };
 window.openFromNotification = async function(caseId, uniqueId) {
-if (isOpeningCase) return;
-isOpeningCase = true;
-try {
-const panel = document.getElementById("notifPanel");
-if (panel) panel.classList.add("hidden");
-if (!caseId || caseId === 'undefined') {
-  showCustomDialog("Notice", "Case ID missing hai.", false);
-  return;
-}
+    if (isOpeningCase) return;
+    isOpeningCase = true;
+    try {
+        const panel = document.getElementById("notifPanel");
+        if (panel) panel.classList.add("hidden");
+        if (!caseId || caseId === 'undefined') {
+          showCustomDialog("Notice", "Case ID missing hai.", false);
+          return;
+        }
 
-const cleanCaseId = window.normalizeCaseId(caseId);
+        const cleanCaseId = window.normalizeCaseId(caseId);
+        await new Promise(r => setTimeout(r, 150));
 
-await new Promise(r => setTimeout(r, 150));
+        const card = [...document.querySelectorAll('[data-conv-id]')].find(el => window.normalizeCaseId(el.dataset.convId) === cleanCaseId);
 
-const card = [...document.querySelectorAll('[data-conv-id]')]
-  .find(el => window.normalizeCaseId(el.dataset.convId) === cleanCaseId);
+        if (uniqueId) {
+          locallySeenNotifications.add(uniqueId);
+        }
 
-if (uniqueId) {
-  const notif = notifications.find(n => n.id === uniqueId);
-  if (notif && notif.type !== 'Ask') {
-    locallySeenNotifications.add(uniqueId);
-  }
-}
+        // FIX: Aggressively remove the clicked notification so it doesn't get stuck
+        notifications = notifications.filter(n => n.id !== uniqueId);
+        unreadCount = notifications.length;
+        updateNotificationUI();
 
-notifications = notifications.filter(n => n.id !== uniqueId || n.type === 'Ask');
-unreadCount = notifications.length;
-updateNotificationUI();
+        if (uniqueId && currentUser?.email) {
+          apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email, userName: currentUser.name || currentUser.email }).catch(e => console.log(e));
+        }
 
-if (uniqueId && currentUser?.email) {
-  apiCall('markSeen', {
-    notificationId: uniqueId,
-    userEmail: currentUser.email,
-    userName: currentUser.name || currentUser.email
-  }).catch(e => console.log(e));
-}
+        if (!card) {
+          showCustomDialog("Loading...", "Case is still loading in dashboard. Please wait 1 second and try again.", false);
+          return;
+        }
 
-if (!card) {
-  showCustomDialog("Loading...", "Case is still loading in dashboard. Please wait 1 second and try again.", false);
-  return;
-}
-
-const requestId = Date.now();
-currentOpenRequest = requestId;
-await window.openCaseDetail(card);
-if (currentOpenRequest !== requestId) return;
-} catch (err) {
-console.error("Notification Open Error:", err);
-showCustomDialog("Error", "Failed to load case properly.", false);
-} finally {
-setTimeout(() => {
-isOpeningCase = false;
-}, 300);
-}
+        const requestId = Date.now();
+        currentOpenRequest = requestId;
+        await window.openCaseDetail(card);
+        if (currentOpenRequest !== requestId) return;
+    } catch (err) {
+        console.error("Notification Open Error:", err);
+        showCustomDialog("Error", "Failed to load case properly.", false);
+    } finally {
+        setTimeout(() => { isOpeningCase = false; }, 300);
+    }
 };
 window.clearAllNotifications = function() {
 notifications = notifications.filter(n => n.type === 'Ask');
@@ -1648,12 +1638,14 @@ const isCreator = (document.getElementById('detail-author').innerText || '').toL
 if (!isAdmin && !isUser && !isCreator) {
 if (role === 'Admin') currentCaseAdmins.push(email); else currentCaseUsers.push(email);
 if (!window.currentCaseAllMembers) window.currentCaseAllMembers = [];
-window.currentCaseAllMembers.push(email);
+if (!window.currentCaseAllMembers.includes(email)) {
+    window.currentCaseAllMembers.push(email);
+}
 const detAdm = document.getElementById('detail-admins'); const detUsr = document.getElementById('detail-users');
 const badgeHtml = `<span class="px-2 py-0.5 ${role === 'Admin' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-600 border-slate-200'} border text-[10px] rounded font-bold shadow-sm">${role === 'Admin' ? '👑' : '👤'} ${name}</span>`;
 if (role === 'Admin') { detAdm.insertAdjacentHTML('afterbegin', badgeHtml); }
 else { detUsr.insertAdjacentHTML('afterbegin', badgeHtml); }
-apiCall('updateCaseMembers', { id: document.getElementById('detail-conv-id').value, admins: currentCaseAdmins, users: currentCaseUsers }).catch(e=>{});
+apiCall('updateCaseMembers', { id: document.getElementById('detail-conv-id').value, admins: [...new Set(currentCaseAdmins)], users: [...new Set(currentCaseUsers)], userEmail: currentUser.email }).catch(e => console.error("Error updating members:", e));
 }
 if(!replyComposerState.recipients.find(r=>r.email === email)) { replyComposerState.recipients.push({name: name, email: email, role: role, type: replyComposerState.globalType, customText: ''}); }
 const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(replySavedRange);
@@ -2322,6 +2314,12 @@ setTimeout(() => {
     if(scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
 }, 50);
 
+await apiCall('updateCaseMembers', {
+    id: caseId,
+    admins: [...new Set(currentCaseAdmins)],
+    users: [...new Set(currentCaseUsers)],
+    userEmail: currentUser.email
+});
 await apiCall('addNewComment', payloadToSend);
 
 if(window.isMobileClient && window.isMobileClient()) {
@@ -2456,7 +2454,9 @@ if (!isAdmin && !isUser && !isCreator) {
 if (role === 'Admin') currentCaseAdmins.push(email);
 else currentCaseUsers.push(email);
 if (!window.currentCaseAllMembers) window.currentCaseAllMembers = [];
-window.currentCaseAllMembers.push(email);
+if (!window.currentCaseAllMembers.includes(email)) {
+    window.currentCaseAllMembers.push(email);
+}
 
 const detAdm = document.getElementById('detail-admins');
 const detUsr = document.getElementById('detail-users');
@@ -2467,7 +2467,7 @@ if (role === 'Admin') detAdm.insertAdjacentHTML('afterbegin', badgeHtml);
 else detUsr.insertAdjacentHTML('afterbegin', badgeHtml);
 
 const convId = document.getElementById('detail-conv-id').value;
-apiCall('updateCaseMembers', { id: convId, admins: currentCaseAdmins, users: currentCaseUsers }).catch(e => console.error("Error updating members:", e));
+apiCall('updateCaseMembers', { id: convId, admins: [...new Set(currentCaseAdmins)], users: [...new Set(currentCaseUsers)], userEmail: currentUser.email }).catch(e => console.error("Error updating members:", e));
 }
 const sel = window.getSelection();
 sel.removeAllRanges(); sel.addRange(inlineSavedRange);
@@ -2551,6 +2551,12 @@ inlinePendingFiles = []; replyBox.querySelector('.inline-file-list').innerHTML =
 
 renderAllCommentsLocally();
 
+await apiCall('updateCaseMembers', {
+    id: caseId,
+    admins: [...new Set(currentCaseAdmins)],
+    users: [...new Set(currentCaseUsers)],
+    userEmail: currentUser.email
+});
 await apiCall('addNewComment', payload);
 
 if(window.isMobileClient && window.isMobileClient()) {
@@ -3142,3 +3148,5 @@ document.querySelectorAll('#membersDropdown .dropdown-item').forEach(item => {
 });
 } catch(e) {}
 }, 150);
+
+```
