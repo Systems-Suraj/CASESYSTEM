@@ -1226,28 +1226,35 @@ document.querySelectorAll('#membersDropdown .dropdown-item').forEach(item => {
 // ACTIONS: ARCHIVE, SNOOZE
 // ==========================================
 window.processBulkArchive = function() {
-const selectedIds = Array.from(document.querySelectorAll('.bulk-archive-cb')).map(cb => {
-const card = cb.closest('[data-conv-id]');
-return card ? String(card.dataset.convId).trim() : null;
-}).filter(Boolean);
-if(selectedIds.length === 0) return showCustomDialog("Notice", "Please select at least one case to archive.", false);
+    // FIX 1: Added ':checked' so it only grabs the boxes you actually ticked
+    const selectedIds = Array.from(document.querySelectorAll('.bulk-archive-cb:checked')).map(cb => {
+        const card = cb.closest('[data-conv-id]');
+        return card ? String(card.dataset.convId).trim() : null;
+    }).filter(Boolean);
 
-showCustomDialog("Confirm Archive", `Are you sure you want to archive ${selectedIds.length} selected case(s)?\n\nCase IDs: \n${selectedIds.join('\n')}`, true, async () => {
-    const btn = document.getElementById('bulkArchiveBtn'); 
-    btn.innerText = "Archiving..."; 
-    btn.disabled = true;
-    try { 
-        await apiCall('bulkArchive', { ids: selectedIds, user: currentUser.email || currentUser.name }); 
-        await loadConversations(); 
-    }
-    catch(e) { 
-        showCustomDialog("Error", "Failed to archive.", false); 
-    }
-    finally { 
-        btn.innerText = "Archive Selected"; 
-        btn.disabled = false; 
-    }
-});
+    if(selectedIds.length === 0) return showCustomDialog("Notice", "Please select at least one case to archive.", false);
+
+    // FIX 2: Cap the display list so it doesn't break the UI if you select 50+ cases at once
+    let displayIds = selectedIds.length > 10 
+        ? selectedIds.slice(0, 10).join('\n') + `\n...and ${selectedIds.length - 10} more` 
+        : selectedIds.join('\n');
+
+    showCustomDialog("Confirm Archive", `Are you sure you want to archive ${selectedIds.length} selected case(s)?\n\nCase IDs: \n${displayIds}`, true, async () => {
+        const btn = document.getElementById('bulkArchiveBtn'); 
+        btn.innerText = "Archiving..."; 
+        btn.disabled = true;
+        try { 
+            await apiCall('bulkArchive', { ids: selectedIds, user: currentUser.email || currentUser.name }); 
+            await loadConversations(); 
+        }
+        catch(e) { 
+            showCustomDialog("Error", "Failed to archive.", false); 
+        }
+        finally { 
+            btn.innerText = "Archive Selected"; 
+            btn.disabled = false; 
+        }
+    });
 };
 // ==========================================
 // ACTIONS: ARCHIVE, UNARCHIVE, SNOOZE
