@@ -552,51 +552,7 @@ updateNotificationUI();
 }
 }
 };
-window.openFromNotification = async function(caseId, uniqueId) {
-    if (isOpeningCase) return;
-    isOpeningCase = true;
-    try {
-        const panel = document.getElementById("notifPanel");
-        if (panel) panel.classList.add("hidden");
-        if (!caseId || caseId === 'undefined') {
-          showCustomDialog("Notice", "Case ID missing hai.", false);
-          return;
-        }
 
-        const cleanCaseId = window.normalizeCaseId(caseId);
-        await new Promise(r => setTimeout(r, 150));
-
-        const card = [...document.querySelectorAll('[data-conv-id]')].find(el => window.normalizeCaseId(el.dataset.convId) === cleanCaseId);
-
-        if (uniqueId) {
-          locallySeenNotifications.add(uniqueId);
-        }
-
-        // FIX: Aggressively remove the clicked notification so it doesn't get stuck
-        notifications = notifications.filter(n => n.id !== uniqueId);
-        unreadCount = notifications.length;
-        updateNotificationUI();
-
-        if (uniqueId && currentUser?.email) {
-          apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email, userName: currentUser.name || currentUser.email }).catch(e => console.log(e));
-        }
-
-        if (!card) {
-          showCustomDialog("Loading...", "Case is still loading in dashboard. Please wait 1 second and try again.", false);
-          return;
-        }
-
-        const requestId = Date.now();
-        currentOpenRequest = requestId;
-        await window.openCaseDetail(card);
-        if (currentOpenRequest !== requestId) return;
-    } catch (err) {
-        console.error("Notification Open Error:", err);
-        showCustomDialog("Error", "Failed to load case properly.", false);
-    } finally {
-        setTimeout(() => { isOpeningCase = false; }, 300);
-    }
-};
 window.clearAllNotifications = function() {
 notifications = notifications.filter(n => n.type === 'Ask');
 unreadCount = notifications.length;
@@ -963,6 +919,7 @@ await apiCall('saveToken', { person: user.name || user.email, email: user.email,
 }
 } catch (err) { console.error("Notification Error:", err); }
 }
+
 // ==========================================
 // HELPERS
 // ==========================================
@@ -996,6 +953,57 @@ n.parentNode.replaceChild(span, n);
 });
 return tempDiv.innerHTML;
 };
+
+window.getMemberBadgeHTML = function(email, role, archivedByStr, snoozeTimeStr) {
+    if (!email) return '';
+    const emailLower = String(email).toLowerCase().trim();
+    const archivedBy = String(archivedByStr || '').toLowerCase();
+    
+    // Check if user has archived
+    let isArchived = archivedBy.includes(emailLower);
+    const nameLower = String(window.getUserNameByEmail(email)).toLowerCase().trim();
+    if (!isArchived && nameLower) isArchived = archivedBy.includes(nameLower);
+
+    // Check if user has snoozed
+    let isSnoozed = false;
+    let snoozeStr = String(snoozeTimeStr || '').trim();
+    if (snoozeStr.startsWith('{')) {
+        try {
+            let snoozeObj = JSON.parse(snoozeStr);
+            let snoozeMs = parseInt(snoozeObj[emailLower], 10) || 0;
+            if (snoozeMs > Date.now()) isSnoozed = true;
+        } catch(e) {}
+    }
+
+    // Determine Colors based on state
+    let bgClass, textClass, borderClass;
+    let icon = role === 'Admin' ? '👑' : '👤';
+    let nameToDisplay = window.getUserNameByEmail(email);
+
+    if (isArchived) {
+        bgClass = 'bg-red-50';
+        textClass = 'text-red-700';
+        borderClass = 'border-red-200';
+    } else if (isSnoozed) {
+        bgClass = 'bg-orange-50';
+        textClass = 'text-orange-700';
+        borderClass = 'border-orange-200';
+    } else {
+        // Live state (As it is now)
+        if (role === 'Admin') {
+            bgClass = 'bg-blue-50';
+            textClass = 'text-blue-700';
+            borderClass = 'border-blue-200';
+        } else {
+            bgClass = 'bg-slate-50';
+            textClass = 'text-slate-600';
+            borderClass = 'border-slate-200';
+        }
+    }
+
+    return `<span class="px-2 py-0.5 ${bgClass} ${textClass} border ${borderClass} text-[10px] rounded font-bold shadow-sm inline-flex items-center gap-1">${icon} ${nameToDisplay}</span>`;
+};
+
 // ==========================================
 // FILTERS & DROPDOWNS
 // ==========================================
@@ -1093,135 +1101,6 @@ document.querySelectorAll('.dropdown-item').forEach(item => item.style.display =
 document.querySelectorAll('[id$="Dropdown"] input[type="text"]').forEach(inp => inp.value = '');
 applyFilters();
 };
-window.applyFilters = debounce(function() {
-try {
-const filterInput = document.getElementById('filterId');
-if(!filterInput) return;
-const idQuery = filterInput.value.toLowerCase().trim();
-const checkedLabels = Array.from(document.querySelectorAll('.flabel[data-applied="true"]')).map(cb => cb.value);
-const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => String(cb.value).toLowerCase().trim());
-let visibleLabels = new Set(); let visibleMembers = new Set();
-let newCounts = { Live: 0, Snooze: 0, Archive: 0 };
-Array.from(document.getElementById('conversationFeed').children).forEach(wrapper => {
-    const card = wrapper.classList.contains('card-main') ? wrapper : wrapper.querySelector('.card-main');
-    if(!card || !card.dataset.convId) return; 
-
-    let cardLabels = card._cachedLabels || JSON.parse(card.dataset.labels || '[]');
-    if(!Array.isArray(cardLabels)) cardLabels = [];
-    let cardMembers = card._cachedMembers || JSON.parse(card.dataset.members || '[]');
-    if(!Array.isArray(cardMembers)) cardMembers = [];
-
-    // 1. Determine Ownership (isMyCase)
-    let isMyCase = false;
-    if (currentUser && currentUser.isMaster) {
-        const myEmail = currentUser.email.toLowerCase().trim();
-        const myName = (currentUser.name || '').toLowerCase().trim();
-        
-        cardMembers.forEach(m => {
-            if(!m) return;
-            const em = String(m).toLowerCase().trim();
-            const nm = String(window.getUserNameByEmail(m)).toLowerCase().trim();
-            if(em === myEmail || nm === myName || em.includes(myEmail) || nm.includes(myName)) isMyCase = true;
-        });
-        const creatorName = (card.querySelector('[data-id="author"]')?.innerText || '').toLowerCase().trim();
-        if(creatorName === myName || creatorName === myEmail || creatorName.includes(myName)) isMyCase = true;
-    } else {
-        isMyCase = true; 
-    }
-
-    // 2. Tab Routing & Counting Logic
-    let isArchived, isSnoozed, isLive;
-    let currentRecordStatus = String(card.dataset.status || '').trim();
-
-    if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
-        // Evaluated based on CREATOR'S status!
-        const creatorEmail = String(card.dataset.creatorEmail || '').trim();
-        const creatorName = String(card.querySelector('[data-id="author"]')?.innerText || '').toLowerCase().trim();
-        const archivedBy = String(card.dataset.archivedBy || '').toLowerCase();
-        
-        // Check if creator archived
-        isArchived = (creatorEmail && archivedBy.includes(creatorEmail)) || (creatorName && archivedBy.includes(creatorName));
-        
-        // Check if creator snoozed
-        let creatorSnoozeMs = 0;
-        const snoozeStr = String(card.dataset.snoozeRawStr || '');
-        if (snoozeStr.startsWith('{')) {
-            try { creatorSnoozeMs = parseInt(JSON.parse(snoozeStr)[creatorEmail], 10) || 0; } catch(e){}
-        }
-        isSnoozed = creatorSnoozeMs > Date.now();
-        isLive = !isArchived && !isSnoozed;
-        
-        if (isLive) newCounts.Live++;
-        if (isSnoozed) newCounts.Snooze++;
-        if (isArchived) newCounts.Archive++;
-    } else {
-        // 🔒 PRESERVE ME CASES COMPLETELY
-        isArchived = currentRecordStatus === 'Archived';
-        isSnoozed = parseInt(card.dataset.snooze || 0) > Date.now();
-        isLive = !isArchived && !isSnoozed;
-        
-        if (window.masterViewMode === 'ME' && isMyCase) {
-            if (isArchived) newCounts.Archive++;
-            else if (isSnoozed) newCounts.Snooze++;
-            else newCounts.Live++;
-        }
-    }
-
-    let showTab = false;
-    if (currentTab === 'Live' && isLive) showTab = true;
-    if (currentTab === 'Archive' && isArchived) showTab = true;
-    if (currentTab === 'Snooze' && isSnoozed) showTab = true;
-
-    // ⚡ --- BEGIN MASTER FILTER LOGIC ---
-    if (currentUser && currentUser.isMaster) {
-        if (window.masterViewMode === 'ME' && !isMyCase) showTab = false;
-        if (window.masterViewMode === 'NOT_ME' && isMyCase) showTab = false;
-    }
-    // ⚡ --- END MASTER FILTER LOGIC ---
-    
-    const matchesLabels = checkedLabels.length === 0 || checkedLabels.every(l => cardLabels.includes(l));
-    const matchesMembers = checkedMembers.length === 0 || checkedMembers.every(m => 
-        cardMembers.some(cm => {
-            if (!cm) return false;
-            const cmEmail = String(cm).toLowerCase().trim();
-            const cmName = String(window.getUserNameByEmail(cm)).toLowerCase().trim();
-            return cmEmail === m || cmName === m;
-        })
-    );
-    const matchesId = !idQuery || String(card.dataset.convId).toLowerCase().includes(idQuery) || (card.dataset.subject && String(card.dataset.subject).toLowerCase().includes(idQuery));
-    const baseMatch = showTab && matchesId;
-    
-    if (baseMatch && matchesLabels && matchesMembers) wrapper.style.display = 'block';
-    else wrapper.style.display = 'none';
-
-    if (baseMatch && matchesMembers) cardLabels.forEach(l => visibleLabels.add(String(l)));
-    if (baseMatch && matchesLabels) cardMembers.forEach(m => {
-        if(m) { visibleMembers.add(String(m).toLowerCase().trim()); visibleMembers.add(String(window.getUserNameByEmail(m)).toLowerCase().trim()); }
-    });
-});
-
-// UPDATE COUNTS IN DOM ACCURATELY AFTER APPLYING NOT ME CASES FILTER
-if(document.getElementById('count-Live')) document.getElementById('count-Live').innerText = newCounts.Live;
-if(document.getElementById('count-Snooze')) document.getElementById('count-Snooze').innerText = newCounts.Snooze;
-if(document.getElementById('count-Archive')) document.getElementById('count-Archive').innerText = newCounts.Archive;
-
-document.querySelectorAll('#labelsDropdown .dropdown-item').forEach(item => {
-    const cb = item.querySelector('input[type="checkbox"]');
-    if(!cb) return;
-    if (cb.hasAttribute('data-applied') || visibleLabels.has(cb.value)) { item.style.display = 'flex'; item.dataset.available = 'true'; } 
-    else { item.style.display = 'none'; item.dataset.available = 'false'; }
-});
-
-document.querySelectorAll('#membersDropdown .dropdown-item').forEach(item => {
-    const cb = item.querySelector('input[type="checkbox"]');
-    if(!cb) return;
-    const valLower = String(cb.value).toLowerCase().trim();
-    const isVisible = visibleMembers.has(valLower);
-    if (cb.hasAttribute('data-applied') || isVisible) { item.style.display = 'flex'; item.dataset.available = 'true'; } 
-    else { item.style.display = 'none'; item.dataset.available = 'false'; }
-});
-} catch(e) {}
-}, 150);
 // ==========================================
 // ACTIONS: ARCHIVE, SNOOZE
 // ==========================================
@@ -1399,6 +1278,7 @@ if(newRole === 'Admin') tempAdmins.push(email); if(newRole === 'User') tempUsers
 window.removeTempMember = function(email) { tempAdmins = tempAdmins.filter(e => e !== email); tempUsers = tempUsers.filter(e => e !== email); renderManageMembersList(); };
 window.addNewTempMember = function(email, role) { tempAdmins = tempAdmins.filter(e => e !== email); tempUsers = tempUsers.filter(e => e !== email);
 if(role === 'Admin') tempAdmins.push(email); else tempUsers.push(email); document.getElementById('member_search_input').value = ''; document.getElementById('member_search_dropdown').classList.add('hidden'); renderManageMembersList(); };
+
 window.saveManagedMembers = async function() {
 const btn = document.getElementById('saveMembersBtn'); btn.innerText = "Saving..."; btn.disabled = true;
 const convId = document.getElementById('detail-conv-id').value;
@@ -1407,12 +1287,18 @@ await apiCall('updateCaseMembers', { id: convId, admins: tempAdmins, users: temp
 currentCaseAdmins = [...tempAdmins]; currentCaseUsers = [...tempUsers];
 const detAdm = document.getElementById('detail-admins'); detAdm.innerHTML = '';
 const detUsr = document.getElementById('detail-users'); detUsr.innerHTML = '';
-currentCaseAdmins.forEach(a => { if(a) detAdm.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${window.getUserNameByEmail(a)}</span>`; });
-currentCaseUsers.forEach(u => { if(u) detUsr.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${window.getUserNameByEmail(u)}</span>`; });
+
+const cardEl = document.querySelector(`[data-conv-id="${window.normalizeCaseId(convId)}"]`);
+const archivedByStr = cardEl ? (cardEl.dataset.archivedBy || '') : '';
+const snoozeTimeStr = cardEl ? (cardEl.dataset.snoozeRawStr || '') : '';
+
+currentCaseAdmins.forEach(a => { if(a) detAdm.innerHTML += window.getMemberBadgeHTML(a, 'Admin', archivedByStr, snoozeTimeStr); });
+currentCaseUsers.forEach(u => { if(u) detUsr.innerHTML += window.getMemberBadgeHTML(u, 'User', archivedByStr, snoozeTimeStr); });
 detAdm.innerHTML += `<button onclick="openManageMembers()" class="ml-1 text-blue-600 hover:text-blue-800 p-0.5 rounded-full hover:bg-blue-50 transition-colors" title="Manage Members"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>`;
 closeManageMembers(); loadConversations();
 } catch(e) { showCustomDialog("Error", "Failed to update members", false); } finally { btn.innerText = "Save Changes"; btn.disabled = false; }
 };
+
 // ==========================================
 // 🎙️ AUDIO RECORDING LOGIC (GLOBAL + TIMER)
 // ==========================================
@@ -1637,6 +1523,7 @@ dropdown.classList.add('hidden'); return;
 dropdown.innerHTML = `<div class="bg-slate-800 px-3 py-2 text-xs font-bold text-white">Select Role for ${name}</div> <div onclick="finalizeReplyMention('${String(name).replace(/'/g, "\\'")}', '${String(email).replace(/'/g, "\\'")}', 'Admin')" class="p-2 hover:bg-blue-50 cursor-pointer border-b text-sm font-bold text-blue-700">👑 Admin</div> <div onclick="finalizeReplyMention('${String(name).replace(/'/g, "\\'")}', '${String(email).replace(/'/g, "\\'")}', 'User')" class="p-2 hover:bg-slate-50 cursor-pointer text-sm font-medium text-slate-700">👤 User</div>`;
 }
 };
+
 window.finalizeReplyMention = function(name, email, role) {
 const emailLower = String(email).toLowerCase(); const nameLower = String(name).toLowerCase();
 const isAdmin = currentCaseAdmins.some(a => String(a).toLowerCase() === emailLower || String(a).toLowerCase() === nameLower);
@@ -1649,7 +1536,14 @@ if (!window.currentCaseAllMembers.includes(email)) {
     window.currentCaseAllMembers.push(email);
 }
 const detAdm = document.getElementById('detail-admins'); const detUsr = document.getElementById('detail-users');
-const badgeHtml = `<span class="px-2 py-0.5 ${role === 'Admin' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-600 border-slate-200'} border text-[10px] rounded font-bold shadow-sm">${role === 'Admin' ? '👑' : '👤'} ${name}</span>`;
+
+const convId = document.getElementById('detail-conv-id').value;
+const cardEl = document.querySelector(`[data-conv-id="${window.normalizeCaseId(convId)}"]`);
+const archivedByStr = cardEl ? (cardEl.dataset.archivedBy || '') : '';
+const snoozeTimeStr = cardEl ? (cardEl.dataset.snoozeRawStr || '') : '';
+
+const badgeHtml = window.getMemberBadgeHTML(email, role, archivedByStr, snoozeTimeStr);
+
 if (role === 'Admin') { detAdm.insertAdjacentHTML('afterbegin', badgeHtml); }
 else { detUsr.insertAdjacentHTML('afterbegin', badgeHtml); }
 apiCall('updateCaseMembers', { id: document.getElementById('detail-conv-id').value, admins: [...new Set(currentCaseAdmins)], users: [...new Set(currentCaseUsers)], userEmail: currentUser.email }).catch(e => console.error("Error updating members:", e));
@@ -1666,6 +1560,7 @@ replySavedRange.insertNode(document.createTextNode('\u00A0')); replySavedRange.s
 document.getElementById('reply_mention_dropdown').classList.add('hidden'); renderReplyDynamicUI();
 checkComposerRestrictions(document.getElementById('detail-reply-input'), 'main');
 };
+
 window.setReplyGlobalType = function(type) {
 replyComposerState.globalType = type; replyComposerState.recipients.forEach(r => r.type = type);
 const btnReply = document.getElementById('btn_global_reply');
@@ -1792,6 +1687,7 @@ window.handleCardClick = function(event, cardEl) {
 if (event.target.closest('button') || event.target.closest('label') || event.target.closest('.archive-cb-container') || event.target.closest('a')) return;
 window.openCaseDetail(cardEl);
 };
+
 window.openCaseDetail = async function(cardEl) {
 window.isOpeningDetailView = true;
 // RESET OLD UI
@@ -1845,11 +1741,17 @@ window.currentCaseHasAdminRights = hasAdminRights;
 const editBtn = document.getElementById('edit-case-btn');
 if(editBtn) { if(hasAdminRights) editBtn.classList.remove('hidden'); else editBtn.classList.add('hidden'); }
 window.currentCaseAllMembers = JSON.parse(dataset.members || '[]');
+
 const detAdm = document.getElementById('detail-admins'); detAdm.innerHTML = '';
 const detUsr = document.getElementById('detail-users'); detUsr.innerHTML = '';
-currentCaseAdmins.forEach(a => { if(a) detAdm.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${window.getUserNameByEmail(a)}</span>`; });
-currentCaseUsers.forEach(u => { if(u) detUsr.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${window.getUserNameByEmail(u)}</span>`; });
+const archivedByStr = dataset.archivedBy || '';
+const snoozeTimeStr = dataset.snoozeRawStr || '';
+
+currentCaseAdmins.forEach(a => { if(a) detAdm.innerHTML += window.getMemberBadgeHTML(a, 'Admin', archivedByStr, snoozeTimeStr); });
+currentCaseUsers.forEach(u => { if(u) detUsr.innerHTML += window.getMemberBadgeHTML(u, 'User', archivedByStr, snoozeTimeStr); });
+
 if(hasAdminRights) detAdm.innerHTML += `<button onclick="openManageMembers()" class="ml-1 text-blue-600 hover:text-blue-800 p-0.5 rounded-full hover:bg-blue-50 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>`;
+
 // ✅ SMART FIX: Top description images and iframe fix
 const attContainer = document.getElementById('detail-attachments'); attContainer.innerHTML = '';
 JSON.parse(dataset.attachmentsData || '[]').forEach(url => {
@@ -1884,22 +1786,22 @@ const isSnoozed = parseInt(dataset.snooze) > Date.now();
 const unarchiveBtn = document.getElementById('detail-unarchive-btn');
 const unsnoozeBtn = document.getElementById('detail-unsnooze-btn');
 const snoozeBtn = document.getElementById('detail-snooze-btn');
-const archiveBtn = document.getElementById('detail-archive-btn'); // 👈 Add this
+const archiveBtn = document.getElementById('detail-archive-btn'); 
 unarchiveBtn.classList.add('hidden');
 unsnoozeBtn.classList.add('hidden');
 snoozeBtn.classList.add('hidden');
-archiveBtn.classList.add('hidden'); // 👈 Add this
+archiveBtn.classList.add('hidden'); 
 if (status === 'Archived') {
 unarchiveBtn.classList.remove('hidden');
 }
 if (status !== 'Archived') {
-archiveBtn.classList.remove('hidden'); // 👈 Show Archive if not already archived
+archiveBtn.classList.remove('hidden'); 
 if (isSnoozed) { unsnoozeBtn.classList.remove('hidden'); }
 else { snoozeBtn.classList.remove('hidden'); }
 }
 ['Live', 'Snooze', 'Archive'].forEach(t => { if (t !== currentTab) document.getElementById(`tab-${t}`).style.display = 'none'; });
 
-// FIX: Clear all notifications for this case when opened (including Asks) to prevent lingering notifications
+// FIX: Clear all notifications for this case when opened
 const caseNotifs = notifications.filter(n => window.normalizeCaseId(n.caseId) === window.normalizeCaseId(convId));
 if (caseNotifs.length > 0) {
     caseNotifs.forEach(n => {
@@ -1908,7 +1810,6 @@ if (caseNotifs.length > 0) {
             locallySeenNotifications.add(n.id);
         }
     });
-    // Remove all matched notifications (both Ask and Message) since we are opening the case
     notifications = notifications.filter(n => window.normalizeCaseId(n.caseId) !== window.normalizeCaseId(convId));
     unreadCount = notifications.length;
     updateNotificationUI();
@@ -1924,6 +1825,7 @@ loadCommentsPaginated(convId, true);
 } catch(e) { console.error("Open Case Error:", e); }
 window.isOpeningDetailView = false;
 };
+
 window.closeCaseDetail = function() {
 if (realtimeInterval) {
 clearInterval(realtimeInterval);
@@ -2450,6 +2352,7 @@ dropdown.innerHTML =
       <div onclick="finalizeInlineMention('${String(name).replace(/'/g, "\\'")}', '${String(email).replace(/'/g, "\\'")}', 'User')" class="p-2 hover:bg-slate-50 cursor-pointer text-xs font-medium text-slate-700">👤 User</div>`;
 }
 };
+
 window.finalizeInlineMention = function(name, email, role) {
 if(!activeInlineBox) return;
 const emailLower = String(email).toLowerCase();
@@ -2468,12 +2371,17 @@ if (!window.currentCaseAllMembers.includes(email)) {
 const detAdm = document.getElementById('detail-admins');
 const detUsr = document.getElementById('detail-users');
 const shortName = window.getUserNameByEmail(email);
-const badgeHtml = `<span class="px-2 py-0.5 ${role === 'Admin' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-600 border-slate-200'} border text-[10px] rounded font-bold shadow-sm">${role === 'Admin' ? '👑' : '👤'} ${shortName}</span>`;
+
+const convId = document.getElementById('detail-conv-id').value;
+const cardEl = document.querySelector(`[data-conv-id="${window.normalizeCaseId(convId)}"]`);
+const archivedByStr = cardEl ? (cardEl.dataset.archivedBy || '') : '';
+const snoozeTimeStr = cardEl ? (cardEl.dataset.snoozeRawStr || '') : '';
+
+const badgeHtml = window.getMemberBadgeHTML(email, role, archivedByStr, snoozeTimeStr);
 
 if (role === 'Admin') detAdm.insertAdjacentHTML('afterbegin', badgeHtml);
 else detUsr.insertAdjacentHTML('afterbegin', badgeHtml);
 
-const convId = document.getElementById('detail-conv-id').value;
 apiCall('updateCaseMembers', { id: convId, admins: [...new Set(currentCaseAdmins)], users: [...new Set(currentCaseUsers)], userEmail: currentUser.email }).catch(e => console.error("Error updating members:", e));
 }
 const sel = window.getSelection();
@@ -2490,6 +2398,7 @@ inlineSavedRange.setStartAfter(badge.nextSibling);
 activeInlineBox.querySelector('.inline-mention-dropdown').classList.add('hidden');
 checkComposerRestrictions(activeInlineBox.querySelector('.inline-reply-input'), 'inline');
 };
+
 // ⚡ COMPLETELY OPTIMISTIC INLINE SUBMIT
 window.submitInlineReply = async function(btn) {
 const container = btn.closest('[data-id="reply-container"]');
@@ -2865,10 +2774,14 @@ else if (currentTab === 'Live') { snoozeBtn.classList.remove('hidden'); }
 }
 const lCont = cardDiv.querySelector('[data-id="labels-container"]');
 conv.labels.forEach(l => { if(l){ const s = document.createElement('span'); s.className='px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded font-bold'; s.innerText=l; lCont.appendChild(s); } });
+
+// ======== START UPDATE ========
 const admCont = cardDiv.querySelector('[data-id="admins-container"]');
 const usrCont = cardDiv.querySelector('[data-id="users-container"]');
-conv.admins.forEach(a => { if(a) admCont.innerHTML += `<span class="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] rounded font-bold shadow-sm">👑 ${window.getUserNameByEmail(a)}</span>`; });
-conv.users.forEach(u => { if(u) usrCont.innerHTML += `<span class="px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 text-[10px] rounded font-bold shadow-sm">👤 ${window.getUserNameByEmail(u)}</span>`; });
+conv.admins.forEach(a => { if(a) admCont.innerHTML += window.getMemberBadgeHTML(a, 'Admin', conv.archivedBy, conv.snoozeTime); });
+conv.users.forEach(u => { if(u) usrCont.innerHTML += window.getMemberBadgeHTML(u, 'User', conv.archivedBy, conv.snoozeTime); });
+// ======== END UPDATE ========
+
 // ⚡ --- BEGIN MASTER FILTER LOGIC (Initial Routing) ---
 let isMyCase = false;
 if (currentUser && currentUser.isMaster) {
