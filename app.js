@@ -2188,6 +2188,12 @@ payloads.forEach(p => {
      const tempId = p.uniqueId; 
      seenMessages.add(tempId); 
      
+     // 👉 NEW FIX: If replying to an Ask from main composer, mark it closed locally
+     if (p.parentAskId) {
+         const parentAsk = allLoadedComments.find(c => String(c.askId) === String(p.parentAskId));
+         if (parentAsk) parentAsk.status = 'Closed';
+     }
+
      allLoadedComments.push({
          caseId: String(p.caseId).trim(),
          timestamp: new Date().getTime(),
@@ -2457,6 +2463,12 @@ allLoadedComments.push({
 // FIX: Remove the notification for the Ask they just replied to, and clear general case notifications
 if (payload.parentAskId) {
     notifications = notifications.filter(n => String(n.askId) !== String(payload.parentAskId) && String(n.id) !== String(payload.parentAskId));
+    
+    // 👉 NEW FIX: Instantly mark the parent Ask as Closed in the UI
+    const parentAsk = allLoadedComments.find(c => String(c.askId) === String(payload.parentAskId));
+    if (parentAsk) {
+        parentAsk.status = 'Closed';
+    }
 }
 notifications = notifications.filter(n => window.normalizeCaseId(n.caseId) !== window.normalizeCaseId(caseId));
 unreadCount = notifications.length;
