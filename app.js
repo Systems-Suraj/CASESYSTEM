@@ -1810,7 +1810,8 @@ if (caseNotifs.length > 0) {
             locallySeenNotifications.add(n.id);
         }
     });
-    notifications = notifications.filter(n => window.normalizeCaseId(n.caseId) !== window.normalizeCaseId(convId));
+    // 🔥 REAL FIX: Preserve the notification if it is an Ask that is still Open
+    notifications = notifications.filter(n => window.normalizeCaseId(n.caseId) !== window.normalizeCaseId(convId) || (n.type === 'Ask' && String(n.status).toLowerCase() === 'open'));
     unreadCount = notifications.length;
     updateNotificationUI();
 }
@@ -2921,12 +2922,16 @@ window.openFromNotification = async function(caseId, uniqueId) {
 
         const card = [...document.querySelectorAll('[data-conv-id]')].find(el => window.normalizeCaseId(el.dataset.convId) === cleanCaseId);
 
-        if (uniqueId) {
-          locallySeenNotifications.add(uniqueId);
+       if (uniqueId) {
+            const clickedNotif = notifications.find(n => n.id === uniqueId);
+            // Do not add to locallySeenNotifications if it's an Ask
+            if (!clickedNotif || clickedNotif.type !== 'Ask') {
+                locallySeenNotifications.add(uniqueId);
+            }
         }
 
-        // FIX: Aggressively remove the clicked notification so it doesn't get stuck
-        notifications = notifications.filter(n => n.id !== uniqueId);
+        // 🔥 REAL FIX: Aggressively remove the clicked notification, UNLESS it's an Open Ask
+        notifications = notifications.filter(n => n.id !== uniqueId || (n.type === 'Ask' && String(n.status).toLowerCase() === 'open'));
         unreadCount = notifications.length;
         updateNotificationUI();
 
