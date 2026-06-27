@@ -1,3 +1,4 @@
+
 // ==========================================
 // 🔒 UI PROTECTION STATE & GLOBAL HELPERS
 // ==========================================
@@ -3087,29 +3088,3 @@ document.querySelectorAll('#membersDropdown .dropdown-item').forEach(item => {
 });
 } catch(e) {}
 }, 150);
-
-// ==========================================
-// FMS RETURN TO TASK LOGIC
-// ==========================================
-function initFmsReturnButton(sourceLink) {
-    const container = document.getElementById('fms-return-container');
-    if (!container) return;
-    
-    if (sourceLink && sourceLink.trim() !== '' && sourceLink !== 'undefined') {
-        window.fmsTaskUrl = sourceLink;
-        container.classList.remove('hidden');
-    } else {
-        container.classList.add('hidden');
-    }
-}
-
-function openFmsInModal() {
-    if(!window.fmsTaskUrl) return;
-    document.getElementById('fms-view-iframe').src = window.fmsTaskUrl;
-    document.getElementById('fms-view-modal').classList.remove('hidden');
-}
-
-function closeFmsInModal() {
-    document.getElementById('fms-view-modal').classList.add('hidden');
-    document.getElementById('fms-view-iframe').src = '';
-}
