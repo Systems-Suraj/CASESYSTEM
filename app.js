@@ -1714,6 +1714,7 @@ resetCaseState();
 const dataset = card.dataset;
 const convId = String(dataset.convId || "").trim();
 const rawSnooze = parseInt(dataset.snoozeRaw || 0, 10);
+initFmsReturnButton(dataset.sourceLink);
 const currentSafeSnooze = parseInt(dataset.snooze || 0, 10);
 if (rawSnooze > Date.now() && currentSafeSnooze === 0) {
 apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }).catch(e => {});
@@ -2744,6 +2745,7 @@ cardDiv.dataset.labels = JSON.stringify(conv.labels);
 cardDiv.dataset.members = JSON.stringify([...conv.admins, ...conv.users, conv.createdBy]);
 cardDiv.dataset.caseAdmins = JSON.stringify(conv.admins);
 cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
+cardDiv.dataset.sourceLink = conv.sourceLink || conv.sourceTaskLink || '';
 // ✅ ATTACH RAW DATA FOR NOT ME TAB FILTERING
 cardDiv.dataset.creatorEmail = conv.creatorEmail || '';
 cardDiv.dataset.archivedBy = conv.archivedBy || '';
