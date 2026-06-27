@@ -1,5 +1,4 @@
-
-// ==========================================
+ // ==========================================
 // 🔒 UI PROTECTION STATE & GLOBAL HELPERS
 // ==========================================
 window.normalizeCaseId = function(id) {
@@ -1715,7 +1714,6 @@ resetCaseState();
 const dataset = card.dataset;
 const convId = String(dataset.convId || "").trim();
 const rawSnooze = parseInt(dataset.snoozeRaw || 0, 10);
-initFmsReturnButton(dataset.sourceLink);
 const currentSafeSnooze = parseInt(dataset.snooze || 0, 10);
 if (rawSnooze > Date.now() && currentSafeSnooze === 0) {
 apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }).catch(e => {});
@@ -1812,8 +1810,7 @@ if (caseNotifs.length > 0) {
             locallySeenNotifications.add(n.id);
         }
     });
-    // 🔥 REAL FIX: Preserve the notification if it is an Ask that is still Open
-    notifications = notifications.filter(n => window.normalizeCaseId(n.caseId) !== window.normalizeCaseId(convId) || (n.type === 'Ask' && String(n.status).toLowerCase() === 'open'));
+    notifications = notifications.filter(n => window.normalizeCaseId(n.caseId) !== window.normalizeCaseId(convId));
     unreadCount = notifications.length;
     updateNotificationUI();
 }
@@ -2746,7 +2743,6 @@ cardDiv.dataset.labels = JSON.stringify(conv.labels);
 cardDiv.dataset.members = JSON.stringify([...conv.admins, ...conv.users, conv.createdBy]);
 cardDiv.dataset.caseAdmins = JSON.stringify(conv.admins);
 cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
-cardDiv.dataset.sourceLink = conv.sourceLink || conv.sourceTaskLink || '';
 // ✅ ATTACH RAW DATA FOR NOT ME TAB FILTERING
 cardDiv.dataset.creatorEmail = conv.creatorEmail || '';
 cardDiv.dataset.archivedBy = conv.archivedBy || '';
@@ -2925,16 +2921,12 @@ window.openFromNotification = async function(caseId, uniqueId) {
 
         const card = [...document.querySelectorAll('[data-conv-id]')].find(el => window.normalizeCaseId(el.dataset.convId) === cleanCaseId);
 
-       if (uniqueId) {
-            const clickedNotif = notifications.find(n => n.id === uniqueId);
-            // Do not add to locallySeenNotifications if it's an Ask
-            if (!clickedNotif || clickedNotif.type !== 'Ask') {
-                locallySeenNotifications.add(uniqueId);
-            }
+        if (uniqueId) {
+          locallySeenNotifications.add(uniqueId);
         }
 
-        // 🔥 REAL FIX: Aggressively remove the clicked notification, UNLESS it's an Open Ask
-        notifications = notifications.filter(n => n.id !== uniqueId || (n.type === 'Ask' && String(n.status).toLowerCase() === 'open'));
+        // FIX: Aggressively remove the clicked notification so it doesn't get stuck
+        notifications = notifications.filter(n => n.id !== uniqueId);
         unreadCount = notifications.length;
         updateNotificationUI();
 
