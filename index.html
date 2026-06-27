@@ -139,10 +139,14 @@
         </div>
       </div>
 
-      <div id="caseDetailView" class="hidden w-full max-w-5xl mx-auto px-2 sm:px-6 py-2 sm:py-4 flex-1 flex flex-col min-h-0 h-[calc(100vh-60px)]">
-        <button onclick="closeCaseDetail()" class="mb-2 sm:mb-4 text-indigo-600 font-extrabold text-sm hover:underline self-start flex items-center gap-1.5 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back to Dashboard
-        </button>
+      <div id="fms-return-container" class="hidden flex gap-2 items-center mb-4 self-start">
+      <button onclick="openFmsInModal()" class="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold shadow-sm hover:bg-indigo-100 transition-colors border border-indigo-200 flex items-center">
+          <i class="fas fa-arrow-left mr-2"></i> View Origin Task
+      </button>
+      <button id="fms-new-tab-btn" onclick="window.open(window.fmsTaskUrl, '_blank')" class="px-4 py-2 bg-white text-slate-600 rounded-lg text-sm font-bold shadow-sm hover:bg-slate-50 transition-colors border border-slate-200">
+          <i class="fas fa-external-link-alt"></i>
+      </button>
+  </div>
         
         <div class="bg-white rounded-xl sm:rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-200 overflow-hidden flex flex-col flex-1 min-h-0">
           <div class="p-3 sm:p-6 border-b border-slate-100 bg-white flex flex-col gap-3 sm:gap-4 shrink-0">
@@ -527,6 +531,19 @@
         <p id="globalUploadSize" class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">0 MB / 0 MB</p>
       </div>
     </div>
+
+    <div id="fms-view-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+            <div class="p-4 border-b flex justify-between items-center bg-gray-50">
+                <h3 class="font-bold text-gray-700">Origin Task Activity Feed</h3>
+                <button onclick="closeFmsInModal()" class="text-gray-500 hover:text-black text-2xl font-bold">&times;</button>
+            </div>
+            <div class="flex-1 overflow-hidden p-0 relative">
+                <iframe id="fms-view-iframe" src="" class="w-full h-full border-none absolute inset-0"></iframe>
+            </div>
+        </div>
+    </div>
+    
     
     <script src="app.js"></script>
   </body>
