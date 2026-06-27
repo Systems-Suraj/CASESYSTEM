@@ -154,6 +154,7 @@
                      </button>
                  </div>
                  <div class="flex gap-2 items-center flex-wrap shrink-0">
+    <button id="detail-fms-btn" class="hidden text-xs bg-indigo-50 text-indigo-700 font-bold px-3 py-2 rounded-lg shadow-sm border border-indigo-200" onclick="openFmsModal(event, this.dataset.url)"><i class="fas fa-tasks mr-1"></i> FMS</button>
     <button id="detail-unarchive-btn" class="hidden text-xs bg-slate-100 text-slate-700 font-bold px-3 py-2 rounded-lg shadow-sm border border-slate-200" onclick="processUnarchive(this)">📂 Un-Archive</button>
     <button id="detail-unsnooze-btn" class="hidden text-xs bg-orange-50 text-orange-700 font-bold px-3 py-2 rounded-lg shadow-sm border border-orange-200" onclick="processUnsnooze(this)">🔔 Un-Snooze</button>
     <button id="detail-snooze-btn" class="hidden text-xs text-indigo-600 font-bold bg-indigo-50 px-3 py-2 rounded-lg border border-indigo-200" onclick="openSnoozeModal(this)">⏰ Snooze</button>
@@ -460,7 +461,26 @@
         </div>
       </div>
     </div>
-    
+
+    <div id="fmsModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col transform transition-all">
+        <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <h2 class="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+            <i class="fas fa-tasks text-indigo-600"></i> FMS Task Queue
+          </h2>
+          <div class="flex items-center gap-3">
+            <a id="fmsNewTabBtn" href="#" target="_blank" class="px-4 py-1.5 bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg hover:bg-indigo-200 transition-colors shadow-sm flex items-center gap-1">
+              <i class="fas fa-external-link-alt"></i> Open in New Tab
+            </a>
+            <button onclick="closeFmsModal()" class="text-slate-400 hover:text-red-600 text-2xl leading-none transition-colors w-8 h-8 rounded-full hover:bg-red-50 flex items-center justify-center">&times;</button>
+          </div>
+        </div>
+        <div class="flex-1 w-full bg-slate-100 relative">
+          <div class="absolute inset-0 flex items-center justify-center text-slate-400 text-sm font-bold z-0">Loading...</div>
+          <iframe id="fmsIframe" src="" class="w-full h-full border-0 relative z-10 bg-white"></iframe>
+        </div>
+      </div>
+    </div>
     <template id="cardTemplate">
       <div>
         <div class="card-main bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden sm:hover:shadow-lg sm:transition-all sm:duration-300 sm:transform sm:hover:-translate-y-1 flex flex-col h-full">
@@ -497,6 +517,7 @@
             </div>
             
             <div class="flex items-center gap-3 text-sm flex-wrap sm:flex-nowrap justify-end shrink-0">
+               <button type="button" class="fms-card-btn hidden text-indigo-700 font-bold bg-white/90 hover:bg-white px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg transition-colors border border-indigo-200 shadow-sm text-[10px] sm:text-sm leading-none whitespace-nowrap" onclick="event.stopPropagation(); openFmsModal(event, this.closest('.card-main').dataset.fmsUrl)" title="FMS Task Queue"><i class="fas fa-tasks mr-1"></i> FMS</button>
                <label class="hidden flex items-center gap-1.5 cursor-pointer archive-cb-container text-white font-bold group">
                   <input type="checkbox" class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-600 rounded border-orange-300 focus:ring-orange-500 bulk-archive-cb transition-colors cursor-pointer">
                   <span class="text-[10px] sm:text-xs group-hover:text-orange-100 tracking-wider uppercase transition-colors">Archive</span>
