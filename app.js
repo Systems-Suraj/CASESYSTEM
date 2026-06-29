@@ -3147,7 +3147,7 @@ window.applyFilters = debounce(function() {
             else { item.style.display = 'none'; item.dataset.available = 'false'; }
         });
     } catch(e) {}
-}, 150);
+}, 150);  
 
 
 // ==========================================
