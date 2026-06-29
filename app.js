@@ -43,7 +43,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v62";
+const APP_VERSION = "v63";
 function checkAppUpdate() {
     const storedVersion = localStorage.getItem("app_version");
     if (!storedVersion) {
@@ -1847,20 +1847,20 @@ window.openCaseDetail = async function(cardEl) {
         }
 
         // ==========================================
-        // DETAIL VIEW FMS BUTTON
+        // DETAIL VIEW CASE SOURCE BUTTON
         // ==========================================
-        const fmsUrl = dataset.fmsUrl || '';
-        const detailFmsBtn = document.getElementById('detail-fms-btn');
+        const caseSourceUrl = dataset.caseSourceUrl || dataset.fmsUrl || '';
+        const detailCaseSourceBtn = document.getElementById('detail-case-source-btn');
 
-        if (detailFmsBtn) {
-            if (fmsUrl) {
-                detailFmsBtn.classList.remove('hidden');
-                detailFmsBtn.classList.add('flex');
-                detailFmsBtn.dataset.url = fmsUrl;
+        if (detailCaseSourceBtn) {
+            if (caseSourceUrl) {
+                detailCaseSourceBtn.classList.remove('hidden');
+                detailCaseSourceBtn.classList.add('flex');
+                detailCaseSourceBtn.dataset.url = caseSourceUrl;
             } else {
-                detailFmsBtn.classList.add('hidden');
-                detailFmsBtn.classList.remove('flex');
-                detailFmsBtn.dataset.url = '';
+                detailCaseSourceBtn.classList.add('hidden');
+                detailCaseSourceBtn.classList.remove('flex');
+                detailCaseSourceBtn.dataset.url = '';
             }
         }
         // ==========================================
@@ -2795,8 +2795,8 @@ async function loadConversations() {
             cardDiv.dataset.caseAdmins = JSON.stringify(conv.admins);
             cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
             
-            // FMS Task Queue Setup
-            cardDiv.dataset.fmsUrl = conv.fmsUrl || '';
+            // Case Source Setup
+            cardDiv.dataset.caseSourceUrl = conv.caseSourceUrl || conv.caseUrl || conv.sourceUrl || conv.fmsUrl || '';
             
             cardDiv.dataset.creatorEmail = conv.creatorEmail || '';
             cardDiv.dataset.archivedBy = conv.archivedBy || '';
@@ -2829,17 +2829,17 @@ async function loadConversations() {
             const unsnoozeBtn = footerActions.querySelector('.unsnooze-card-btn');
             const unarchiveBtn = footerActions.querySelector('.unarchive-card-btn');
             const checkbox = footerActions.querySelector('.bulk-archive-cb');
-            const fmsCardBtn = footerActions.querySelector('.fms-card-btn');
+            const caseSourceCardBtn = footerActions.querySelector('.case-source-card-btn');
             
             cbContainer.classList.add('hidden'); cbContainer.classList.remove('flex'); snoozeBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden');
             unarchiveBtn.classList.add('hidden');
             
-            // Show/Hide FMS button on card
-            if (fmsCardBtn) {
-                if (conv.fmsUrl) {
-                    fmsCardBtn.classList.remove('hidden');
+            // Show/Hide Case Source button on card
+            if (caseSourceCardBtn) {
+                if (cardDiv.dataset.caseSourceUrl) {
+                    caseSourceCardBtn.classList.remove('hidden');
                 } else {
-                    fmsCardBtn.classList.add('hidden');
+                    caseSourceCardBtn.classList.add('hidden');
                 }
             }
 
@@ -3151,30 +3151,30 @@ window.applyFilters = debounce(function() {
 
 
 // ==========================================
-// FMS TASK QUEUE MODAL LOGIC
+// CASE SOURCE MODAL LOGIC
 // ==========================================
-window.openFmsModal = function(event, url) {
+window.openCaseSourceModal = function(event, url) {
     if (event) event.stopPropagation(); // Prevents the card click from opening case details
     
     if (!url || String(url).trim() === '' || url === 'undefined') {
-        showCustomDialog("Notice", "No FMS Task Queue URL found for this case.", false);
+        showCustomDialog("Case Source", "No Case Source URL is available for this case.", false);
         return;
     }
     
     // Set iframe and button href
-    document.getElementById('fmsIframe').src = url;
-    document.getElementById('fmsNewTabBtn').href = url;
+    document.getElementById('caseSourceIframe').src = url;
+    document.getElementById('caseSourceNewTabBtn').href = url;
     
     // Show modal
-    document.getElementById('fmsModal').classList.remove('hidden');
-    document.getElementById('fmsModal').classList.add('flex');
+    document.getElementById('caseSourceModal').classList.remove('hidden');
+    document.getElementById('caseSourceModal').classList.add('flex');
 };
 
-window.closeFmsModal = function() {
-    const modal = document.getElementById('fmsModal');
+window.closeCaseSourceModal = function() {
+    const modal = document.getElementById('caseSourceModal');
     modal.classList.add('hidden');
     modal.classList.remove('flex');
     
     // Clear iframe src to stop background loading/playing
-    document.getElementById('fmsIframe').src = '';
+    document.getElementById('caseSourceIframe').src = '';
 };
