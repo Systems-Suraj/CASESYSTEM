@@ -2243,7 +2243,7 @@ window.submitDetailReply = async function() {
                  attachmentUrl: p.attachmentUrl || '',
                  attachmentFileName: p.attachmentFileName || '',
                  type: p.mentionType,
-                 askId: p.mentionType === 'Ask' ? 'NEW' : '', 
+                 askId: '',
                  status: p.mentionType === 'Ask' ? 'Open' : '', 
                  parentAskId: p.parentAskId || '',
                  uniqueId: tempId, 
@@ -2497,13 +2497,25 @@ window.submitInlineReply = async function(btn) {
              attachmentUrl: fileUrl,
              attachmentFileName: fileName,
              type: typeVal,
-             askId: typeVal === 'Ask' ? 'NEW' : '', 
+             askId: '',
              status: typeVal === 'Ask' ? 'Open' : '', 
              parentAskId: payload.parentAskId,
              uniqueId: tempId, 
              threadId: payload.threadId || 'LOCAL-T-' + Math.random(),
              threadColor: payload.threadColor || '#f8fafc'
          });
+
+
+        if (payload.parentAskId === "NEW" || payload.parentAskId === "") {
+    showCustomDialog(
+        "Please wait",
+        "The Ask is still being saved. Wait one second and try again.",
+        false
+    );
+    btn.disabled = false;
+    btn.innerText = originalText;
+    return;
+}
 
         if (payload.parentAskId) {
             notifications = notifications.filter(n => String(n.askId) !== String(payload.parentAskId) && String(n.id) !== String(payload.parentAskId));
@@ -2528,6 +2540,10 @@ window.submitInlineReply = async function(btn) {
             userEmail: currentUser.email
         });
         await apiCall('addNewComment', payload);
+
+// Reload comments immediately so NEW placeholder
+// is replaced with the real Ask ID (611, 612, etc.)
+await loadCaseDetails(caseId);
 
         if(window.isMobileClient && window.isMobileClient()) {
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIBRATE' }));
