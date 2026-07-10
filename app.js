@@ -2279,7 +2279,16 @@ window.submitDetailReply = async function() {
         if(window.isMobileClient && window.isMobileClient()) {
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIBRATE' }));
         }
-        setTimeout(() => loadCaseDetails(caseId), 500);
+
+        // REFRESH LOGIC: Replaced non-existent loadCaseDetails with existing modal refresh logic
+        setTimeout(() => {
+            if (typeof window.openCaseModal === 'function') {
+                window.openCaseModal(caseId);
+            } else if (typeof window.openCaseDetails === 'function') {
+                window.openCaseDetails(caseId);
+            }
+        }, 500);
+
     } catch(e) {
         hideUploadOverlay();
         showCustomDialog("Error", "Failed to post reply. Reason: \n" + (e.message || e), false);
@@ -2287,7 +2296,6 @@ window.submitDetailReply = async function() {
         submitBtn.disabled = false; submitBtn.innerText = originalText;
     }
 };
-
 window.toggleInlineReply = function(btn) {
     const container = btn.closest('[data-id="reply-container"]');
     const replyBox = container.querySelector('[data-id="inline-reply-box"]');
@@ -2507,15 +2515,15 @@ window.submitInlineReply = async function(btn) {
 
 
         if (payload.parentAskId === "NEW" || payload.parentAskId === "") {
-    showCustomDialog(
-        "Please wait",
-        "The Ask is still being saved. Wait one second and try again.",
-        false
-    );
-    btn.disabled = false;
-    btn.innerText = originalText;
-    return;
-}
+            showCustomDialog(
+                "Please wait",
+                "The Ask is still being saved. Wait one second and try again.",
+                false
+            );
+            btn.disabled = false;
+            btn.innerText = originalText;
+            return;
+        }
 
         if (payload.parentAskId) {
             notifications = notifications.filter(n => String(n.askId) !== String(payload.parentAskId) && String(n.id) !== String(payload.parentAskId));
@@ -2541,9 +2549,13 @@ window.submitInlineReply = async function(btn) {
         });
         await apiCall('addNewComment', payload);
 
-// Reload comments immediately so NEW placeholder
-// is replaced with the real Ask ID (611, 612, etc.)
-
+        // Reload comments immediately so NEW placeholder is replaced with the real Ask ID (611, 612, etc.)
+        // Reusing the project's existing modal view refresh handlers to safely rebuild the view state
+        if (typeof window.openCaseModal === 'function') {
+            await window.openCaseModal(caseId);
+        } else if (typeof window.openCaseDetails === 'function') {
+            await window.openCaseDetails(caseId);
+        }
 
         if(window.isMobileClient && window.isMobileClient()) {
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIBRATE' }));
