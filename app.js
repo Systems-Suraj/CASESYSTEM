@@ -2543,12 +2543,12 @@ window.submitInlineReply = async function(btn) {
 
 // Reload comments immediately so NEW placeholder
 // is replaced with the real Ask ID (611, 612, etc.)
-await loadCaseDetails(caseId);
+
 
         if(window.isMobileClient && window.isMobileClient()) {
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIBRATE' }));
         }
-        setTimeout(() => loadCaseDetails(caseId), 500);
+            
     } catch(e) {
         hideUploadOverlay();
         showCustomDialog("Error", "Failed to post inline reply.\n" + (e.message || e), false);
