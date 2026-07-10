@@ -2994,50 +2994,128 @@ window.addEventListener('offline', () => {
 // NOTIFICATION CLEARING FIXES
 // ==========================================
 window.openFromNotification = async function(caseId, uniqueId) {
+
     if (isOpeningCase) return;
     isOpeningCase = true;
+
     try {
+
         const panel = document.getElementById("notifPanel");
         if (panel) panel.classList.add("hidden");
-        if (!caseId || caseId === 'undefined') {
-          showCustomDialog("Notice", "Case ID missing hai.", false);
-          return;
+
+        if (!caseId || caseId === "undefined") {
+            showCustomDialog("Notice", "Case ID missing hai.", false);
+            return;
         }
 
         const cleanCaseId = window.normalizeCaseId(caseId);
-        await new Promise(r => setTimeout(r, 150));
 
-        const card = [...document.querySelectorAll('[data-conv-id]')].find(el => window.normalizeCaseId(el.dataset.convId) === cleanCaseId);
-
-       if (uniqueId) {
+        // ==========================================
+        // Remove notification immediately
+        // ==========================================
+        if (uniqueId) {
             const clickedNotif = notifications.find(n => n.id === uniqueId);
-            if (!clickedNotif || clickedNotif.type !== 'Ask') {
+
+            if (!clickedNotif || clickedNotif.type !== "Ask") {
                 locallySeenNotifications.add(uniqueId);
             }
         }
 
-        notifications = notifications.filter(n => n.id !== uniqueId || (n.type === 'Ask' && String(n.status).toLowerCase() === 'open'));
+        notifications = notifications.filter(
+            n => n.id !== uniqueId ||
+            (n.type === "Ask" &&
+             String(n.status).toLowerCase() === "open")
+        );
+
         unreadCount = notifications.length;
         updateNotificationUI();
 
         if (uniqueId && currentUser?.email) {
-          apiCall('markSeen', { notificationId: uniqueId, userEmail: currentUser.email, userName: currentUser.name || currentUser.email }).catch(e => console.log(e));
+            apiCall("markSeen", {
+                notificationId: uniqueId,
+                userEmail: currentUser.email,
+                userName: currentUser.name || currentUser.email
+            }).catch(console.log);
         }
 
+        // ==========================================
+        // Wait until card exists
+        // ==========================================
+        let card = null;
+
+        for (let i = 0; i < 20; i++) {
+
+            card = [...document.querySelectorAll("[data-conv-id]")]
+                .find(el =>
+                    window.normalizeCaseId(el.dataset.convId) === cleanCaseId
+                );
+
+            if (card) break;
+
+            await new Promise(r => setTimeout(r, 250));
+        }
+
+        // ==========================================
+        // If still not found, refresh dashboard once
+        // ==========================================
         if (!card) {
-          showCustomDialog("Loading...", "Case is still loading in dashboard. Please wait 1 second and try again.", false);
-          return;
+
+            if (typeof loadConversations === "function") {
+                try {
+                    await loadConversations();
+                } catch (e) {
+                    console.log(e);
+                }
+
+                await new Promise(r => setTimeout(r, 500));
+
+                card = [...document.querySelectorAll("[data-conv-id]")]
+                    .find(el =>
+                        window.normalizeCaseId(el.dataset.convId) === cleanCaseId
+                    );
+            }
         }
 
+        // ==========================================
+        // Final check
+        // ==========================================
+        if (!card) {
+            showCustomDialog(
+                "Loading...",
+                "Case is still loading. Please try again in a moment.",
+                false
+            );
+            return;
+        }
+
+        // ==========================================
+        // Open case
+        // ==========================================
         const requestId = Date.now();
         currentOpenRequest = requestId;
+
         await window.openCaseDetail(card);
+
         if (currentOpenRequest !== requestId) return;
-    } catch (err) {
+
+    }
+    catch (err) {
+
         console.error("Notification Open Error:", err);
-        showCustomDialog("Error", "Failed to load case properly.", false);
-    } finally {
-        setTimeout(() => { isOpeningCase = false; }, 300);
+
+        showCustomDialog(
+            "Error",
+            "Failed to load case properly.",
+            false
+        );
+
+    }
+    finally {
+
+        setTimeout(() => {
+            isOpeningCase = false;
+        }, 300);
+
     }
 };
 
