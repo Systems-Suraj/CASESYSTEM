@@ -2478,10 +2478,14 @@ window.finalizeInlineMention = function(name, email, role) {
 };
 
 window.submitInlineReply = async function(btn) {
+    // 🔥 FIX: Find the container directly using the button
     const container = btn.closest('[data-id="reply-container"]');
     const replyBox = container.querySelector('[data-id="inline-reply-box"]');
+    const toggleBtn = container.querySelector('.inline-reply-toggle-btn');
+    
     const inputDiv = replyBox.querySelector('.inline-reply-input');
     const msgHTML = inputDiv.innerHTML.trim();
+    
     if (!inputDiv.querySelector('.mention-badge')) {
         return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
     }
@@ -2493,10 +2497,10 @@ window.submitInlineReply = async function(btn) {
         .filter(Boolean)
         .join(',');
         
-    const toggleBtn = container.querySelector('.inline-reply-toggle-btn');
     const typeVal = replyBox.querySelector('.inline-type-val').value;
     
-    // 🔥 FIX: Check if we are replying to an Ask or a regular Message
+    // 🔥 FIX: Directly grab the data-attributes from the toggle button
+    const askId = toggleBtn ? toggleBtn.getAttribute('data-askid') : '';
     const parentMsgType = toggleBtn ? toggleBtn.getAttribute('data-parent-type') : ''; 
 
     btn.disabled = true;
@@ -2520,7 +2524,7 @@ window.submitInlineReply = async function(btn) {
             mentionType: typeVal, 
             sender: currentUser.email, 
             receiver: mentionedEmails, 
-            parentAskId: toggleBtn ? toggleBtn.getAttribute('data-askid') : '', 
+            parentAskId: askId, 
             threadId: toggleBtn ? toggleBtn.getAttribute('data-threadid') : '', 
             threadColor: toggleBtn ? toggleBtn.getAttribute('data-threadcolor') : '', 
             attachmentUrl: fileUrl, 
@@ -2528,6 +2532,20 @@ window.submitInlineReply = async function(btn) {
             uniqueId: tempId 
         };
 
+        // 🔥 LOGIC CHANGE: Only block if parentMsgType IS 'Ask' AND the askId is still "NEW"
+        // If it's a regular 'Reply' or 'Message', it will proceed regardless of askId.
+        if (parentMsgType === 'Ask' && (askId === "NEW" || askId === "")) {
+            showCustomDialog(
+                "Please wait",
+                "The Ask is still being saved. Wait one second and try again.",
+                false
+            );
+            btn.disabled = false;
+            btn.innerText = originalText;
+            return;
+        }
+
+        // ... rest of your existing function code (api calls, clearing inputs, etc) ...
         const localSenderName = currentUser.name || currentUser.email;
         seenMessages.add(tempId); 
 
@@ -2542,31 +2560,16 @@ window.submitInlineReply = async function(btn) {
              type: typeVal,
              askId: '',
              status: typeVal === 'Ask' ? 'Open' : '', 
-             parentAskId: payload.parentAskId,
+             parentAskId: askId,
              uniqueId: tempId, 
              threadId: payload.threadId || 'LOCAL-T-' + Math.random(),
              threadColor: payload.threadColor || '#f8fafc'
-         });
+        });
 
-        // 🔥 FIX: Now it only blocks if you are explicitly replying to a newly created "Ask" that has no ID yet.
-        // It will let regular "Messages" pass right through!
-        if (payload.parentAskId === "NEW" || (parentMsgType === 'Ask' && payload.parentAskId === "")) {
-            showCustomDialog(
-                "Please wait",
-                "The Ask is still being saved. Wait one second and try again.",
-                false
-            );
-            btn.disabled = false;
-            btn.innerText = originalText;
-            return;
-        }
-
-        if (payload.parentAskId) {
-            notifications = notifications.filter(n => String(n.askId) !== String(payload.parentAskId) && String(n.id) !== String(payload.parentAskId));
-            const parentAsk = allLoadedComments.find(c => String(c.askId) === String(payload.parentAskId));
-            if (parentAsk) {
-                parentAsk.status = 'Closed';
-            }
+        if (askId && askId !== "NEW") {
+            notifications = notifications.filter(n => String(n.askId) !== String(askId) && String(n.id) !== String(askId));
+            const parentAsk = allLoadedComments.find(c => String(c.askId) === String(askId));
+            if (parentAsk) parentAsk.status = 'Closed';
         }
         notifications = notifications.filter(n => window.normalizeCaseId(n.caseId) !== window.normalizeCaseId(caseId));
         unreadCount = notifications.length;
@@ -2574,7 +2577,6 @@ window.submitInlineReply = async function(btn) {
 
         inputDiv.innerHTML = '';
         inlinePendingFiles = []; replyBox.querySelector('.inline-file-list').innerHTML = ''; replyBox.classList.add('hidden');
-
         renderAllCommentsLocally();
 
         await apiCall('updateCaseMembers', {
@@ -2590,11 +2592,6 @@ window.submitInlineReply = async function(btn) {
         } else if (typeof window.openCaseDetails === 'function') {
             await window.openCaseDetails(caseId);
         }
-
-        if(window.isMobileClient && window.isMobileClient()) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIBRATE' }));
-        }
-            
     } catch(e) {
         hideUploadOverlay();
         showCustomDialog("Error", "Failed to post inline reply.\n" + (e.message || e), false);
@@ -2602,7 +2599,6 @@ window.submitInlineReply = async function(btn) {
         btn.disabled = false; btn.innerText = originalText;
     }
 };
-
 // ==========================================
 // CREATE NEW CASE MODAL & UPLOADS
 // ==========================================
