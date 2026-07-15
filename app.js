@@ -1,4 +1,4 @@
-  // ==========================================
+
 // 🔒 UI PROTECTION STATE & GLOBAL HELPERS
 // ==========================================
 window.normalizeCaseId = function(id) {
