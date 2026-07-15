@@ -928,22 +928,30 @@ function showAppScreen(userObj) {
 }
 
 async function initNotifications(user) {
-    try {
-        if (!('Notification' in window)) return;
-        const permission = await Notification.requestPermission();
-        if (permission !== "granted") return;
-        const registration = await navigator.serviceWorker.register('service-worker.js');
-        await navigator.serviceWorker.ready;
-        const token = await messaging.getToken({
-            vapidKey: "BGF23YCUEVWA9ZKDyD0NduAyLU_Cijhc_ZsO2UMAb8kQTThWSEBMJjnE3Qq3Ad1ys4ms1vETk3KyBeffAx9lHEw",
-            serviceWorkerRegistration: registration
-        });
-        if (token) {
-            await apiCall('saveToken', { person: user.name || user.email, email: user.email, token: token, platform: "web" });
-        }
-    } catch (err) { console.error("Notification Error:", err); }
+    try {
+        if (!('Notification' in window)) return;
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") return;
+        const registration = await navigator.serviceWorker.register('service-worker.js');
+        await navigator.serviceWorker.ready;
+        const token = await messaging.getToken({
+            vapidKey: "BGF23YCUEVWA9ZKDyD0NduAyLU_Cijhc_ZsO2UMAb8kQTThWSEBMJjnE3Qq3Ad1ys4ms1vETk3KyBeffAx9lHEw",
+            serviceWorkerRegistration: registration
+        });
+        if (token) {
+            // FIX: Added fallbacks to prevent "Missing required fields" API error
+            const safeEmail = user.email || user.mobileNo || user.name || "no-email";
+            const safeName = user.name || safeEmail;
+            
+            await apiCall('saveToken', { 
+                person: safeName, 
+                email: safeEmail, 
+                token: token, 
+                platform: "web" 
+            });
+        }
+    } catch (err) { console.error("Notification Error:", err); }
 }
-
 // ==========================================
 // HELPERS
 // ==========================================
@@ -2697,253 +2705,259 @@ window.handleFormSubmit = async function(e) {
 // LOAD CONVERSATIONS (DASHBOARD FEED)
 // ==========================================
 async function loadConversations() {
-    if (window.isOpeningDetailView) return;
-    const feed = document.getElementById('conversationFeed');
-    if(!feed) return;
-    try {
-        allCasesData = await apiCall('getConversations', currentUser); feed.innerHTML = '';
-        let counts = { Live: 0, Snooze: 0, Archive: 0 };
-        const uEmail = (currentUser.email || '').toLowerCase();
-        const uName = (currentUser.name || '').toLowerCase();
-        
-        allCasesData.forEach(c => {
-            let originalSnoozeMs = parseInt(c.snoozeTime || "0", 10);
-            if (String(c.snoozeTime).startsWith('{')) {
-                try { originalSnoozeMs = parseInt(JSON.parse(c.snoozeTime)[uEmail], 10) || 0; } catch(e){}
-            }
-            const hasUnread = notifications.filter(n => String(n.caseId).trim() === String(c.id).trim()).length > 0;
-            const isSnoozed = originalSnoozeMs > Date.now();
+    if (window.isOpeningDetailView) return;
+    const feed = document.getElementById('conversationFeed');
+    if(!feed) return;
+    try {
+        allCasesData = await apiCall('getConversations', currentUser); feed.innerHTML = '';
+        let counts = { Live: 0, Snooze: 0, Archive: 0 };
+        const uEmail = (currentUser.email || '').toLowerCase();
+        const uName = (currentUser.name || '').toLowerCase();
+        
+        allCasesData.forEach(c => {
+            let originalSnoozeMs = parseInt(c.snoozeTime || "0", 10);
+            if (String(c.snoozeTime).startsWith('{')) {
+                try { originalSnoozeMs = parseInt(JSON.parse(c.snoozeTime)[uEmail], 10) || 0; } catch(e){}
+            }
+            const hasUnread = notifications.filter(n => String(n.caseId).trim() === String(c.id).trim()).length > 0;
+            const isSnoozed = originalSnoozeMs > Date.now();
 
-            let isMyCase = false;
-            if (currentUser && currentUser.isMaster) {
-                const members = [...(c.admins||[]), ...(c.users||[]), c.createdBy];
-                members.forEach(m => {
-                    if(!m) return;
-                    const em = String(m).toLowerCase().trim();
-                    const nm = String(window.getUserNameByEmail(m)).toLowerCase().trim();
-                    if(em === uEmail || nm === uName || em.includes(uEmail) || nm.includes(uName)) isMyCase = true;
-                });
-                const cName = String(window.getUserNameByEmail(c.createdBy)).toLowerCase().trim();
-                if(cName === uName || cName === uEmail || cName.includes(uName)) isMyCase = true;
-            } else {
-                isMyCase = true;
-            }
+            let isMyCase = false;
+            if (currentUser && currentUser.isMaster) {
+                const members = [...(c.admins||[]), ...(c.users||[]), c.createdBy];
+                members.forEach(m => {
+                    if(!m) return;
+                    const em = String(m).toLowerCase().trim();
+                    const nm = String(window.getUserNameByEmail(m)).toLowerCase().trim();
+                    if(em === uEmail || nm === uName || em.includes(uEmail) || nm.includes(uName)) isMyCase = true;
+                });
+                const cName = String(window.getUserNameByEmail(c.createdBy)).toLowerCase().trim();
+                if(cName === uName || cName === uEmail || cName.includes(uName)) isMyCase = true;
+            } else {
+                isMyCase = true;
+            }
 
-            if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
-                const creatorEmail = String(c.creatorEmail || '').trim();
-                const creatorName = String(c.createdBy || '').toLowerCase().trim();
-                const archivedBy = String(c.archivedBy || '').toLowerCase();
-                
-                let isCreatorArchived = (creatorEmail && archivedBy.includes(creatorEmail)) || (creatorName && archivedBy.includes(creatorName));
-                
-                let creatorSnoozeMs = 0;
-                if (String(c.snoozeTime).startsWith('{')) {
-                    try { creatorSnoozeMs = parseInt(JSON.parse(c.snoozeTime)[creatorEmail], 10) || 0; } catch(e){}
-                }
-                let isCreatorSnoozed = creatorSnoozeMs > Date.now();
+            if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
+                const creatorEmail = String(c.creatorEmail || '').trim();
+                const creatorName = String(c.createdBy || '').toLowerCase().trim();
+                const archivedBy = String(c.archivedBy || '').toLowerCase();
+                
+                let isCreatorArchived = (creatorEmail && archivedBy.includes(creatorEmail)) || (creatorName && archivedBy.includes(creatorName));
+                
+                let creatorSnoozeMs = 0;
+                if (String(c.snoozeTime).startsWith('{')) {
+                    try { creatorSnoozeMs = parseInt(JSON.parse(c.snoozeTime)[creatorEmail], 10) || 0; } catch(e){}
+                }
+                let isCreatorSnoozed = creatorSnoozeMs > Date.now();
 
-                if (isCreatorArchived) counts.Archive++;
-                else if (isCreatorSnoozed && !hasUnread) counts.Snooze++;
-                else counts.Live++;
-            } else if (window.masterViewMode === 'ME' && isMyCase) {
-                if (c.status === 'Archived') counts.Archive++;
-                else if (isSnoozed && !hasUnread) counts.Snooze++;
-                else counts.Live++;
-            }
-        });
-        
-        if(document.getElementById('count-Live')) document.getElementById('count-Live').innerText = counts.Live;
-        if(document.getElementById('count-Snooze')) document.getElementById('count-Snooze').innerText = counts.Snooze;
-        if(document.getElementById('count-Archive')) document.getElementById('count-Archive').innerText = counts.Archive;
-        if(allCasesData.length === 0) { feed.innerHTML = `<p class="text-center py-10 text-slate-500 font-medium">No cases found.</p>`; return; }
-        
-        const fragment = document.createDocumentFragment();
-        
-        allCasesData.forEach(conv => {
-            const cardTemp = document.getElementById('cardTemplate');
-            if(!cardTemp) return;
-            const cardFragment = cardTemp.content.cloneNode(true);
-            const wrapperDiv = cardFragment.firstElementChild;
-            const cardDiv = wrapperDiv.classList.contains('card-main') ? wrapperDiv : wrapperDiv.querySelector('.card-main');
-            
-            const hasAdminRights = conv.createdBy.toLowerCase().includes(uEmail) || conv.createdBy.toLowerCase().includes(uName) || conv.admins.some(a => String(a).toLowerCase().includes(uEmail) || String(a).toLowerCase().includes(uName));
-            let originalSnoozeMs = 0;
-            const snoozeStr = String(conv.snoozeTime || "").trim();
-            if (snoozeStr && snoozeStr !== '0' && snoozeStr !== 'NaN') {
-                if (snoozeStr.startsWith('{')) {
-                    try {
-                        const obj = JSON.parse(snoozeStr);
-                        originalSnoozeMs = parseInt(obj[uEmail], 10) || 0;
-                    } catch(e) { originalSnoozeMs = 0; }
-                } else {
-                    originalSnoozeMs = parseInt(snoozeStr, 10) || 0;
-                }
-            }
-            
-            const unreadNotifsForCase = notifications.filter(n => String(n.caseId).trim() === String(conv.id).trim());
-            const hasUnread = unreadNotifsForCase.length > 0;
-            let isSnoozed = false;
-            let badgeText = "ACTIVE";
-            let badgeClasses = ['bg-emerald-500', 'text-white'];
-            
-            if (conv.status === 'Archived') {
-                badgeText = "ARCHIVED";
-                badgeClasses = ['bg-emerald-700', 'text-white'];
-            } else if (hasUnread && originalSnoozeMs > 0) {
-                const lastNotif = unreadNotifsForCase[0];
-                const replierName = window.getUserNameByEmail(lastNotif.sender);
-                const actType = String(lastNotif.type || "REPLY").toUpperCase();
-                badgeText = `MOVED TO LIVE: ${actType} BY ${replierName.toUpperCase()}`;
-                badgeClasses = ['bg-blue-100', 'text-blue-800', 'border', 'border-blue-300'];
-                isSnoozed = false;
-            } else if (originalSnoozeMs > Date.now()) {
-                const snoozeDateStr = new Date(originalSnoozeMs).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                badgeText = `SNOOZED TILL ${snoozeDateStr.toUpperCase()}`;
-                badgeClasses = ['bg-orange-100', 'text-orange-700'];
-                isSnoozed = true;
-            } else if (originalSnoozeMs > 0 && originalSnoozeMs <= Date.now()) {
-                badgeText = "MOVED TO LIVE: TIME EXPIRED";
-                badgeClasses = ['bg-purple-100', 'text-purple-800', 'border', 'border-purple-200'];
-                isSnoozed = false;
-            }
-            
-            let safeSnoozeMs = isSnoozed ? originalSnoozeMs : 0;
-            
-            cardDiv._cachedLabels = conv.labels;
-            cardDiv._cachedMembers = [...conv.admins, ...conv.users, conv.createdBy];
-            cardDiv.dataset.convId = String(conv.id).trim();
-            cardDiv.dataset.subject = String(conv.subject).toLowerCase();
-            cardDiv.dataset.status = conv.status;
-            cardDiv.dataset.snooze = safeSnoozeMs;
-            cardDiv.dataset.snoozeRaw = originalSnoozeMs;
-            cardDiv.dataset.hasAdminRights = hasAdminRights;
-            cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments);
-            cardDiv.dataset.labels = JSON.stringify(conv.labels);
-            cardDiv.dataset.members = JSON.stringify([...conv.admins, ...conv.users, conv.createdBy]);
-            cardDiv.dataset.caseAdmins = JSON.stringify(conv.admins);
-            cardDiv.dataset.caseUsers = JSON.stringify(conv.users);
-            
-            // Case Source Setup
-            cardDiv.dataset.caseSourceUrl = conv.caseSourceUrl || conv.caseUrl || conv.sourceUrl || conv.fmsUrl || '';
-            
-            cardDiv.dataset.creatorEmail = conv.creatorEmail || '';
-            cardDiv.dataset.archivedBy = conv.archivedBy || '';
-            cardDiv.dataset.snoozeRawStr = conv.snoozeTime || '';
-            
-            if (wrapperDiv !== cardDiv) {
-                wrapperDiv.dataset.convId = String(conv.id).trim();
-            }
-            
-            const creatorName = window.getUserNameByEmail(conv.createdBy);
-            cardDiv.querySelector('[data-id="conv-id"]').textContent = conv.id;
-            cardDiv.querySelector('[data-id="subject"]').textContent = conv.subject;
-            cardDiv.querySelector('[data-id="details"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.details) : conv.details;
-            cardDiv.querySelector('[data-id="message"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.message) : conv.message;
-            cardDiv.querySelector('[data-id="author"]').textContent = creatorName;
-            cardDiv.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString();
-            cardDiv.querySelector('[data-id="display-case-id"]').textContent = conv.id;
-            
-            const avatarEl = cardDiv.querySelector('[data-id="avatar-letter"]');
-            if(avatarEl) avatarEl.textContent = String(creatorName).charAt(0).toUpperCase();
-            
-            const badge = cardDiv.querySelector('[data-id="status-badge"]');
-            badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm";
-            badge.classList.add(...badgeClasses);
-            badge.innerText = badgeText;
-            
-            const footerActions = cardDiv.querySelector('.flex.items-center.gap-3.text-sm');
-            const cbContainer = footerActions.querySelector('.archive-cb-container');
-            const snoozeBtn = footerActions.querySelector('.snooze-card-btn');
-            const unsnoozeBtn = footerActions.querySelector('.unsnooze-card-btn');
-            const unarchiveBtn = footerActions.querySelector('.unarchive-card-btn');
-            const checkbox = footerActions.querySelector('.bulk-archive-cb');
-            const caseSourceCardBtn = footerActions.querySelector('.case-source-card-btn');
-            
-            cbContainer.classList.add('hidden'); cbContainer.classList.remove('flex'); snoozeBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden');
-            unarchiveBtn.classList.add('hidden');
-            
-            // Show/Hide Case Source button on card
-            if (caseSourceCardBtn) {
-                if (cardDiv.dataset.caseSourceUrl) {
-                    caseSourceCardBtn.classList.remove('hidden');
-                } else {
-                    caseSourceCardBtn.classList.add('hidden');
-                }
-            }
+                if (isCreatorArchived) counts.Archive++;
+                else if (isCreatorSnoozed && !hasUnread) counts.Snooze++;
+                else counts.Live++;
+            } else if (window.masterViewMode === 'ME' && isMyCase) {
+                if (c.status === 'Archived') counts.Archive++;
+                else if (isSnoozed && !hasUnread) counts.Snooze++;
+                else counts.Live++;
+            }
+        });
+        
+        if(document.getElementById('count-Live')) document.getElementById('count-Live').innerText = counts.Live;
+        if(document.getElementById('count-Snooze')) document.getElementById('count-Snooze').innerText = counts.Snooze;
+        if(document.getElementById('count-Archive')) document.getElementById('count-Archive').innerText = counts.Archive;
+        if(allCasesData.length === 0) { feed.innerHTML = `<p class="text-center py-10 text-slate-500 font-medium">No cases found.</p>`; return; }
+        
+        const fragment = document.createDocumentFragment();
+        
+        allCasesData.forEach(conv => {
+            const cardTemp = document.getElementById('cardTemplate');
+            if(!cardTemp) return;
+            const cardFragment = cardTemp.content.cloneNode(true);
+            const wrapperDiv = cardFragment.firstElementChild;
+            const cardDiv = wrapperDiv.classList.contains('card-main') ? wrapperDiv : wrapperDiv.querySelector('.card-main');
+            
+            // FIX: added fallback || [] to avoid crashes if arrays are missing from DB
+            const safeAdmins = conv.admins || [];
+            const safeUsers = conv.users || [];
+            const safeLabels = conv.labels || [];
 
-            if (conv.status === 'Archived') {
-                unarchiveBtn.classList.remove('hidden');
-            }
-            if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) {
-                cbContainer.classList.remove('hidden');
-                cbContainer.classList.add('flex');
-                checkbox.disabled = false;
-            }
-            if (conv.status !== 'Archived') {
-                if (isSnoozed) { unsnoozeBtn.classList.remove('hidden'); }
-                else if (currentTab === 'Live') { snoozeBtn.classList.remove('hidden'); }
-            }
-            
-            const lCont = cardDiv.querySelector('[data-id="labels-container"]');
-            conv.labels.forEach(l => { if(l){ const s = document.createElement('span'); s.className='px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded font-bold'; s.innerText=l; lCont.appendChild(s); } });
+            const hasAdminRights = conv.createdBy.toLowerCase().includes(uEmail) || conv.createdBy.toLowerCase().includes(uName) || safeAdmins.some(a => String(a).toLowerCase().includes(uEmail) || String(a).toLowerCase().includes(uName));
+            
+            let originalSnoozeMs = 0;
+            const snoozeStr = String(conv.snoozeTime || "").trim();
+            if (snoozeStr && snoozeStr !== '0' && snoozeStr !== 'NaN') {
+                if (snoozeStr.startsWith('{')) {
+                    try {
+                        const obj = JSON.parse(snoozeStr);
+                        originalSnoozeMs = parseInt(obj[uEmail], 10) || 0;
+                    } catch(e) { originalSnoozeMs = 0; }
+                } else {
+                    originalSnoozeMs = parseInt(snoozeStr, 10) || 0;
+                }
+            }
+            
+            const unreadNotifsForCase = notifications.filter(n => String(n.caseId).trim() === String(conv.id).trim());
+            const hasUnread = unreadNotifsForCase.length > 0;
+            let isSnoozed = false;
+            let badgeText = "ACTIVE";
+            let badgeClasses = ['bg-emerald-500', 'text-white'];
+            
+            if (conv.status === 'Archived') {
+                badgeText = "ARCHIVED";
+                badgeClasses = ['bg-emerald-700', 'text-white'];
+            } else if (hasUnread && originalSnoozeMs > 0) {
+                const lastNotif = unreadNotifsForCase[0];
+                const replierName = window.getUserNameByEmail(lastNotif.sender);
+                const actType = String(lastNotif.type || "REPLY").toUpperCase();
+                badgeText = `MOVED TO LIVE: ${actType} BY ${replierName.toUpperCase()}`;
+                badgeClasses = ['bg-blue-100', 'text-blue-800', 'border', 'border-blue-300'];
+                isSnoozed = false;
+            } else if (originalSnoozeMs > Date.now()) {
+                const snoozeDateStr = new Date(originalSnoozeMs).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                badgeText = `SNOOZED TILL ${snoozeDateStr.toUpperCase()}`;
+                badgeClasses = ['bg-orange-100', 'text-orange-700'];
+                isSnoozed = true;
+            } else if (originalSnoozeMs > 0 && originalSnoozeMs <= Date.now()) {
+                badgeText = "MOVED TO LIVE: TIME EXPIRED";
+                badgeClasses = ['bg-purple-100', 'text-purple-800', 'border', 'border-purple-200'];
+                isSnoozed = false;
+            }
+            
+            let safeSnoozeMs = isSnoozed ? originalSnoozeMs : 0;
+            
+            cardDiv._cachedLabels = safeLabels;
+            cardDiv._cachedMembers = [...safeAdmins, ...safeUsers, conv.createdBy];
+            cardDiv.dataset.convId = String(conv.id).trim();
+            cardDiv.dataset.subject = String(conv.subject).toLowerCase();
+            cardDiv.dataset.status = conv.status;
+            cardDiv.dataset.snooze = safeSnoozeMs;
+            cardDiv.dataset.snoozeRaw = originalSnoozeMs;
+            cardDiv.dataset.hasAdminRights = hasAdminRights;
+            cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments || []);
+            cardDiv.dataset.labels = JSON.stringify(safeLabels);
+            cardDiv.dataset.members = JSON.stringify(cardDiv._cachedMembers);
+            cardDiv.dataset.caseAdmins = JSON.stringify(safeAdmins);
+            cardDiv.dataset.caseUsers = JSON.stringify(safeUsers);
+            
+            // Case Source Setup
+            cardDiv.dataset.caseSourceUrl = conv.caseSourceUrl || conv.caseUrl || conv.sourceUrl || conv.fmsUrl || '';
+            
+            cardDiv.dataset.creatorEmail = conv.creatorEmail || '';
+            cardDiv.dataset.archivedBy = conv.archivedBy || '';
+            cardDiv.dataset.snoozeRawStr = conv.snoozeTime || '';
+            
+            if (wrapperDiv !== cardDiv) {
+                wrapperDiv.dataset.convId = String(conv.id).trim();
+            }
+            
+            const creatorName = window.getUserNameByEmail(conv.createdBy);
+            cardDiv.querySelector('[data-id="conv-id"]').textContent = conv.id;
+            cardDiv.querySelector('[data-id="subject"]').textContent = conv.subject;
+            cardDiv.querySelector('[data-id="details"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.details) : conv.details;
+            cardDiv.querySelector('[data-id="message"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.message) : conv.message;
+            cardDiv.querySelector('[data-id="author"]').textContent = creatorName;
+            cardDiv.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString();
+            cardDiv.querySelector('[data-id="display-case-id"]').textContent = conv.id;
+            
+            const avatarEl = cardDiv.querySelector('[data-id="avatar-letter"]');
+            if(avatarEl) avatarEl.textContent = String(creatorName).charAt(0).toUpperCase();
+            
+            const badge = cardDiv.querySelector('[data-id="status-badge"]');
+            badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm";
+            badge.classList.add(...badgeClasses);
+            badge.innerText = badgeText;
+            
+            const footerActions = cardDiv.querySelector('.flex.items-center.gap-3.text-sm');
+            const cbContainer = footerActions.querySelector('.archive-cb-container');
+            const snoozeBtn = footerActions.querySelector('.snooze-card-btn');
+            const unsnoozeBtn = footerActions.querySelector('.unsnooze-card-btn');
+            const unarchiveBtn = footerActions.querySelector('.unarchive-card-btn');
+            const checkbox = footerActions.querySelector('.bulk-archive-cb');
+            const caseSourceCardBtn = footerActions.querySelector('.case-source-card-btn');
+            
+            cbContainer.classList.add('hidden'); cbContainer.classList.remove('flex'); snoozeBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden');
+            unarchiveBtn.classList.add('hidden');
+            
+            // Show/Hide Case Source button on card
+            if (caseSourceCardBtn) {
+                if (cardDiv.dataset.caseSourceUrl) {
+                    caseSourceCardBtn.classList.remove('hidden');
+                } else {
+                    caseSourceCardBtn.classList.add('hidden');
+                }
+            }
 
-            const admCont = cardDiv.querySelector('[data-id="admins-container"]');
-            const usrCont = cardDiv.querySelector('[data-id="users-container"]');
-            conv.admins.forEach(a => { if(a) admCont.innerHTML += window.getMemberBadgeHTML(a, 'Admin', conv.archivedBy, conv.snoozeTime); });
-            conv.users.forEach(u => { if(u) usrCont.innerHTML += window.getMemberBadgeHTML(u, 'User', conv.archivedBy, conv.snoozeTime); });
+            if (conv.status === 'Archived') {
+                unarchiveBtn.classList.remove('hidden');
+            }
+            if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) {
+                cbContainer.classList.remove('hidden');
+                cbContainer.classList.add('flex');
+                checkbox.disabled = false;
+            }
+            if (conv.status !== 'Archived') {
+                if (isSnoozed) { unsnoozeBtn.classList.remove('hidden'); }
+                else if (currentTab === 'Live') { snoozeBtn.classList.remove('hidden'); }
+            }
+            
+            // FIX: Added fallbacks for array methods
+            const lCont = cardDiv.querySelector('[data-id="labels-container"]');
+            safeLabels.forEach(l => { if(l){ const s = document.createElement('span'); s.className='px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded font-bold'; s.innerText=l; lCont.appendChild(s); } });
 
-            let isMyCase = false;
-            if (currentUser && currentUser.isMaster) {
-                const myEmail = currentUser.email.toLowerCase().trim();
-                const myName = (currentUser.name || '').toLowerCase().trim();
-                cardDiv._cachedMembers.forEach(m => {
-                    if(!m) return;
-                    const em = String(m).toLowerCase().trim();
-                    const nm = String(window.getUserNameByEmail(m)).toLowerCase().trim();
-                    if(em === myEmail || nm === myName || em.includes(myEmail) || nm.includes(myName)) isMyCase = true;
-                });
-                const cName = creatorName.toLowerCase().trim();
-                if(cName === myName || cName === myEmail || cName.includes(myName)) isMyCase = true;
-            } else {
-                isMyCase = true;
-            }
+            const admCont = cardDiv.querySelector('[data-id="admins-container"]');
+            const usrCont = cardDiv.querySelector('[data-id="users-container"]');
+            safeAdmins.forEach(a => { if(a) admCont.innerHTML += window.getMemberBadgeHTML(a, 'Admin', conv.archivedBy, conv.snoozeTime); });
+            safeUsers.forEach(u => { if(u) usrCont.innerHTML += window.getMemberBadgeHTML(u, 'User', conv.archivedBy, conv.snoozeTime); });
 
-            let isRecArchived, isRecSnoozed, isRecLive;
-            if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
-                const creatorEmail = String(conv.creatorEmail || '').trim();
-                const creatorN = String(creatorName || '').toLowerCase().trim();
-                const archivedBy = String(conv.archivedBy || '').toLowerCase();
-                isRecArchived = (creatorEmail && archivedBy.includes(creatorEmail)) || (creatorN && archivedBy.includes(creatorN));
-                
-                let creatorSnoozeMs = 0;
-                if (String(conv.snoozeTime).startsWith('{')) {
-                    try { creatorSnoozeMs = parseInt(JSON.parse(conv.snoozeTime)[creatorEmail], 10) || 0; } catch(e){}
-                }
-                isRecSnoozed = creatorSnoozeMs > Date.now();
-                isRecLive = !isRecArchived && !isRecSnoozed;
-            } else {
-                isRecArchived = conv.status === 'Archived';
-                isRecSnoozed = isSnoozed;
-                isRecLive = !isRecArchived && !isRecSnoozed;
-            }
-            
-            let showInitial = false;
-            if (currentTab === 'Live' && isRecLive) showInitial = true;
-            if (currentTab === 'Archive' && isRecArchived) showInitial = true;
-            if (currentTab === 'Snooze' && isRecSnoozed) showInitial = true;
-            
-            if (currentUser && currentUser.isMaster) {
-                if (window.masterViewMode === 'ME' && !isMyCase) showInitial = false;
-                if (window.masterViewMode === 'NOT_ME' && isMyCase) showInitial = false;
-            }
-            
-            wrapperDiv.style.display = showInitial ? 'block' : 'none';
-            fragment.appendChild(cardFragment);
-        });
-        feed.appendChild(fragment); window.switchTab(currentTab);
-    } catch(e) { console.error(e); }
+            let isMyCase = false;
+            if (currentUser && currentUser.isMaster) {
+                const myEmail = currentUser.email.toLowerCase().trim();
+                const myName = (currentUser.name || '').toLowerCase().trim();
+                cardDiv._cachedMembers.forEach(m => {
+                    if(!m) return;
+                    const em = String(m).toLowerCase().trim();
+                    const nm = String(window.getUserNameByEmail(m)).toLowerCase().trim();
+                    if(em === myEmail || nm === myName || em.includes(myEmail) || nm.includes(myName)) isMyCase = true;
+                });
+                const cName = creatorName.toLowerCase().trim();
+                if(cName === myName || cName === myEmail || cName.includes(myName)) isMyCase = true;
+            } else {
+                isMyCase = true;
+            }
+
+            let isRecArchived, isRecSnoozed, isRecLive;
+            if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
+                const creatorEmail = String(conv.creatorEmail || '').trim();
+                const creatorN = String(creatorName || '').toLowerCase().trim();
+                const archivedBy = String(conv.archivedBy || '').toLowerCase();
+                isRecArchived = (creatorEmail && archivedBy.includes(creatorEmail)) || (creatorN && archivedBy.includes(creatorN));
+                
+                let creatorSnoozeMs = 0;
+                if (String(conv.snoozeTime).startsWith('{')) {
+                    try { creatorSnoozeMs = parseInt(JSON.parse(conv.snoozeTime)[creatorEmail], 10) || 0; } catch(e){}
+                }
+                isRecSnoozed = creatorSnoozeMs > Date.now();
+                isRecLive = !isRecArchived && !isRecSnoozed;
+            } else {
+                isRecArchived = conv.status === 'Archived';
+                isRecSnoozed = isSnoozed;
+                isRecLive = !isRecArchived && !isRecSnoozed;
+            }
+            
+            let showInitial = false;
+            if (currentTab === 'Live' && isRecLive) showInitial = true;
+            if (currentTab === 'Archive' && isRecArchived) showInitial = true;
+            if (currentTab === 'Snooze' && isRecSnoozed) showInitial = true;
+            
+            if (currentUser && currentUser.isMaster) {
+                if (window.masterViewMode === 'ME' && !isMyCase) showInitial = false;
+                if (window.masterViewMode === 'NOT_ME' && isMyCase) showInitial = false;
+            }
+            
+            wrapperDiv.style.display = showInitial ? 'block' : 'none';
+            fragment.appendChild(cardFragment);
+        });
+        feed.appendChild(fragment); window.switchTab(currentTab);
+    } catch(e) { console.error(e); }
 }
-
 let deferredPrompt = null;
 const installBtn = document.getElementById('installAppBtn');
 function isMobileDevice() {
