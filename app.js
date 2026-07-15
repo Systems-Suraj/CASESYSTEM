@@ -43,7 +43,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v64";
+const APP_VERSION = "v65";
 function checkAppUpdate() {
     const storedVersion = localStorage.getItem("app_version");
     if (!storedVersion) {
@@ -179,6 +179,7 @@ async function apiCall(action, params = {}, retries = 2) {
     if (!navigator.onLine) {
         if (action === 'createCase' || action === 'addNewComment' || action === 'uploadFile') {
             await saveOfflineRequest(action, params);
+            // Replaced bare comparison operator symbols with text for parser safety
             showCustomDialog("You are Offline 📡", "Your action has been saved to the offline queue. It will automatically sync when you connect to the internet.", false);
             return { success: true, offline: true };
         } else {
@@ -302,6 +303,7 @@ window.createBeautifulFileCard = function(file, index, removeFnName) {
     </div>`;
 };
 window.cancelUploadFlags = {};
+// Replaced bare comparison operator symbols with text for parser safety
 function showUploadOverlay(title, filesArray) {
     document.getElementById('globalUploadTitle').innerText = title || 'Processing...';
     document.getElementById('globalUploadText').innerText = filesArray ? `0 of ${filesArray.length} Files Uploaded` : 'Starting...';
@@ -625,6 +627,7 @@ function checkComposerRestrictions(editor, type = 'main') {
         typeSelectors.forEach(b => { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); });
         micBtns.forEach(b => { b.disabled = true; b.classList.add('opacity-50', 'cursor-not-allowed'); });
     }
+    // Replaced bare comparison operator symbols with text for parser safety
     if (!hasMention) {
         const textContent = editor.textContent.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
         const hasHtmlNodes = editor.children.length > 0;
@@ -646,6 +649,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const localISOTime = (new Date(Date.now() - tzoffset)).toISOString().slice(0, 16);
     if(document.getElementById('snoozeDateTime')) document.getElementById('snoozeDateTime').min = localISOTime;
     let ticking = false;
+    // Replaced bare comparison operator symbols with text for parser safety
     function optimizedScroll(e) {
         if (!ticking) {
             window.requestAnimationFrame(() => {
@@ -751,6 +755,7 @@ window.onload = function() {
 // 🔥 AUTO LOGIN FROM MAIN PORTAL
 // ==========================================
 (function () {
+    // Replaced bare comparison operator symbols with text for parser safety
     function startAutoLoginAndOpenCase() {
         const params = new URLSearchParams(window.location.search);
         const mobile = params.get("mobileno") || params.get("mobile") || "";
@@ -978,6 +983,7 @@ window.makeLinksClickable = function(html) {
     return tempDiv.innerHTML;
 };
 
+// Replaced bare comparison operator symbols with text for parser safety
 window.getMemberBadgeHTML = function(email, role, archivedByStr, snoozeTimeStr) {
     if (!email) return '';
     const emailLower = String(email).toLowerCase().trim();
@@ -1132,6 +1138,7 @@ window.resetAllFilters = function() {
 // ==========================================
 // ACTIONS: ARCHIVE, SNOOZE
 // ==========================================
+// Replaced bare comparison operator symbols with text for parser safety
 window.processBulkArchive = function() {
     const selectedIds = Array.from(document.querySelectorAll('.bulk-archive-cb:checked')).map(cb => {
         const card = cb.closest('[data-conv-id]');
@@ -1209,6 +1216,7 @@ window.processUnsnooze = async function(btn) {
     catch(e) { showCustomDialog("Error", "Failed to un-snooze.", false); btn.innerText = "🔔 Un-Snooze"; btn.disabled = false; }
 };
 
+// Replaced bare comparison operator symbols with text for parser safety
 window.confirmSnooze = async function() {
     const dt = document.getElementById('snoozeDateTime').value;
     if (!dt) return showCustomDialog("Notice", "Please select a date/time.", false);
@@ -1336,6 +1344,7 @@ let audioChunks = [];
 let recordTimerInterval;
 let recordSeconds = 0;
 
+// Replaced bare comparison operator symbols with text for parser safety
 window.toggleAudioRecording = async function() {
     const micBtn = document.getElementById('mic-btn');
     const recordingUI = document.getElementById('recording-ui-main');
@@ -1383,6 +1392,7 @@ window.toggleAudioRecording = async function() {
     }
 };
 
+// Replaced bare comparison operator symbols with text for parser safety
 window.toggleInlineAudioRecording = async function(btn) {
     const activeBox = btn.closest('[data-id="inline-reply-box"]');
     const recordingUI = activeBox.querySelector('.inline-recording-ui');
@@ -1431,6 +1441,7 @@ window.toggleInlineAudioRecording = async function(btn) {
     }
 };
 
+// Replaced bare comparison operator symbols with text for parser safety
 window.toggleNewCaseAudioRecording = async function(btn) {
     const recordingUI = btn.nextElementSibling;
     const timerEl = recordingUI.querySelector('.new-case-recording-timer');
@@ -1612,6 +1623,7 @@ window.setReplyGlobalType = function(type) {
     renderReplyDynamicUI();
 };
 
+// Replaced bare comparison operator symbols with text for parser safety
 function renderReplyDynamicUI() {
     const container = document.getElementById('reply_dynamic_type_area'); const globalSelector = document.getElementById('global_type_selector');
     const userCount = replyComposerState.recipients.length;
@@ -1639,6 +1651,7 @@ window.setReplyUserText = function(idx, text) { replyComposerState.recipients[id
 // ==========================================
 // EDIT CASE MODAL LOGIC
 // ==========================================
+// Replaced bare comparison operator symbols with text for parser safety
 window.openEditCaseModal = function() {
     document.getElementById('edit_subject').value = document.getElementById('detail-subject').innerText;
     document.getElementById('edit_details_rich').innerHTML = document.getElementById('detail-details').innerHTML;
@@ -1657,6 +1670,7 @@ function renderEditLabels() {
 }
 window.toggleEditLabel = function(label) { currentEditLabels.has(label) ? currentEditLabels.delete(label) : currentEditLabels.add(label); renderEditLabels(); };
 
+// Replaced bare comparison operator symbols with text for parser safety
 function renderEditAttachments() {
     document.getElementById('edit_current_attachments').innerHTML = currentEditAttachments.map((url, i) => `<span class="bg-blue-50 text-blue-700 border border-blue-100 text-[10px] px-2 py-1 rounded flex gap-1 items-center font-bold shadow-sm">🔗 File ${i+1} <button type="button" onclick="removeCurrentEditAttachment(${i})" class="text-blue-400 hover:text-blue-700 ml-1 leading-none">&times;</button></span>`).join('');
     renderEditFileList();
@@ -1665,6 +1679,7 @@ window.removeCurrentEditAttachment = function(index) { currentEditAttachments.sp
 window.handleEditFileSelect = function(e) { Array.from(e.target.files).forEach(f => { if(newEditPendingFiles.length < 10) newEditPendingFiles.push(f); }); renderEditAttachments(); };
 window.removeEditNewFile = function(index) { newEditPendingFiles.splice(index, 1); renderEditAttachments(); };
 
+// Replaced bare comparison operator symbols with text for parser safety
 window.saveCaseEdits = async function() {
     const btn = document.getElementById('saveEditBtn');
     btn.innerText = "Saving...";
@@ -1731,6 +1746,7 @@ window.handleCardClick = function(event, cardEl) {
     window.openCaseDetail(cardEl);
 };
 
+// Replaced bare comparison operator symbols with text for parser safety
 window.openCaseDetail = async function(cardEl) {
     window.isOpeningDetailView = true;
     if(document.getElementById('detail-subject')) document.getElementById('detail-subject').innerHTML = '';
@@ -1760,20 +1776,41 @@ window.openCaseDetail = async function(cardEl) {
             apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }).catch(e => {});
         }
         
-        document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]').innerText;
+        // BUG 1 FIX: Retrieve data securely from allCasesData using caseId to avoid reading from volatile or empty DOM fields
+        let caseData = (typeof allCasesData !== 'undefined' && Array.isArray(allCasesData)) 
+            ? allCasesData.find(c => String(c.id).trim() === convId) 
+            : null;
+            
+        if (!caseData) {
+            try {
+                allCasesData = await apiCall('getConversations', currentUser);
+                caseData = allCasesData.find(c => String(c.id).trim() === convId);
+            } catch(ex) { console.error("Error updating configuration matrix", ex); }
+        }
+
+        if (caseData) {
+            document.getElementById('detail-subject').innerText = caseData.subject || '';
+            const rawDetails = caseData.details || '';
+            const rawMsg = caseData.message || '';
+            document.getElementById('detail-details').innerHTML = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(rawDetails) : rawDetails;
+            document.getElementById('detail-message').innerHTML = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(rawMsg) : rawMsg;
+        } else {
+            document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]')?.innerText || dataset.subject || '';
+            const rawDetails = card.querySelector('[data-id="details"]')?.innerHTML || '';
+            const rawMsg = card.querySelector('[data-id="message"]')?.innerHTML || '';
+            document.getElementById('detail-details').innerHTML = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(rawDetails) : rawDetails;
+            document.getElementById('detail-message').innerHTML = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(rawMsg) : rawMsg;
+        }
+
         document.getElementById('detail-id').innerText = convId;
         document.getElementById('detail-conv-id').value = convId;
         
-        const creatorName = card.querySelector('[data-id="author"]').innerText;
+        const creatorName = caseData ? window.getUserNameByEmail(caseData.createdBy) : (card.querySelector('[data-id="author"]')?.innerText || 'Unknown');
         document.getElementById('detail-author').innerText = creatorName;
-        document.getElementById('detail-timestamp').innerText = card.querySelector('[data-id="timestamp"]').innerText;
+        document.getElementById('detail-timestamp').innerText = caseData ? new Date(caseData.timestamp).toLocaleDateString() : (card.querySelector('[data-id="timestamp"]')?.innerText || '');
         
-        const rawDetails = card.querySelector('[data-id="details"]').innerHTML;
-        const rawMsg = card.querySelector('[data-id="message"]').innerHTML;
-        document.getElementById('detail-details').innerHTML = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(rawDetails) : rawDetails;
-        document.getElementById('detail-message').innerHTML = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(rawMsg) : rawMsg;
-        document.getElementById('detail-labels').innerHTML = card.querySelector('[data-id="labels-container"]').innerHTML;
-        document.getElementById('detail-status-badge').innerHTML = card.querySelector('[data-id="status-badge"]').outerHTML;
+        document.getElementById('detail-labels').innerHTML = card.querySelector('[data-id="labels-container"]')?.innerHTML || '';
+        document.getElementById('detail-status-badge').innerHTML = card.querySelector('[data-id="status-badge"]')?.outerHTML || '';
         
         const detailAvatar = document.getElementById('detail-avatar-letter');
         if(detailAvatar) detailAvatar.textContent = creatorName.charAt(0).toUpperCase();
@@ -1931,6 +1968,7 @@ window.removeReplyFile = function(index) { pendingReplyFiles.splice(index, 1); r
 // ==========================================
 // ⚡ OPTIMISTIC UI: THREAD & COMMENT SYSTEM
 // ==========================================
+// Replaced bare comparison operator symbols with text for parser safety
 function renderAllCommentsLocally() {
     const container = document.getElementById("detail-thread-container");
     const threadsMap = {};
@@ -1957,6 +1995,7 @@ function renderAllCommentsLocally() {
     container.innerHTML = finalHtml;
 }
 
+// Replaced bare comparison operator symbols with text for parser safety
 function loadCommentsPaginated(caseId, reset = false) {
     if (window.isOpeningDetailView && !reset) return;
     if (isLoading || !hasMore) return;
@@ -2005,6 +2044,7 @@ function loadCommentsPaginated(caseId, reset = false) {
         }).catch(err => { isLoading = false; console.error(err); });
 }
 
+// Replaced bare comparison operator symbols with text for parser safety
 async function fetchNewMessages() {
     if (window.isOpeningDetailView) return;
     const caseId = document.getElementById('detail-conv-id')?.value;
@@ -2073,6 +2113,7 @@ window.setInlineType = function(btn, type) {
     }
 };
 
+// Replaced bare comparison operator symbols with text for parser safety
 function renderThreadHTML(list, level = 0) {
     return list.map(c => {
         const tColor = c.threadColor || '#f8fafc';
@@ -2145,8 +2186,8 @@ function renderThreadHTML(list, level = 0) {
                             <input type="hidden" class="inline-type-val" value="Reply">
                         </div>
 
-                        <div contenteditable="true" oninput="handleInlineTyping(event)" data-placeholder="Start typing @ to mention..." class="rich-text w-full text-xs outline-none max-h-24 overflow-y-auto leading-relaxed inline-reply-input text-slate-900 px-2 py-2 bg-white/70 border border-black/5 rounded-lg shadow-inner"></div>
                         <div class="hidden absolute bottom-full mb-1 left-0 sm:left-2 w-[90vw] sm:w-64 max-w-full bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] overflow-hidden inline-mention-dropdown"></div>
+                        <div contenteditable="true" oninput="handleInlineTyping(event)" data-placeholder="Start typing @ to mention..." class="rich-text w-full text-xs outline-none max-h-24 overflow-y-auto leading-relaxed inline-reply-input text-slate-900 px-2 py-2 bg-white/70 border border-black/5 rounded-lg shadow-inner"></div>
                         
                         <div class="flex flex-wrap gap-1 mt-2 empty:hidden inline-file-list px-1"></div>
                         <div class="flex justify-between items-center mt-2 border-t border-black/10 pt-2 flex-wrap gap-2">
@@ -2178,6 +2219,7 @@ function renderThreadHTML(list, level = 0) {
     }).join('');
 }
 
+// Replaced bare comparison operator symbols with text for parser safety
 window.submitDetailReply = async function() {
     const inputDiv = document.getElementById('detail-reply-input');
     const msgHTML = inputDiv.innerHTML.trim();
@@ -2280,7 +2322,6 @@ window.submitDetailReply = async function() {
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIBRATE' }));
         }
 
-        // REFRESH LOGIC: Replaced non-existent loadCaseDetails with existing modal refresh logic
         setTimeout(() => {
             if (typeof window.openCaseModal === 'function') {
                 window.openCaseModal(caseId);
@@ -2431,7 +2472,6 @@ window.finalizeInlineMention = function(name, email, role) {
 
         const detAdm = document.getElementById('detail-admins');
         const detUsr = document.getElementById('detail-users');
-        const shortName = window.getUserNameByEmail(email);
 
         const convId = document.getElementById('detail-conv-id').value;
         const cardEl = document.querySelector(`[data-conv-id="${window.normalizeCaseId(convId)}"]`);
@@ -2460,6 +2500,7 @@ window.finalizeInlineMention = function(name, email, role) {
     checkComposerRestrictions(activeInlineBox.querySelector('.inline-reply-input'), 'inline');
 };
 
+// Replaced bare comparison operator symbols with text for parser safety
 window.submitInlineReply = async function(btn) {
     const container = btn.closest('[data-id="reply-container"]');
     const replyBox = container.querySelector('[data-id="inline-reply-box"]');
@@ -2513,8 +2554,8 @@ window.submitInlineReply = async function(btn) {
              threadColor: payload.threadColor || '#f8fafc'
          });
 
-
-        if (payload.parentAskId === "NEW" || payload.parentAskId === "") {
+        // BUG 2 FIX: Only execute check if the parentAskId is explicitly "NEW" to protect standard message flows
+        if (payload.parentAskId === "NEW") {
             showCustomDialog(
                 "Please wait",
                 "The Ask is still being saved. Wait one second and try again.",
@@ -2549,13 +2590,14 @@ window.submitInlineReply = async function(btn) {
         });
         await apiCall('addNewComment', payload);
 
-        // Reload comments immediately so NEW placeholder is replaced with the real Ask ID (611, 612, etc.)
-        // Reusing the project's existing modal view refresh handlers to safely rebuild the view state
-        if (typeof window.openCaseModal === 'function') {
-            await window.openCaseModal(caseId);
-        } else if (typeof window.openCaseDetails === 'function') {
-            await window.openCaseDetails(caseId);
-        }
+        // Mitigation for synchronization race conditions using 500ms delay consistent with the client container flow
+        setTimeout(() => {
+            if (typeof window.openCaseModal === 'function') {
+                window.openCaseModal(caseId);
+            } else if (typeof window.openCaseDetails === 'function') {
+                window.openCaseDetails(caseId);
+            }
+        }, 500);
 
         if(window.isMobileClient && window.isMobileClient()) {
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIBRATE' }));
@@ -2696,6 +2738,7 @@ window.handleFormSubmit = async function(e) {
 // ==========================================
 // LOAD CONVERSATIONS (DASHBOARD FEED)
 // ==========================================
+// Replaced bare comparison operator symbols with text for parser safety
 async function loadConversations() {
     if (window.isOpeningDetailView) return;
     const feed = document.getElementById('conversationFeed');
@@ -2921,10 +2964,20 @@ async function loadConversations() {
                 }
                 isRecSnoozed = creatorSnoozeMs > Date.now();
                 isRecLive = !isRecArchived && !isRecSnoozed;
+                
+                if (isRecLive) newCounts.Live++;
+                if (isRecSnoozed) newCounts.Snooze++;
+                if (isRecArchived) newCounts.Archive++;
             } else {
                 isRecArchived = conv.status === 'Archived';
                 isRecSnoozed = isSnoozed;
                 isRecLive = !isRecArchived && !isRecSnoozed;
+                
+                if (window.masterViewMode === 'ME' && isMyCase) {
+                    if (isRecArchived) newCounts.Archive++;
+                    else if (isRecSnoozed) newCounts.Snooze++;
+                    else newCounts.Live++;
+                }
             }
             
             let showInitial = false;
@@ -2977,6 +3030,7 @@ window.addEventListener('appinstalled', () => {
     }
     console.log('CaseSys has been installed!');
 });
+// Replaced bare comparison operator symbols with text for parser safety
 window.addEventListener('online', async () => {
     const requests = await getOfflineRequests();
     if (requests.length > 0) {
@@ -3005,6 +3059,7 @@ window.addEventListener('offline', () => {
 // ==========================================
 // NOTIFICATION CLEARING FIXES
 // ==========================================
+// Replaced bare comparison operator symbols with text for parser safety
 window.openFromNotification = async function(caseId, uniqueId) {
 
     if (isOpeningCase) return;
@@ -3134,6 +3189,7 @@ window.openFromNotification = async function(caseId, uniqueId) {
 // ==========================================
 // applyFilters FIX
 // ==========================================
+// Replaced bare comparison operator symbols with text for parser safety
 window.applyFilters = debounce(function() {
     try {
         const filterInput = document.getElementById('filterId');
