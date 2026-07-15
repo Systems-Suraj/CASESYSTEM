@@ -2114,7 +2114,7 @@ function renderThreadHTML(list, level = 0) {
                 }
 
                 return `
-                <div class="mt-2 bg-white p-2 rounded-xl border border-slate-200 shadow-sm inline-block w-full max-w-md mr-2">
+                <div class="mt-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm inline-block w-full max-w-md mr-2">
                     <div class="rounded-lg overflow-hidden bg-slate-50 relative w-full border border-slate-100 flex justify-center">
                         ${previewElement}
                     </div>
@@ -2128,7 +2128,7 @@ function renderThreadHTML(list, level = 0) {
         const parentAskIdForBackend = (c.type === 'Ask') ? c.askId : (c.parentAskId || '');
         const senderName = window.getUserNameByEmail(c.sender || 'Unknown');
 
-        // 🔥 FIX: Aggressively strip empty paragraphs, br tags, and spaces injected by contenteditable that cause huge blank gaps
+        // 🔥 STRIPS HUGE BLANK SPACES INJECTED BY CONTENT-EDITABLE DIVS
         let cleanMsg = c.text || '';
         cleanMsg = cleanMsg.replace(/^(<br\s*\/?>|\s|&nbsp;|<div>(\s|<br\s*\/?>|&nbsp;)*<\/div>|<p>(\s|<br\s*\/?>|&nbsp;)*<\/p>)+/gi, '');
         cleanMsg = cleanMsg.replace(/(<br\s*\/?>|\s|&nbsp;|<div>(\s|<br\s*\/?>|&nbsp;)*<\/div>|<p>(\s|<br\s*\/?>|&nbsp;)*<\/p>)+$/gi, '');
@@ -2136,22 +2136,21 @@ function renderThreadHTML(list, level = 0) {
         let processedText = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(cleanMsg) : cleanMsg;
 
         return `
-        <div class="mb-3 group" style="${indentStyle}" data-id="reply-container">
-            <!-- 🔥 FIX: Reduced p-4 to px-4 py-2.5 to tighten the vertical layout -->
-            <div class="px-4 py-2.5 rounded-xl shadow-sm transition-all border border-slate-200/50" style="background-color: ${tColor}; border-left: 4px solid rgba(0,0,0,0.1);">
-                <!-- 🔥 FIX: Reduced mb-2 to mb-1 -->
-                <div class="flex items-center gap-2 mb-1">
-                    <div class="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold shadow-inner shrink-0">${senderName.charAt(0).toUpperCase()}</div>
-                    <span class="font-bold text-sm text-slate-900 truncate">${senderName}</span>
+        <div class="mb-4 group" style="${indentStyle}" data-id="reply-container">
+            <!-- PADDING & MARGIN REVERTED TO YOUR ORIGINAL CODE -->
+            <div class="p-4 rounded-xl shadow-sm transition-all border border-slate-200/50" style="background-color: ${tColor}; border-left: 4px solid rgba(0,0,0,0.1);">
+                
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold shadow-inner">${senderName.charAt(0).toUpperCase()}</div>
+                    <span class="font-bold text-sm text-slate-900">${senderName}</span>
                     ${badge}
-                    <span class="text-[10px] text-slate-500 font-medium ml-auto shrink-0">${new Date(c.timestamp).toLocaleString()}</span>
+                    <span class="text-[10px] text-slate-500 font-medium ml-auto">${new Date(c.timestamp).toLocaleString()}</span>
                 </div>
                 
-                <div class="rich-text text-sm text-slate-800 leading-relaxed whitespace-pre-wrap break-words">${processedText}</div>
+                <div class="rich-text text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">${processedText}</div>
                 ${attachmentPreviewHtml}
                 
-                <!-- 🔥 FIX: Reduced mt-3 to mt-2 to pull the reply button closer -->
-                <div class="mt-2 flex gap-3 items-center text-xs border-t border-slate-200/50 pt-2">
+                <div class="mt-3 flex gap-3 items-center text-xs border-t border-slate-200/50 pt-2">
                     <button class="font-bold text-slate-500 hover:text-indigo-600 transition-colors inline-reply-toggle-btn" onclick="toggleInlineReply(this)" data-askid="${parentAskIdForBackend}" data-threadid="${c.threadId}" data-threadcolor="${c.threadColor}">Reply</button>
                 </div>
                 
