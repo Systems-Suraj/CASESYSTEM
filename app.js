@@ -22,7 +22,7 @@ document.addEventListener('focusin', (e) => {
         window.isUserTypingGlobal = true;
         activeInputElement = e.target;
     }
-});
+}); 
 document.addEventListener('focusout', (e) => {
     if (e.target && (
         e.target.id === 'detail-reply-input' ||
