@@ -2082,108 +2082,118 @@ window.setInlineType = function(btn, type) {
 };
 
 function renderThreadHTML(list, level = 0) {
-    return list.map(c => {
-        const tColor = c.threadColor || '#f8fafc';
-        const indentStyle = level > 0 ? `margin-left: ${level * 24}px;` : '';
-        let badge = ''; const statusIcon = (c.type === 'Ask' && c.status === 'Closed') ? ' ✅' : '';
-        if (c.type === 'Ask') badge = `<span class="bg-red-500 text-white px-2 py-0.5 rounded text-[10px] font-extrabold shadow-sm uppercase">Ask ${c.askId ? `#${c.askId}` : ''}${statusIcon}</span>`;
-        else if (c.type === 'Reply') badge = `<span class="bg-indigo-500 text-white px-2 py-0.5 rounded text-[10px] font-extrabold shadow-sm uppercase">Reply ${c.parentAskId ? `to #${c.parentAskId}` : ''}</span>`;
-        else badge = `<span class="bg-slate-500 text-white px-2 py-0.5 rounded text-[10px] font-extrabold shadow-sm uppercase">Message</span>`;
-        
-        let attachmentPreviewHtml = '';
-        if (c.attachmentUrl) {
-            const urls = String(c.attachmentUrl).split(',').filter(String);
-            const names = String(c.attachmentFileName || '').split(',').map(s => s.trim());
-            
-            attachmentPreviewHtml = urls.map((url, idx) => {
-                const fName = names[idx] || 'Attached File';
-                const cleanUrlForPreview = String(url).trim().replace(/\/view.*/, '/preview');
-                const isImage = fName.match(/\.(png|jpe?g|gif|webp)$/i);
-                const isAudio = fName.match(/\.(mp3|wav|ogg|m4a|webm)$/i);
-                const previewHeight = isAudio ? '80' : '300';
-                
-                let previewElement = '';
-                if (isImage) {
-                    let fileIdMatch = url.match(/id=([^&]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                    let fileId = fileIdMatch ? fileIdMatch[1] : '';
-                    let primaryImg = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
-                    let fallbackImg = `https://drive.google.com/uc?export=view&id=${fileId}`;
-                    previewElement = `<img src="${primaryImg}" onerror="this.onerror=null; this.src='${fallbackImg}';" class="w-full h-auto max-h-64 object-contain rounded" alt="Attachment">`;
-                } else {
-                    previewElement = `<iframe src="${cleanUrlForPreview}" height="${previewHeight}" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe>`;
-                }
+    return list.map(c => {
+        const tColor = c.threadColor || '#f8fafc';
+        const indentStyle = level > 0 ? `margin-left: ${level * 24}px;` : '';
+        let badge = ''; const statusIcon = (c.type === 'Ask' && c.status === 'Closed') ? ' ✅' : '';
+        if (c.type === 'Ask') badge = `<span class="bg-red-500 text-white px-2 py-0.5 rounded text-[10px] font-extrabold shadow-sm uppercase">Ask ${c.askId ? `#${c.askId}` : ''}${statusIcon}</span>`;
+        else if (c.type === 'Reply') badge = `<span class="bg-indigo-500 text-white px-2 py-0.5 rounded text-[10px] font-extrabold shadow-sm uppercase">Reply ${c.parentAskId ? `to #${c.parentAskId}` : ''}</span>`;
+        else badge = `<span class="bg-slate-500 text-white px-2 py-0.5 rounded text-[10px] font-extrabold shadow-sm uppercase">Message</span>`;
+        
+        let attachmentPreviewHtml = '';
+        if (c.attachmentUrl) {
+            const urls = String(c.attachmentUrl).split(',').filter(String);
+            const names = String(c.attachmentFileName || '').split(',').map(s => s.trim());
+            
+            attachmentPreviewHtml = urls.map((url, idx) => {
+                const fName = names[idx] || 'Attached File';
+                const cleanUrlForPreview = String(url).trim().replace(/\/view.*/, '/preview');
+                const isImage = fName.match(/\.(png|jpe?g|gif|webp)$/i);
+                const isAudio = fName.match(/\.(mp3|wav|ogg|m4a|webm)$/i);
+                const previewHeight = isAudio ? '80' : '300';
+                
+                let previewElement = '';
+                if (isImage) {
+                    let fileIdMatch = url.match(/id=([^&]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                    let fileId = fileIdMatch ? fileIdMatch[1] : '';
+                    let primaryImg = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+                    let fallbackImg = `https://drive.google.com/uc?export=view&id=${fileId}`;
+                    previewElement = `<img src="${primaryImg}" onerror="this.onerror=null; this.src='${fallbackImg}';" class="w-full h-auto max-h-64 object-contain rounded" alt="Attachment">`;
+                } else {
+                    previewElement = `<iframe src="${cleanUrlForPreview}" height="${previewHeight}" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe>`;
+                }
 
-                return `
-                <div class="mt-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm inline-block w-full max-w-md mr-2">
-                    <div class="rounded-lg overflow-hidden bg-slate-50 relative w-full border border-slate-100 flex justify-center">
-                        ${previewElement}
-                    </div>
-                    <div class="mt-2 text-left">
-                        <a href="${url.trim()}" target="_blank" class="inline-flex items-center gap-1 text-[11px] font-extrabold text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-100">📎 ${escapeHTML(fName)}</a>
-                    </div>
-                </div>`;
-            }).join('');
-        }
+                return `
+                <div class="mt-2 bg-white p-2 rounded-xl border border-slate-200 shadow-sm inline-block w-full max-w-md mr-2">
+                    <div class="rounded-lg overflow-hidden bg-slate-50 relative w-full border border-slate-100 flex justify-center">
+                        ${previewElement}
+                    </div>
+                    <div class="mt-2 text-left">
+                        <a href="${url.trim()}" target="_blank" class="inline-flex items-center gap-1 text-[11px] font-extrabold text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-100">📎 ${escapeHTML(fName)}</a>
+                    </div>
+                </div>`;
+            }).join('');
+        }
 
-        const parentAskIdForBackend = (c.type === 'Ask') ? c.askId : (c.parentAskId || '');
-        const senderName = window.getUserNameByEmail(c.sender || 'Unknown');
+        const parentAskIdForBackend = (c.type === 'Ask') ? c.askId : (c.parentAskId || '');
+        const senderName = window.getUserNameByEmail(c.sender || 'Unknown');
 
-        return `
-        <div class="mb-4 group" style="${indentStyle}" data-id="reply-container">
-            <div class="p-4 rounded-xl shadow-sm transition-all border border-slate-200/50" style="background-color: ${tColor}; border-left: 4px solid rgba(0,0,0,0.1);">
-                <div class="flex items-center gap-2 mb-2">
-                    <div class="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold shadow-inner">${senderName.charAt(0).toUpperCase()}</div>
-                    <span class="font-bold text-sm text-slate-900">${senderName}</span>
-                    ${badge}
-                    <span class="text-[10px] text-slate-500 font-medium ml-auto">${new Date(c.timestamp).toLocaleString()}</span>
-                </div>
-                
-                <div class="rich-text text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">${typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(c.text) : c.text}</div>
-                ${attachmentPreviewHtml}
-                
-                <div class="mt-3 flex gap-3 items-center text-xs border-t border-slate-200/50 pt-2">
-                    <button class="font-bold text-slate-500 hover:text-indigo-600 transition-colors inline-reply-toggle-btn" onclick="toggleInlineReply(this)" data-askid="${parentAskIdForBackend}" data-threadid="${c.threadId}" data-threadcolor="${c.threadColor}">Reply</button>
-                </div>
-                
-                <div class="hidden mt-3 flex gap-2 items-start relative" data-id="inline-reply-box">
-                    <div class="flex-1 border border-slate-300 rounded-xl p-2 flex flex-col shadow-sm transition-all relative" style="background-color: ${tColor}; border-left: 4px solid rgba(0,0,0,0.15);">
-                        <div class="flex gap-2 items-center px-1 mb-2 border-b border-black/10 pb-2">
-                            <button type="button" onclick="setInlineType(this, 'Reply')" class="inline-type-btn inline-reply-btn px-3 py-1 text-[10px] font-bold rounded-md bg-indigo-600 text-white shadow-sm transition-colors">Reply</button>
-                            <button type="button" onclick="setInlineType(this, 'Ask')" class="inline-type-btn inline-ask-btn px-3 py-1 text-[10px] font-bold rounded-md bg-white/60 text-slate-700 hover:bg-white shadow-sm transition-colors">New Ask</button>
-                            <input type="hidden" class="inline-type-val" value="Reply">
-                        </div>
+        // 🔥 FIX: Aggressively strip empty paragraphs, br tags, and spaces injected by contenteditable that cause huge blank gaps
+        let cleanMsg = c.text || '';
+        cleanMsg = cleanMsg.replace(/^(<br\s*\/?>|\s|&nbsp;|<div>(\s|<br\s*\/?>|&nbsp;)*<\/div>|<p>(\s|<br\s*\/?>|&nbsp;)*<\/p>)+/gi, '');
+        cleanMsg = cleanMsg.replace(/(<br\s*\/?>|\s|&nbsp;|<div>(\s|<br\s*\/?>|&nbsp;)*<\/div>|<p>(\s|<br\s*\/?>|&nbsp;)*<\/p>)+$/gi, '');
+        
+        let processedText = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(cleanMsg) : cleanMsg;
 
-                        <div contenteditable="true" oninput="handleInlineTyping(event)" data-placeholder="Start typing @ to mention..." class="rich-text w-full text-xs outline-none max-h-24 overflow-y-auto leading-relaxed inline-reply-input text-slate-900 px-2 py-2 bg-white/70 border border-black/5 rounded-lg shadow-inner"></div>
-                        <div class="hidden absolute bottom-full mb-1 left-0 sm:left-2 w-[90vw] sm:w-64 max-w-full bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] overflow-hidden inline-mention-dropdown"></div>
-                        
-                        <div class="flex flex-wrap gap-1 mt-2 empty:hidden inline-file-list px-1"></div>
-                        <div class="flex justify-between items-center mt-2 border-t border-black/10 pt-2 flex-wrap gap-2">
-                            <div class="flex items-center gap-2">
-                                <div class="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm">
-                                    <label class="text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer p-1.5 rounded hover:bg-indigo-50" title="Attach File">
-                                        <i class="fas fa-paperclip"></i>
-                                        <input type="file" multiple class="hidden inline-file-input" onchange="handleInlineFileSelect(event, this)">
-                                    </label>
-                                    <div class="w-px h-4 bg-slate-300 mx-0.5"></div>
-                                    <button type="button" class="text-slate-500 hover:text-red-600 transition-colors p-1.5 rounded hover:bg-red-50 inline-mic-btn" onclick="toggleInlineAudioRecording(this)" title="Record Voice Note">
-                                        <i class="fas fa-microphone"></i>
-                                    </button>
-                                </div>
-                                <div class="hidden items-center gap-2 px-2.5 py-1 bg-red-50 border border-red-200 rounded-full inline-recording-ui shadow-inner">
-                                    <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                                    <span class="inline-recording-timer text-[10px] font-bold text-red-600 font-mono tracking-wider">00:00</span>
-                                    <div class="recording-wave !h-3"><span></span><span></span><span></span><span></span><span></span></div>
-                                </div>
-                            </div>
-                            <button type="button" class="px-4 py-1.5 bg-indigo-600 text-white text-[11px] font-bold rounded-lg hover:bg-indigo-700 shadow-sm transition-colors" onclick="submitInlineReply(this)">Send</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            ${c.children && c.children.length ? renderThreadHTML(c.children, level + 1) : ''}
-        </div>
-        `;
-    }).join('');
+        return `
+        <div class="mb-3 group" style="${indentStyle}" data-id="reply-container">
+            <!-- 🔥 FIX: Reduced p-4 to px-4 py-2.5 to tighten the vertical layout -->
+            <div class="px-4 py-2.5 rounded-xl shadow-sm transition-all border border-slate-200/50" style="background-color: ${tColor}; border-left: 4px solid rgba(0,0,0,0.1);">
+                <!-- 🔥 FIX: Reduced mb-2 to mb-1 -->
+                <div class="flex items-center gap-2 mb-1">
+                    <div class="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold shadow-inner shrink-0">${senderName.charAt(0).toUpperCase()}</div>
+                    <span class="font-bold text-sm text-slate-900 truncate">${senderName}</span>
+                    ${badge}
+                    <span class="text-[10px] text-slate-500 font-medium ml-auto shrink-0">${new Date(c.timestamp).toLocaleString()}</span>
+                </div>
+                
+                <div class="rich-text text-sm text-slate-800 leading-relaxed whitespace-pre-wrap break-words">${processedText}</div>
+                ${attachmentPreviewHtml}
+                
+                <!-- 🔥 FIX: Reduced mt-3 to mt-2 to pull the reply button closer -->
+                <div class="mt-2 flex gap-3 items-center text-xs border-t border-slate-200/50 pt-2">
+                    <button class="font-bold text-slate-500 hover:text-indigo-600 transition-colors inline-reply-toggle-btn" onclick="toggleInlineReply(this)" data-askid="${parentAskIdForBackend}" data-threadid="${c.threadId}" data-threadcolor="${c.threadColor}">Reply</button>
+                </div>
+                
+                <div class="hidden mt-3 flex gap-2 items-start relative" data-id="inline-reply-box">
+                    <div class="flex-1 border border-slate-300 rounded-xl p-2 flex flex-col shadow-sm transition-all relative" style="background-color: ${tColor}; border-left: 4px solid rgba(0,0,0,0.15);">
+                        <div class="flex gap-2 items-center px-1 mb-2 border-b border-black/10 pb-2">
+                            <button type="button" onclick="setInlineType(this, 'Reply')" class="inline-type-btn inline-reply-btn px-3 py-1 text-[10px] font-bold rounded-md bg-indigo-600 text-white shadow-sm transition-colors">Reply</button>
+                            <button type="button" onclick="setInlineType(this, 'Ask')" class="inline-type-btn inline-ask-btn px-3 py-1 text-[10px] font-bold rounded-md bg-white/60 text-slate-700 hover:bg-white shadow-sm transition-colors">New Ask</button>
+                            <input type="hidden" class="inline-type-val" value="Reply">
+                        </div>
+
+                        <div contenteditable="true" oninput="handleInlineTyping(event)" data-placeholder="Start typing @ to mention..." class="rich-text w-full text-xs outline-none max-h-24 overflow-y-auto leading-relaxed inline-reply-input text-slate-900 px-2 py-2 bg-white/70 border border-black/5 rounded-lg shadow-inner"></div>
+                        <div class="hidden absolute bottom-full mb-1 left-0 sm:left-2 w-[90vw] sm:w-64 max-w-full bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] overflow-hidden inline-mention-dropdown"></div>
+                        
+                        <div class="flex flex-wrap gap-1 mt-2 empty:hidden inline-file-list px-1"></div>
+                        <div class="flex justify-between items-center mt-2 border-t border-black/10 pt-2 flex-wrap gap-2">
+                            <div class="flex items-center gap-2">
+                                <div class="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm">
+                                    <label class="text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer p-1.5 rounded hover:bg-indigo-50" title="Attach File">
+                                        <i class="fas fa-paperclip"></i>
+                                        <input type="file" multiple class="hidden inline-file-input" onchange="handleInlineFileSelect(event, this)">
+                                    </label>
+                                    <div class="w-px h-4 bg-slate-300 mx-0.5"></div>
+                                    <button type="button" class="text-slate-500 hover:text-red-600 transition-colors p-1.5 rounded hover:bg-red-50 inline-mic-btn" onclick="toggleInlineAudioRecording(this)" title="Record Voice Note">
+                                        <i class="fas fa-microphone"></i>
+                                    </button>
+                                </div>
+                                <div class="hidden items-center gap-2 px-2.5 py-1 bg-red-50 border border-red-200 rounded-full inline-recording-ui shadow-inner">
+                                    <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                                    <span class="inline-recording-timer text-[10px] font-bold text-red-600 font-mono tracking-wider">00:00</span>
+                                    <div class="recording-wave !h-3"><span></span><span></span><span></span><span></span><span></span></div>
+                                </div>
+                            </div>
+                            <button type="button" class="px-4 py-1.5 bg-indigo-600 text-white text-[11px] font-bold rounded-lg hover:bg-indigo-700 shadow-sm transition-colors" onclick="submitInlineReply(this)">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            ${c.children && c.children.length ? renderThreadHTML(c.children, level + 1) : ''}
+        </div>
+        `;
+    }).join('');
 }
 
 window.submitDetailReply = async function() {
