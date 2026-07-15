@@ -1,4 +1,4 @@
- // ==========================================
+  // ==========================================
 // 🔒 UI PROTECTION STATE & GLOBAL HELPERS
 // ==========================================
 window.normalizeCaseId = function(id) {
@@ -43,7 +43,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v64";
+const APP_VERSION = "v66";
 function checkAppUpdate() {
     const storedVersion = localStorage.getItem("app_version");
     if (!storedVersion) {
