@@ -1744,199 +1744,205 @@ window.handleCardClick = function(event, cardEl) {
 };
 
 window.openCaseDetail = async function(cardEl) {
-    window.isOpeningDetailView = true;
-    if(document.getElementById('detail-subject')) document.getElementById('detail-subject').innerHTML = '';
-    if(document.getElementById('detail-details')) document.getElementById('detail-details').innerHTML = '';
-    if(document.getElementById('detail-message')) document.getElementById('detail-message').innerHTML = '';
-    if(document.getElementById('detail-labels')) document.getElementById('detail-labels').innerHTML = '';
-    if(document.getElementById('detail-admins')) document.getElementById('detail-admins').innerHTML = '';
-    if(document.getElementById('detail-users')) document.getElementById('detail-users').innerHTML = '';
-    if(document.getElementById('detail-attachments')) document.getElementById('detail-attachments').innerHTML = '';
-    if(document.getElementById('detail-thread-container')) document.getElementById('detail-thread-container').innerHTML = `<div class="flex justify-center py-10"><div class="loader"></div></div>`;
-    
-    try {
-        let card = cardEl.classList && cardEl.classList.contains('card-main') ? cardEl : null;
-        if (!card && cardEl.closest) card = cardEl.closest('.card-main');
-        if (!card && cardEl.querySelector) card = cardEl.querySelector('.card-main');
-        if (!card) card = cardEl.closest('[data-conv-id]');
-        if (!card) {
-            console.error("Card element not found for opening.");
-            return;
-        }
-        resetCaseState();
-        const dataset = card.dataset;
-        const convId = String(dataset.convId || "").trim();
-        const rawSnooze = parseInt(dataset.snoozeRaw || 0, 10);
-        const currentSafeSnooze = parseInt(dataset.snooze || 0, 10);
-        if (rawSnooze > Date.now() && currentSafeSnooze === 0) {
-            apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }).catch(e => {});
-        }
-        
-        document.getElementById('detail-subject').innerText = card.querySelector('[data-id="subject"]').innerText;
-        document.getElementById('detail-id').innerText = convId;
-        document.getElementById('detail-conv-id').value = convId;
-        
-        const creatorName = card.querySelector('[data-id="author"]').innerText;
-        document.getElementById('detail-author').innerText = creatorName;
-        document.getElementById('detail-timestamp').innerText = card.querySelector('[data-id="timestamp"]').innerText;
-        
-        const rawDetails = card.querySelector('[data-id="details"]').innerHTML;
-        const rawMsg = card.querySelector('[data-id="message"]').innerHTML;
-        document.getElementById('detail-details').innerHTML = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(rawDetails) : rawDetails;
-        document.getElementById('detail-message').innerHTML = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(rawMsg) : rawMsg;
-        document.getElementById('detail-labels').innerHTML = card.querySelector('[data-id="labels-container"]').innerHTML;
-        document.getElementById('detail-status-badge').innerHTML = card.querySelector('[data-id="status-badge"]').outerHTML;
-        
-        const detailAvatar = document.getElementById('detail-avatar-letter');
-        if(detailAvatar) detailAvatar.textContent = creatorName.charAt(0).toUpperCase();
-        
-        currentCaseAdmins = JSON.parse(dataset.caseAdmins || '[]').filter(String);
-        let rawCaseUsers = JSON.parse(dataset.caseUsers || '[]').filter(String);
-        const hasAdminRights = dataset.hasAdminRights === 'true';
-        let adminSetUI = new Set(currentCaseAdmins.map(a => a.toLowerCase().trim()));
-        currentCaseUsers = rawCaseUsers.filter(u => !adminSetUI.has(u.toLowerCase().trim()));
-        window.currentCaseHasAdminRights = hasAdminRights;
-        
-        const editBtn = document.getElementById('edit-case-btn');
-        if(editBtn) { if(hasAdminRights) editBtn.classList.remove('hidden'); else editBtn.classList.add('hidden'); }
-        window.currentCaseAllMembers = JSON.parse(dataset.members || '[]');
+    window.isOpeningDetailView = true;
+    if(document.getElementById('detail-subject')) document.getElementById('detail-subject').innerHTML = '';
+    if(document.getElementById('detail-details')) document.getElementById('detail-details').innerHTML = '';
+    if(document.getElementById('detail-message')) document.getElementById('detail-message').innerHTML = '';
+    if(document.getElementById('detail-labels')) document.getElementById('detail-labels').innerHTML = '';
+    if(document.getElementById('detail-admins')) document.getElementById('detail-admins').innerHTML = '';
+    if(document.getElementById('detail-users')) document.getElementById('detail-users').innerHTML = '';
+    if(document.getElementById('detail-attachments')) document.getElementById('detail-attachments').innerHTML = '';
+    if(document.getElementById('detail-thread-container')) document.getElementById('detail-thread-container').innerHTML = `<div class="flex justify-center py-10"><div class="loader"></div></div>`;
+    
+    try {
+        let card = cardEl.classList && cardEl.classList.contains('card-main') ? cardEl : null;
+        if (!card && cardEl.closest) card = cardEl.closest('.card-main');
+        if (!card && cardEl.querySelector) card = cardEl.querySelector('.card-main');
+        if (!card) card = cardEl.closest('[data-conv-id]');
+        
+        if (!card) {
+            console.error("Card element not found for opening.");
+            return;
+        }
 
-        const detAdm = document.getElementById('detail-admins'); detAdm.innerHTML = '';
-        const detUsr = document.getElementById('detail-users'); detUsr.innerHTML = '';
-        const archivedByStr = dataset.archivedBy || '';
-        const snoozeTimeStr = dataset.snoozeRawStr || '';
+        resetCaseState();
+        const dataset = card.dataset;
+        const convId = String(dataset.convId || "").trim();
+        const rawSnooze = parseInt(dataset.snoozeRaw || 0, 10);
+        const currentSafeSnooze = parseInt(dataset.snooze || 0, 10);
+        if (rawSnooze > Date.now() && currentSafeSnooze === 0) {
+            apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }).catch(e => {});
+        }
+        
+        // 🔥 FIXED: Robust Subject Loading
+        let subjectText = card.querySelector('[data-id="subject"]')?.innerText;
+        // Fallback: If DOM is empty/missing, look up the subject from global loaded data
+        if (!subjectText && typeof allCasesData !== 'undefined') {
+            const match = allCasesData.find(c => String(c.id).trim() === convId);
+            if (match) subjectText = match.subject;
+        }
+        document.getElementById('detail-subject').innerText = subjectText || "Case Details";
+        
+        document.getElementById('detail-id').innerText = convId;
+        document.getElementById('detail-conv-id').value = convId;
+        
+        const creatorName = card.querySelector('[data-id="author"]').innerText;
+        document.getElementById('detail-author').innerText = creatorName;
+        document.getElementById('detail-timestamp').innerText = card.querySelector('[data-id="timestamp"]').innerText;
+        
+        const rawDetails = card.querySelector('[data-id="details"]').innerHTML;
+        const rawMsg = card.querySelector('[data-id="message"]').innerHTML;
+        document.getElementById('detail-details').innerHTML = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(rawDetails) : rawDetails;
+        document.getElementById('detail-message').innerHTML = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(rawMsg) : rawMsg;
+        document.getElementById('detail-labels').innerHTML = card.querySelector('[data-id="labels-container"]').innerHTML;
+        document.getElementById('detail-status-badge').innerHTML = card.querySelector('[data-id="status-badge"]').outerHTML;
+        
+        const detailAvatar = document.getElementById('detail-avatar-letter');
+        if(detailAvatar) detailAvatar.textContent = creatorName.charAt(0).toUpperCase();
+        
+        currentCaseAdmins = JSON.parse(dataset.caseAdmins || '[]').filter(String);
+        let rawCaseUsers = JSON.parse(dataset.caseUsers || '[]').filter(String);
+        const hasAdminRights = dataset.hasAdminRights === 'true';
+        let adminSetUI = new Set(currentCaseAdmins.map(a => a.toLowerCase().trim()));
+        currentCaseUsers = rawCaseUsers.filter(u => !adminSetUI.has(u.toLowerCase().trim()));
+        window.currentCaseHasAdminRights = hasAdminRights;
+        
+        const editBtn = document.getElementById('edit-case-btn');
+        if(editBtn) { if(hasAdminRights) editBtn.classList.remove('hidden'); else editBtn.classList.add('hidden'); }
+        window.currentCaseAllMembers = JSON.parse(dataset.members || '[]');
 
-        currentCaseAdmins.forEach(a => { if(a) detAdm.innerHTML += window.getMemberBadgeHTML(a, 'Admin', archivedByStr, snoozeTimeStr); });
-        currentCaseUsers.forEach(u => { if(u) detUsr.innerHTML += window.getMemberBadgeHTML(u, 'User', archivedByStr, snoozeTimeStr); });
+        const detAdm = document.getElementById('detail-admins'); detAdm.innerHTML = '';
+        const detUsr = document.getElementById('detail-users'); detUsr.innerHTML = '';
+        const archivedByStr = dataset.archivedBy || '';
+        const snoozeTimeStr = dataset.snoozeRawStr || '';
 
-        if(hasAdminRights) detAdm.innerHTML += `<button onclick="openManageMembers()" class="ml-1 text-blue-600 hover:text-blue-800 p-0.5 rounded-full hover:bg-blue-50 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>`;
+        currentCaseAdmins.forEach(a => { if(a) detAdm.innerHTML += window.getMemberBadgeHTML(a, 'Admin', archivedByStr, snoozeTimeStr); });
+        currentCaseUsers.forEach(u => { if(u) detUsr.innerHTML += window.getMemberBadgeHTML(u, 'User', archivedByStr, snoozeTimeStr); });
 
-        const attContainer = document.getElementById('detail-attachments'); attContainer.innerHTML = '';
-        JSON.parse(dataset.attachmentsData || '[]').forEach(url => {
-            if(url) {
-                const isThumbnail = String(url).includes('thumbnail');
-                let previewElement = '';
-                if (isThumbnail) {
-                    let fileIdMatch = String(url).match(/id=([^&]+)/) || String(url).match(/\/d\/([a-zA-Z0-9_-]+)/);
-                    let fileId = fileIdMatch ? fileIdMatch[1] : '';
-                    let primaryImg = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
-                    let fallbackImg = `https://drive.google.com/uc?export=view&id=${fileId}`;
-                    previewElement = `<img src="${primaryImg}" onerror="this.onerror=null; this.src='${fallbackImg}';" class="w-full h-auto max-h-64 object-contain rounded" alt="Attachment">`;
-                } else {
-                    const cleanUrl = String(url).replace(/\/view.*/, '/preview');
-                    previewElement = `<iframe src="${cleanUrl}" height="200" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe>`;
-                }
+        if(hasAdminRights) detAdm.innerHTML += `<button onclick="openManageMembers()" class="ml-1 text-blue-600 hover:text-blue-800 p-0.5 rounded-full hover:bg-blue-50 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>`;
 
-                attContainer.innerHTML += `
-                <div class="flex flex-col gap-2 mt-3 w-full max-w-sm">
-                    <div class="rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-50 relative w-full flex justify-center">
-                        ${previewElement}
-                    </div>
-                    <a href="${url}" target="_blank" class="self-start inline-flex items-center gap-1 text-[11px] font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg shadow-sm border border-indigo-100">📎 Open Attachment</a>
-                </div>`;
-            }
-        });
+        const attContainer = document.getElementById('detail-attachments'); attContainer.innerHTML = '';
+        JSON.parse(dataset.attachmentsData || '[]').forEach(url => {
+            if(url) {
+                const isThumbnail = String(url).includes('thumbnail');
+                let previewElement = '';
+                if (isThumbnail) {
+                    let fileIdMatch = String(url).match(/id=([^&]+)/) || String(url).match(/\/d\/([a-zA-Z0-9_-]+)/);
+                    let fileId = fileIdMatch ? fileIdMatch[1] : '';
+                    let primaryImg = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+                    let fallbackImg = `https://drive.google.com/uc?export=view&id=${fileId}`;
+                    previewElement = `<img src="${primaryImg}" onerror="this.onerror=null; this.src='${fallbackImg}';" class="w-full h-auto max-h-64 object-contain rounded" alt="Attachment">`;
+                } else {
+                    const cleanUrl = String(url).replace(/\/view.*/, '/preview');
+                    previewElement = `<iframe src="${cleanUrl}" height="200" class="w-full" allow="autoplay; encrypted-media" frameborder="0" scrolling="no"></iframe>`;
+                }
 
-        const status = dataset.status;
-        const isSnoozed = parseInt(dataset.snooze) > Date.now();
-        const unarchiveBtn = document.getElementById('detail-unarchive-btn');
-        const unsnoozeBtn = document.getElementById('detail-unsnooze-btn');
-        const snoozeBtn = document.getElementById('detail-snooze-btn');
-        const archiveBtn = document.getElementById('detail-archive-btn'); 
-        
-        unarchiveBtn.classList.add('hidden');
-        unsnoozeBtn.classList.add('hidden');
-        snoozeBtn.classList.add('hidden');
-        archiveBtn.classList.add('hidden'); 
-        
-        if (status === 'Archived') {
-            unarchiveBtn.classList.remove('hidden');
-        }
-        if (status !== 'Archived') {
-            archiveBtn.classList.remove('hidden'); 
-            if (isSnoozed) { unsnoozeBtn.classList.remove('hidden'); }
-            else { snoozeBtn.classList.remove('hidden'); }
-        }
+                attContainer.innerHTML += `
+                <div class="flex flex-col gap-2 mt-3 w-full max-w-sm">
+                    <div class="rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-50 relative w-full flex justify-center">
+                        ${previewElement}
+                    </div>
+                    <a href="${url}" target="_blank" class="self-start inline-flex items-center gap-1 text-[11px] font-extrabold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg shadow-sm border border-indigo-100">📎 Open Attachment</a>
+                </div>`;
+            }
+        });
 
-        // ==========================================
-        // DETAIL VIEW CASE SOURCE BUTTON
-        // ==========================================
-        const caseSourceUrl = dataset.caseSourceUrl || dataset.fmsUrl || '';
-        const detailCaseSourceBtn = document.getElementById('detail-case-source-btn');
+        const status = dataset.status;
+        const isSnoozed = parseInt(dataset.snooze) > Date.now();
+        const unarchiveBtn = document.getElementById('detail-unarchive-btn');
+        const unsnoozeBtn = document.getElementById('detail-unsnooze-btn');
+        const snoozeBtn = document.getElementById('detail-snooze-btn');
+        const archiveBtn = document.getElementById('detail-archive-btn'); 
+        
+        unarchiveBtn.classList.add('hidden');
+        unsnoozeBtn.classList.add('hidden');
+        snoozeBtn.classList.add('hidden');
+        archiveBtn.classList.add('hidden'); 
+        
+        if (status === 'Archived') {
+            unarchiveBtn.classList.remove('hidden');
+        }
+        if (status !== 'Archived') {
+            archiveBtn.classList.remove('hidden'); 
+            if (isSnoozed) { unsnoozeBtn.classList.remove('hidden'); }
+            else { snoozeBtn.classList.remove('hidden'); }
+        }
 
-        if (detailCaseSourceBtn) {
-            if (caseSourceUrl) {
-                detailCaseSourceBtn.classList.remove('hidden');
-                detailCaseSourceBtn.classList.add('flex');
-                detailCaseSourceBtn.dataset.url = caseSourceUrl;
-            } else {
-                detailCaseSourceBtn.classList.add('hidden');
-                detailCaseSourceBtn.classList.remove('flex');
-                detailCaseSourceBtn.dataset.url = '';
-            }
-        }
-        // ==========================================
+        const caseSourceUrl = dataset.caseSourceUrl || dataset.fmsUrl || '';
+        const detailCaseSourceBtn = document.getElementById('detail-case-source-btn');
 
-        ['Live', 'Snooze', 'Archive'].forEach(t => { if (t !== currentTab) document.getElementById(`tab-${t}`).style.display = 'none'; });
+        if (detailCaseSourceBtn) {
+            if (caseSourceUrl) {
+                detailCaseSourceBtn.classList.remove('hidden');
+                detailCaseSourceBtn.classList.add('flex');
+                detailCaseSourceBtn.dataset.url = caseSourceUrl;
+            } else {
+                detailCaseSourceBtn.classList.add('hidden');
+                detailCaseSourceBtn.classList.remove('flex');
+                detailCaseSourceBtn.dataset.url = '';
+            }
+        }
 
-        const caseNotifs = notifications.filter(n => window.normalizeCaseId(n.caseId) === window.normalizeCaseId(convId));
-        if (caseNotifs.length > 0) {
-            caseNotifs.forEach(n => {
-                apiCall('markSeen', { notificationId: n.id, userEmail: currentUser.email, userName: currentUser.name || currentUser.email }).catch(e => console.log(e));
-                if (n.type !== 'Ask') {
-                    locallySeenNotifications.add(n.id);
-                }
-            });
-            notifications = notifications.filter(n => window.normalizeCaseId(n.caseId) !== window.normalizeCaseId(convId) || (n.type === 'Ask' && String(n.status).toLowerCase() === 'open'));
-            unreadCount = notifications.length;
-            updateNotificationUI();
-        }
+        ['Live', 'Snooze', 'Archive'].forEach(t => { if (t !== currentTab) document.getElementById(`tab-${t}`).style.display = 'none'; });
 
-        replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' };
-        document.getElementById('detail-reply-input').innerHTML = '';
-        window.setReplyGlobalType('Message');
-        checkComposerRestrictions(document.getElementById('detail-reply-input'), 'main');
-        document.getElementById('dashboardView').classList.add('hidden'); document.getElementById('caseDetailView').classList.remove('hidden');
-        realtimeInterval = setInterval(fetchNewMessages, 3000);
-        loadCommentsPaginated(convId, true);
-    } catch(e) { console.error("Open Case Error:", e); }
-    window.isOpeningDetailView = false;
+        const caseNotifs = notifications.filter(n => window.normalizeCaseId(n.caseId) === window.normalizeCaseId(convId));
+        if (caseNotifs.length > 0) {
+            caseNotifs.forEach(n => {
+                apiCall('markSeen', { notificationId: n.id, userEmail: currentUser.email, userName: currentUser.name || currentUser.email }).catch(e => console.log(e));
+                if (n.type !== 'Ask') {
+                    locallySeenNotifications.add(n.id);
+                }
+            });
+            notifications = notifications.filter(n => window.normalizeCaseId(n.caseId) !== window.normalizeCaseId(convId) || (n.type === 'Ask' && String(n.status).toLowerCase() === 'open'));
+            unreadCount = notifications.length;
+            updateNotificationUI();
+        }
+
+        replyComposerState = { recipients: [], mode: 'SAME', globalType: 'Message' };
+        document.getElementById('detail-reply-input').innerHTML = '';
+        window.setReplyGlobalType('Message');
+        checkComposerRestrictions(document.getElementById('detail-reply-input'), 'main');
+        document.getElementById('dashboardView').classList.add('hidden'); document.getElementById('caseDetailView').classList.remove('hidden');
+        realtimeInterval = setInterval(fetchNewMessages, 3000);
+        loadCommentsPaginated(convId, true);
+    } catch(e) { console.error("Open Case Error:", e); }
+    window.isOpeningDetailView = false;
 };
 
 window.closeCaseDetail = function() {
-    if (realtimeInterval) {
-        clearInterval(realtimeInterval);
-        realtimeInterval = null;
-    }
-    document.getElementById('caseDetailView').classList.add('hidden');
-    document.getElementById('dashboardView').classList.remove('hidden');
-    document.getElementById('detail-thread-container').innerHTML = '';
-    document.getElementById('reply_mention_dropdown').classList.add('hidden');
-    document.querySelectorAll('.inline-mention-dropdown').forEach(d => d.classList.add('hidden'));
-    ['Live', 'Snooze', 'Archive'].forEach(t => { if(document.getElementById(`tab-${t}`)) document.getElementById(`tab-${t}`).style.display = ''; });
-    loadConversations();
+    if (realtimeInterval) {
+        clearInterval(realtimeInterval);
+        realtimeInterval = null;
+    }
+    document.getElementById('caseDetailView').classList.add('hidden');
+    document.getElementById('dashboardView').classList.remove('hidden');
+    document.getElementById('detail-thread-container').innerHTML = '';
+    document.getElementById('reply_mention_dropdown').classList.add('hidden');
+    document.querySelectorAll('.inline-mention-dropdown').forEach(d => d.classList.add('hidden'));
+    ['Live', 'Snooze', 'Archive'].forEach(t => { if(document.getElementById(`tab-${t}`)) document.getElementById(`tab-${t}`).style.display = ''; });
+    loadConversations();
 };
 
 window.handleReplyFileSelect = function(e) {
-    if (!document.getElementById('detail-reply-input').querySelector('.mention-badge')) {
-        e.target.value = '';
-        return showCustomDialog("Notice ⚠️", "Pehle kisi ko @mention karein tabhi attachment use kar sakte hain.", false);
-    }
-    Array.from(e.target.files).forEach(file => {
-        if(pendingReplyFiles.length >= 10) return;
-        if(!pendingReplyFiles.some(pf => pf.name === file.name)) pendingReplyFiles.push(file);
-    });
-    renderReplyFileList();
+    if (!document.getElementById('detail-reply-input').querySelector('.mention-badge')) {
+        e.target.value = '';
+        return showCustomDialog("Notice ⚠️", "Pehle kisi ko @mention karein tabhi attachment use kar sakte hain.", false);
+    }
+    Array.from(e.target.files).forEach(file => {
+        if(pendingReplyFiles.length >= 10) return;
+        if(!pendingReplyFiles.some(pf => pf.name === file.name)) pendingReplyFiles.push(file);
+    });
+    renderReplyFileList();
 };
 
 window.renderReplyFileList = function() {
-    const list = document.getElementById('reply_file_list');
-    if(list) {
-        list.innerHTML = '';
-        pendingReplyFiles.forEach((file, index) => {
-            list.innerHTML += createBeautifulFileCard(file, index, 'removeReplyFile');
-        });
-    }
+    const list = document.getElementById('reply_file_list');
+    if(list) {
+        list.innerHTML = '';
+        pendingReplyFiles.forEach((file, index) => {
+            list.innerHTML += createBeautifulFileCard(file, index, 'removeReplyFile');
+        });
+    }
 };
 window.removeReplyFile = function(index) { pendingReplyFiles.splice(index, 1); renderReplyFileList(); };
 
