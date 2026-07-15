@@ -2114,7 +2114,7 @@ function renderThreadHTML(list, level = 0) {
                 }
 
                 return `
-                <div class="mt-3 bg-white p-2 rounded-xl border border-slate-200 shadow-sm inline-block w-full max-w-md mr-2">
+                <div class="mt-2 bg-white p-2 rounded-xl border border-slate-200 shadow-sm inline-block w-full max-w-md mr-2">
                     <div class="rounded-lg overflow-hidden bg-slate-50 relative w-full border border-slate-100 flex justify-center">
                         ${previewElement}
                     </div>
@@ -2128,7 +2128,7 @@ function renderThreadHTML(list, level = 0) {
         const parentAskIdForBackend = (c.type === 'Ask') ? c.askId : (c.parentAskId || '');
         const senderName = window.getUserNameByEmail(c.sender || 'Unknown');
 
-        // 🔥 STRIPS HUGE BLANK SPACES INJECTED BY CONTENT-EDITABLE DIVS
+        // Removes invisible HTML tags (<br>, empty <div>) that create huge gaps above/below text
         let cleanMsg = c.text || '';
         cleanMsg = cleanMsg.replace(/^(<br\s*\/?>|\s|&nbsp;|<div>(\s|<br\s*\/?>|&nbsp;)*<\/div>|<p>(\s|<br\s*\/?>|&nbsp;)*<\/p>)+/gi, '');
         cleanMsg = cleanMsg.replace(/(<br\s*\/?>|\s|&nbsp;|<div>(\s|<br\s*\/?>|&nbsp;)*<\/div>|<p>(\s|<br\s*\/?>|&nbsp;)*<\/p>)+$/gi, '');
@@ -2136,11 +2136,10 @@ function renderThreadHTML(list, level = 0) {
         let processedText = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(cleanMsg) : cleanMsg;
 
         return `
-        <div class="mb-4 group" style="${indentStyle}" data-id="reply-container">
-            <!-- PADDING & MARGIN REVERTED TO YOUR ORIGINAL CODE -->
-            <div class="p-4 rounded-xl shadow-sm transition-all border border-slate-200/50" style="background-color: ${tColor}; border-left: 4px solid rgba(0,0,0,0.1);">
+        <div class="mb-3 group" style="${indentStyle}" data-id="reply-container">
+            <div class="px-4 py-3 rounded-xl shadow-sm transition-all border border-slate-200/50" style="background-color: ${tColor}; border-left: 4px solid rgba(0,0,0,0.1);">
                 
-                <div class="flex items-center gap-2 mb-2">
+                <div class="flex items-center gap-2 mb-1.5">
                     <div class="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold shadow-inner">${senderName.charAt(0).toUpperCase()}</div>
                     <span class="font-bold text-sm text-slate-900">${senderName}</span>
                     ${badge}
@@ -2150,11 +2149,12 @@ function renderThreadHTML(list, level = 0) {
                 <div class="rich-text text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">${processedText}</div>
                 ${attachmentPreviewHtml}
                 
-                <div class="mt-3 flex gap-3 items-center text-xs border-t border-slate-200/50 pt-2">
-                    <button class="font-bold text-slate-500 hover:text-indigo-600 transition-colors inline-reply-toggle-btn" onclick="toggleInlineReply(this)" data-askid="${parentAskIdForBackend}" data-threadid="${c.threadId}" data-threadcolor="${c.threadColor}">Reply</button>
+                <div class="mt-2 flex gap-3 items-center text-xs border-t border-slate-200/50 pt-2">
+                    <!-- 🔥 FIX: Added data-parent-type below so the submit function knows if it's a Message or Ask -->
+                    <button class="font-bold text-slate-500 hover:text-indigo-600 transition-colors inline-reply-toggle-btn" onclick="toggleInlineReply(this)" data-askid="${parentAskIdForBackend}" data-threadid="${c.threadId}" data-threadcolor="${c.threadColor}" data-parent-type="${c.type}">Reply</button>
                 </div>
                 
-                <div class="hidden mt-3 flex gap-2 items-start relative" data-id="inline-reply-box">
+                <div class="hidden mt-2 flex gap-2 items-start relative" data-id="inline-reply-box">
                     <div class="flex-1 border border-slate-300 rounded-xl p-2 flex flex-col shadow-sm transition-all relative" style="background-color: ${tColor}; border-left: 4px solid rgba(0,0,0,0.15);">
                         <div class="flex gap-2 items-center px-1 mb-2 border-b border-black/10 pb-2">
                             <button type="button" onclick="setInlineType(this, 'Reply')" class="inline-type-btn inline-reply-btn px-3 py-1 text-[10px] font-bold rounded-md bg-indigo-600 text-white shadow-sm transition-colors">Reply</button>
