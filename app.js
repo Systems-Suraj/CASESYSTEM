@@ -279,27 +279,28 @@ function formatSize(bytes){
     return (kb / 1024).toFixed(1) + " MB";
 }
 window.createBeautifulFileCard = function(file, index, removeFnName) {
-    let previewHTML = '';
-    if (file.type.startsWith('image/')) {
-        const url = URL.createObjectURL(file);
-        previewHTML = `<img src="${url}" class="w-full h-full object-cover">`;
-    } else if (file.type.startsWith('video/')) {
-        previewHTML = `<div class="w-full h-full bg-slate-800 flex items-center justify-center"><i class="fas fa-play text-white/70 text-xs"></i></div>`;
-    } else {
-        previewHTML = `<i class="fas fa-file-alt text-indigo-400 text-xl"></i>`;
-    }
-    return `<div class="flex items-center gap-3 bg-white border border-slate-200 rounded-xl p-2 pr-8 relative shadow-sm w-60 max-w-full hover:border-indigo-300 transition-colors group">
-        <div class="w-10 h-10 rounded-lg bg-slate-50 shrink-0 flex items-center justify-center overflow-hidden border border-slate-100">
-            ${previewHTML}
-        </div>
-        <div class="flex flex-col min-w-0 flex-1">
-            <span class="text-xs font-bold text-slate-800 truncate block">${file.name}</span>
-            <span class="text-[10px] font-semibold text-slate-400 mt-0.5">${formatSize(file.size)}</span>
-        </div>
-        <button type="button" onclick="${removeFnName}(${index})" class="absolute top-2 right-2 w-5 h-5 bg-slate-100 hover:bg-red-500 text-slate-600 hover:text-white rounded-full flex items-center justify-center text-[10px] transition-all cursor-pointer opacity-80 hover:opacity-100 shadow-sm" title="Remove File">
-            <i class="fas fa-times"></i>
-        </button>
-    </div>`;
+    let previewHTML = '';
+    if (file.type.startsWith('image/')) {
+        const url = URL.createObjectURL(file);
+        previewHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+    } else if (file.type.startsWith('video/')) {
+        previewHTML = `<div class="w-full h-full bg-slate-800 flex items-center justify-center"><i class="fas fa-play text-white/70 text-[10px]"></i></div>`;
+    } else {
+        previewHTML = `<i class="fas fa-file-alt text-indigo-400 text-sm"></i>`;
+    }
+    // Reduced padding (p-1.5), width (w-48), and icon sizes
+    return `<div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1.5 pr-6 relative shadow-sm w-48 max-w-full hover:border-indigo-300 transition-colors group">
+        <div class="w-8 h-8 rounded-md bg-slate-50 shrink-0 flex items-center justify-center overflow-hidden border border-slate-100">
+            ${previewHTML}
+        </div>
+        <div class="flex flex-col min-w-0 flex-1">
+            <span class="text-[10px] font-bold text-slate-800 truncate block">${file.name}</span>
+            <span class="text-[9px] font-semibold text-slate-400">${formatSize(file.size)}</span>
+        </div>
+        <button type="button" onclick="${removeFnName}(${index})" class="absolute top-1 right-1 w-4 h-4 bg-slate-100 hover:bg-red-500 text-slate-600 hover:text-white rounded-full flex items-center justify-center text-[8px] transition-all cursor-pointer opacity-80 hover:opacity-100" title="Remove File">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>`;
 };
 window.cancelUploadFlags = {};
 function showUploadOverlay(title, filesArray) {
@@ -1543,15 +1544,18 @@ window.handleReplyTyping = function(e) {
 };
 
 function showReplyUserList() {
-    const dropdown = document.getElementById('reply_mention_dropdown');
-    dropdown.classList.remove('hidden');
-    const filtered = getFilteredUsersForMention(mentionSearchQuery);
-    dropdown.innerHTML = filtered.map(u =>
-    `<div onclick="selectReplyMentionUser('${String(u.name||'').replace(/'/g, "\\'")}', '${String(u.email||'').replace(/'/g, "\\'")}')" class="p-2 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 text-left"> <div class="text-sm font-bold text-slate-800">${u.name || u.email || 'Unknown'}</div> <div class="text-[11px] text-slate-500 truncate">${u.email || ''}</div> </div>`
-    ).join('');
-    if(filtered.length === 0) dropdown.innerHTML = `<div class="p-3 text-[11px] text-slate-400 font-bold uppercase tracking-widest text-center">No match found</div>`;
+    const dropdown = document.getElementById('reply_mention_dropdown');
+    dropdown.classList.remove('hidden');
+    const filtered = getFilteredUsersForMention(mentionSearchQuery);
+    dropdown.innerHTML = filtered.map(u =>
+    // Changed p-2 to px-2 py-1 for tighter spacing
+    `<div onclick="selectReplyMentionUser('${String(u.name||'').replace(/'/g, "\\'")}', '${String(u.email||'').replace(/'/g, "\\'")}')" class="px-2 py-1 hover:bg-indigo-50 cursor-pointer border-b border-slate-100 last:border-0 text-left"> 
+        <div class="text-xs font-bold text-slate-800">${u.name || u.email || 'Unknown'}</div> 
+        <div class="text-[10px] text-slate-500 truncate">${u.email || ''}</div> 
+    </div>`
+    ).join('');
+    if(filtered.length === 0) dropdown.innerHTML = `<div class="p-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center">No match found</div>`;
 }
-
 window.selectReplyMentionUser = function(name, email) {
     const dropdown = document.getElementById('reply_mention_dropdown');
     const emailLower = String(email).toLowerCase(); const nameLower = String(name).toLowerCase();
@@ -2381,15 +2385,16 @@ window.handleInlineTyping = function(e) {
         const match = text.match(/(?:^|\s|\n|\u00A0)@([^\s]*)$/);
         if (match) { 
             inlineMentionSearchQuery = match[1].toLowerCase();
-            inlineSavedRange = range.cloneRange(); 
-            dropdown.classList.remove('hidden');
-            const filtered = getFilteredUsersForMention(inlineMentionSearchQuery);
-            dropdown.innerHTML = filtered.map(u => 
-                `<div onclick="selectInlineMentionUser('${String(u.name||'').replace(/'/g, "\\'")}', '${String(u.email||'').replace(/'/g, "\\'")}')" class="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-left">
-                    <div class="text-xs font-bold text-slate-800 leading-tight">${u.name || u.email || 'Unknown'}</div>
-                    <div class="text-[9px] text-slate-500 truncate mt-0.5">${u.email || ''}</div>
-                </div>`
-            ).join('');
+            inlineSavedRange = range.cloneRange(); 
+dropdown.classList.remove('hidden');
+const filtered = getFilteredUsersForMention(inlineMentionSearchQuery);
+dropdown.innerHTML = filtered.map(u => 
+    // Changed p-2 to px-2 py-1 here as well
+    `<div onclick="selectInlineMentionUser('${String(u.name||'').replace(/'/g, "\\'")}', '${String(u.email||'').replace(/'/g, "\\'")}')" class="px-2 py-1 hover:bg-blue-50 cursor-pointer border-b border-slate-100 last:border-0 text-left">
+        <div class="text-xs font-bold text-slate-800 leading-tight">${u.name || u.email || 'Unknown'}</div>
+        <div class="text-[10px] text-slate-500 truncate mt-0.5">${u.email || ''}</div>
+    </div>`
+).join('');
             if(filtered.length === 0) {
                 dropdown.innerHTML = `<div class="p-2 text-[10px] text-slate-400 font-bold uppercase text-center">No match</div>`;
             }
