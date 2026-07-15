@@ -2478,112 +2478,129 @@ window.finalizeInlineMention = function(name, email, role) {
 };
 
 window.submitInlineReply = async function(btn) {
-    const container = btn.closest('[data-id="reply-container"]');
-    const replyBox = container.querySelector('[data-id="inline-reply-box"]');
-    const inputDiv = replyBox.querySelector('.inline-reply-input');
-    const msgHTML = inputDiv.innerHTML.trim();
-    if (!inputDiv.querySelector('.mention-badge')) {
-        return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
-    }
-    if(!msgHTML && inlinePendingFiles.length === 0) return showCustomDialog("Notice", "Please write a message or attach a file.", false);
-    const caseId = document.getElementById('detail-conv-id').value;
-    const mentionedEmails = Array.from(inputDiv.querySelectorAll('.mention-badge'))
-        .map(badge => badge.dataset.email)
-        .filter(Boolean)
-        .join(',');
-    const toggleBtn = container.querySelector('.inline-reply-toggle-btn');
-    const typeVal = replyBox.querySelector('.inline-type-val').value;
-    btn.disabled = true;
-    const originalText = btn.innerText;
-    btn.innerText = '...';
-    try {
-        let fileUrl = '';
-        let fileName = '';
-        if(inlinePendingFiles.length > 0) { 
-            showUploadOverlay("Uploading Attachments", inlinePendingFiles);
-            const uploadedData = await uploadMultipleFilesResumable(inlinePendingFiles);
-            fileUrl = uploadedData.map(d => d.url).join(',');
-            fileName = uploadedData.map(d => d.name).join(',');
-            hideUploadOverlay();
-        }
+    const container = btn.closest('[data-id="reply-container"]');
+    const replyBox = container.querySelector('[data-id="inline-reply-box"]');
+    const inputDiv = replyBox.querySelector('.inline-reply-input');
+    const msgHTML = inputDiv.innerHTML.trim();
+    if (!inputDiv.querySelector('.mention-badge')) {
+        return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
+    }
+    if(!msgHTML && inlinePendingFiles.length === 0) return showCustomDialog("Notice", "Please write a message or attach a file.", false);
+    
+    const caseId = document.getElementById('detail-conv-id').value;
+    const mentionedEmails = Array.from(inputDiv.querySelectorAll('.mention-badge'))
+        .map(badge => badge.dataset.email)
+        .filter(Boolean)
+        .join(',');
+        
+    const toggleBtn = container.querySelector('.inline-reply-toggle-btn');
+    const typeVal = replyBox.querySelector('.inline-type-val').value;
+    
+    // 🔥 FIX: Check if we are replying to an Ask or a regular Message
+    const parentMsgType = toggleBtn ? toggleBtn.getAttribute('data-parent-type') : ''; 
 
-        const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
-        const payload = { caseId: caseId, text: msgHTML, mentionType: typeVal, sender: currentUser.email, receiver: mentionedEmails, parentAskId: toggleBtn?toggleBtn.getAttribute('data-askid'):'', threadId: toggleBtn?toggleBtn.getAttribute('data-threadid'):'', threadColor: toggleBtn?toggleBtn.getAttribute('data-threadcolor'):'', attachmentUrl: fileUrl, attachmentFileName: fileName, uniqueId: tempId };
+    btn.disabled = true;
+    const originalText = btn.innerText;
+    btn.innerText = '...';
+    try {
+        let fileUrl = '';
+        let fileName = '';
+        if(inlinePendingFiles.length > 0) { 
+            showUploadOverlay("Uploading Attachments", inlinePendingFiles);
+            const uploadedData = await uploadMultipleFilesResumable(inlinePendingFiles);
+            fileUrl = uploadedData.map(d => d.url).join(',');
+            fileName = uploadedData.map(d => d.name).join(',');
+            hideUploadOverlay();
+        }
 
-        const localSenderName = currentUser.name || currentUser.email;
-        seenMessages.add(tempId); 
+        const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
+        const payload = { 
+            caseId: caseId, 
+            text: msgHTML, 
+            mentionType: typeVal, 
+            sender: currentUser.email, 
+            receiver: mentionedEmails, 
+            parentAskId: toggleBtn ? toggleBtn.getAttribute('data-askid') : '', 
+            threadId: toggleBtn ? toggleBtn.getAttribute('data-threadid') : '', 
+            threadColor: toggleBtn ? toggleBtn.getAttribute('data-threadcolor') : '', 
+            attachmentUrl: fileUrl, 
+            attachmentFileName: fileName, 
+            uniqueId: tempId 
+        };
 
-        allLoadedComments.push({
-             caseId: String(caseId).trim(),
-             timestamp: new Date().getTime(),
-             sender: localSenderName,
-             receiver: mentionedEmails, 
-             text: msgHTML,
-             attachmentUrl: fileUrl,
-             attachmentFileName: fileName,
-             type: typeVal,
-             askId: '',
-             status: typeVal === 'Ask' ? 'Open' : '', 
-             parentAskId: payload.parentAskId,
-             uniqueId: tempId, 
-             threadId: payload.threadId || 'LOCAL-T-' + Math.random(),
-             threadColor: payload.threadColor || '#f8fafc'
-         });
+        const localSenderName = currentUser.name || currentUser.email;
+        seenMessages.add(tempId); 
 
+        allLoadedComments.push({
+             caseId: String(caseId).trim(),
+             timestamp: new Date().getTime(),
+             sender: localSenderName,
+             receiver: mentionedEmails, 
+             text: msgHTML,
+             attachmentUrl: fileUrl,
+             attachmentFileName: fileName,
+             type: typeVal,
+             askId: '',
+             status: typeVal === 'Ask' ? 'Open' : '', 
+             parentAskId: payload.parentAskId,
+             uniqueId: tempId, 
+             threadId: payload.threadId || 'LOCAL-T-' + Math.random(),
+             threadColor: payload.threadColor || '#f8fafc'
+         });
 
-        if (payload.parentAskId === "NEW" || payload.parentAskId === "") {
-            showCustomDialog(
-                "Please wait",
-                "The Ask is still being saved. Wait one second and try again.",
-                false
-            );
-            btn.disabled = false;
-            btn.innerText = originalText;
-            return;
-        }
+        // 🔥 FIX: Now it only blocks if you are explicitly replying to a newly created "Ask" that has no ID yet.
+        // It will let regular "Messages" pass right through!
+        if (payload.parentAskId === "NEW" || (parentMsgType === 'Ask' && payload.parentAskId === "")) {
+            showCustomDialog(
+                "Please wait",
+                "The Ask is still being saved. Wait one second and try again.",
+                false
+            );
+            btn.disabled = false;
+            btn.innerText = originalText;
+            return;
+        }
 
-        if (payload.parentAskId) {
-            notifications = notifications.filter(n => String(n.askId) !== String(payload.parentAskId) && String(n.id) !== String(payload.parentAskId));
-            const parentAsk = allLoadedComments.find(c => String(c.askId) === String(payload.parentAskId));
-            if (parentAsk) {
-                parentAsk.status = 'Closed';
-            }
-        }
-        notifications = notifications.filter(n => window.normalizeCaseId(n.caseId) !== window.normalizeCaseId(caseId));
-        unreadCount = notifications.length;
-        updateNotificationUI();
+        if (payload.parentAskId) {
+            notifications = notifications.filter(n => String(n.askId) !== String(payload.parentAskId) && String(n.id) !== String(payload.parentAskId));
+            const parentAsk = allLoadedComments.find(c => String(c.askId) === String(payload.parentAskId));
+            if (parentAsk) {
+                parentAsk.status = 'Closed';
+            }
+        }
+        notifications = notifications.filter(n => window.normalizeCaseId(n.caseId) !== window.normalizeCaseId(caseId));
+        unreadCount = notifications.length;
+        updateNotificationUI();
 
-        inputDiv.innerHTML = '';
-        inlinePendingFiles = []; replyBox.querySelector('.inline-file-list').innerHTML = ''; replyBox.classList.add('hidden');
+        inputDiv.innerHTML = '';
+        inlinePendingFiles = []; replyBox.querySelector('.inline-file-list').innerHTML = ''; replyBox.classList.add('hidden');
 
-        renderAllCommentsLocally();
+        renderAllCommentsLocally();
 
-        await apiCall('updateCaseMembers', {
-            id: caseId,
-            admins: [...new Set(currentCaseAdmins)],
-            users: [...new Set(currentCaseUsers)],
-            userEmail: currentUser.email
-        });
-        await apiCall('addNewComment', payload);
+        await apiCall('updateCaseMembers', {
+            id: caseId,
+            admins: [...new Set(currentCaseAdmins)],
+            users: [...new Set(currentCaseUsers)],
+            userEmail: currentUser.email
+        });
+        await apiCall('addNewComment', payload);
 
-        // Reload comments immediately so NEW placeholder is replaced with the real Ask ID (611, 612, etc.)
-        // Reusing the project's existing modal view refresh handlers to safely rebuild the view state
-        if (typeof window.openCaseModal === 'function') {
-            await window.openCaseModal(caseId);
-        } else if (typeof window.openCaseDetails === 'function') {
-            await window.openCaseDetails(caseId);
-        }
+        if (typeof window.openCaseModal === 'function') {
+            await window.openCaseModal(caseId);
+        } else if (typeof window.openCaseDetails === 'function') {
+            await window.openCaseDetails(caseId);
+        }
 
-        if(window.isMobileClient && window.isMobileClient()) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIBRATE' }));
-        }
-            
-    } catch(e) {
-        hideUploadOverlay();
-        showCustomDialog("Error", "Failed to post inline reply.\n" + (e.message || e), false);
-    } finally {
-        btn.disabled = false; btn.innerText = originalText;
-    }
+        if(window.isMobileClient && window.isMobileClient()) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIBRATE' }));
+        }
+            
+    } catch(e) {
+        hideUploadOverlay();
+        showCustomDialog("Error", "Failed to post inline reply.\n" + (e.message || e), false);
+    } finally {
+        btn.disabled = false; btn.innerText = originalText;
+    }
 };
 
 // ==========================================
