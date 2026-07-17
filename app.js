@@ -2489,126 +2489,253 @@ window.finalizeInlineMention = function(name, email, role) {
 };
 
 window.submitInlineReply = async function(btn) {
-    // 🔥 FIX: Find the container directly using the button
+
     const container = btn.closest('[data-id="reply-container"]');
     const replyBox = container.querySelector('[data-id="inline-reply-box"]');
     const toggleBtn = container.querySelector('.inline-reply-toggle-btn');
-    
+
     const inputDiv = replyBox.querySelector('.inline-reply-input');
     const msgHTML = inputDiv.innerHTML.trim();
-    
+
     if (!inputDiv.querySelector('.mention-badge')) {
-        return showCustomDialog("Notice", "You must select someone using @ before sending a reply.", false);
+        return showCustomDialog(
+            "Notice",
+            "You must select someone using @ before sending a reply.",
+            false
+        );
     }
-    if(!msgHTML && inlinePendingFiles.length === 0) return showCustomDialog("Notice", "Please write a message or attach a file.", false);
-    
+
+    if (!msgHTML && inlinePendingFiles.length === 0) {
+        return showCustomDialog(
+            "Notice",
+            "Please write a message or attach a file.",
+            false
+        );
+    }
+
     const caseId = document.getElementById('detail-conv-id').value;
-    const mentionedEmails = Array.from(inputDiv.querySelectorAll('.mention-badge'))
-        .map(badge => badge.dataset.email)
+
+    const mentionedEmails = Array.from(
+        inputDiv.querySelectorAll('.mention-badge')
+    )
+        .map(x => x.dataset.email)
         .filter(Boolean)
         .join(',');
-        
+
     const typeVal = replyBox.querySelector('.inline-type-val').value;
-    
-    // 🔥 FIX: Directly grab the data-attributes from the toggle button
-    const askId = toggleBtn ? toggleBtn.getAttribute('data-askid') : '';
-    const parentMsgType = toggleBtn ? toggleBtn.getAttribute('data-parent-type') : ''; 
+
+    const askId = toggleBtn?.dataset.askid || "";
+    const threadId = toggleBtn?.dataset.threadid || "";
+    const threadColor = toggleBtn?.dataset.threadcolor || "";
 
     btn.disabled = true;
     const originalText = btn.innerText;
-    btn.innerText = '...';
+    btn.innerText = "...";
+
     try {
-        let fileUrl = '';
-        let fileName = '';
-        if(inlinePendingFiles.length > 0) { 
-            showUploadOverlay("Uploading Attachments", inlinePendingFiles);
-            const uploadedData = await uploadMultipleFilesResumable(inlinePendingFiles);
-            fileUrl = uploadedData.map(d => d.url).join(',');
-            fileName = uploadedData.map(d => d.name).join(',');
+
+        let fileUrl = "";
+        let fileName = "";
+
+        if (inlinePendingFiles.length > 0) {
+
+            showUploadOverlay(
+                "Uploading Attachments",
+                inlinePendingFiles
+            );
+
+            const uploadedData =
+                await uploadMultipleFilesResumable(
+                    inlinePendingFiles
+                );
+
+            fileUrl = uploadedData.map(x => x.url).join(",");
+            fileName = uploadedData.map(x => x.name).join(",");
+
             hideUploadOverlay();
         }
 
-        const tempId = "TEMP-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
-        const payload = { 
-            caseId: caseId, 
-            text: msgHTML, 
-            mentionType: typeVal, 
-            sender: currentUser.email, 
-            receiver: mentionedEmails, 
-            parentAskId: askId, 
-            threadId: toggleBtn ? toggleBtn.getAttribute('data-threadid') : '', 
-            threadColor: toggleBtn ? toggleBtn.getAttribute('data-threadcolor') : '', 
-            attachmentUrl: fileUrl, 
-            attachmentFileName: fileName, 
-            uniqueId: tempId 
+        const tempId =
+            "TEMP-" +
+            Date.now() +
+            "-" +
+            Math.floor(Math.random() * 100000);
+
+        const payload = {
+
+            caseId,
+
+            text: msgHTML,
+
+            mentionType: typeVal,
+
+            sender: currentUser.email,
+
+            receiver: mentionedEmails,
+
+            parentAskId: askId,
+
+            threadId,
+
+            threadColor,
+
+            attachmentUrl: fileUrl,
+
+            attachmentFileName: fileName,
+
+            uniqueId: tempId
+
         };
 
-        // 🔥 LOGIC CHANGE: Only block if parentMsgType IS 'Ask' AND the askId is still "NEW"
-        // If it's a regular 'Reply' or 'Message', it will proceed regardless of askId.
-        if (parentMsgType === 'Ask' && (askId === "NEW" || askId === "")) {
-            showCustomDialog(
-                "Please wait",
-                "The Ask is still being saved. Wait one second and try again.",
-                false
-            );
-            btn.disabled = false;
-            btn.innerText = originalText;
-            return;
-        }
+        //------------------------------------------
+        // Local optimistic UI
+        //------------------------------------------
 
-        // ... rest of your existing function code (api calls, clearing inputs, etc) ...
-        const localSenderName = currentUser.name || currentUser.email;
-        seenMessages.add(tempId); 
+        seenMessages.add(tempId);
 
         allLoadedComments.push({
-             caseId: String(caseId).trim(),
-             timestamp: new Date().getTime(),
-             sender: localSenderName,
-             receiver: mentionedEmails, 
-             text: msgHTML,
-             attachmentUrl: fileUrl,
-             attachmentFileName: fileName,
-             type: typeVal,
-             askId: '',
-             status: typeVal === 'Ask' ? 'Open' : '', 
-             parentAskId: askId,
-             uniqueId: tempId, 
-             threadId: payload.threadId || 'LOCAL-T-' + Math.random(),
-             threadColor: payload.threadColor || '#f8fafc'
+
+            caseId: String(caseId),
+
+            timestamp: Date.now(),
+
+            sender: currentUser.name || currentUser.email,
+
+            receiver: mentionedEmails,
+
+            text: msgHTML,
+
+            attachmentUrl: fileUrl,
+
+            attachmentFileName: fileName,
+
+            type: typeVal,
+
+            askId: "",
+
+            parentAskId: askId,
+
+            status: typeVal === "Ask" ? "Open" : "",
+
+            uniqueId: tempId,
+
+            threadId:
+                threadId ||
+                ("LOCAL-" + Math.random()),
+
+            threadColor:
+                threadColor || "#f8fafc"
+
         });
 
-        if (askId && askId !== "NEW") {
-            notifications = notifications.filter(n => String(n.askId) !== String(askId) && String(n.id) !== String(askId));
-            const parentAsk = allLoadedComments.find(c => String(c.askId) === String(askId));
-            if (parentAsk) parentAsk.status = 'Closed';
+        //------------------------------------------
+        // Close notification if replying to Ask
+        //------------------------------------------
+
+        if (askId) {
+
+            notifications = notifications.filter(n =>
+                String(n.askId) !== String(askId) &&
+                String(n.id) !== String(askId)
+            );
+
+            const parentAsk =
+                allLoadedComments.find(c =>
+                    String(c.askId) === String(askId)
+                );
+
+            if (parentAsk) {
+                parentAsk.status = "Closed";
+            }
+
         }
-        notifications = notifications.filter(n => window.normalizeCaseId(n.caseId) !== window.normalizeCaseId(caseId));
+
+        notifications = notifications.filter(
+            n =>
+                window.normalizeCaseId(n.caseId) !==
+                window.normalizeCaseId(caseId)
+        );
+
         unreadCount = notifications.length;
+
         updateNotificationUI();
 
-        inputDiv.innerHTML = '';
-        inlinePendingFiles = []; replyBox.querySelector('.inline-file-list').innerHTML = ''; replyBox.classList.add('hidden');
+        //------------------------------------------
+        // Clear UI
+        //------------------------------------------
+
+        inputDiv.innerHTML = "";
+
+        inlinePendingFiles = [];
+
+        replyBox.querySelector(".inline-file-list").innerHTML = "";
+
+        replyBox.classList.add("hidden");
+
         renderAllCommentsLocally();
 
-        await apiCall('updateCaseMembers', {
-            id: caseId,
-            admins: [...new Set(currentCaseAdmins)],
-            users: [...new Set(currentCaseUsers)],
-            userEmail: currentUser.email
-        });
-        await apiCall('addNewComment', payload);
+        //------------------------------------------
+        // Save members
+        //------------------------------------------
 
-        if (typeof window.openCaseModal === 'function') {
-            await window.openCaseModal(caseId);
-        } else if (typeof window.openCaseDetails === 'function') {
-            await window.openCaseDetails(caseId);
+        await apiCall("updateCaseMembers", {
+
+            id: caseId,
+
+            admins: [...new Set(currentCaseAdmins)],
+
+            users: [...new Set(currentCaseUsers)],
+
+            userEmail: currentUser.email
+
+        });
+
+        //------------------------------------------
+        // Save comment
+        //------------------------------------------
+
+        const result =
+            await apiCall("addNewComment", payload);
+
+        if (!result.success) {
+            throw new Error(result.error || "Failed to save");
         }
-    } catch(e) {
+
+        //------------------------------------------
+        // Refresh
+        //------------------------------------------
+
+        if (typeof window.openCaseModal === "function") {
+
+            await window.openCaseModal(caseId);
+
+        } else if (
+            typeof window.openCaseDetails === "function"
+        ) {
+
+            await window.openCaseDetails(caseId);
+
+        }
+
+    } catch (e) {
+
         hideUploadOverlay();
-        showCustomDialog("Error", "Failed to post inline reply.\n" + (e.message || e), false);
+
+        showCustomDialog(
+            "Error",
+            "Failed to post inline reply.\n" +
+                (e.message || e),
+            false
+        );
+
     } finally {
-        btn.disabled = false; btn.innerText = originalText;
+
+        btn.disabled = false;
+
+        btn.innerText = originalText;
+
     }
+
 };
 // ==========================================
 // CREATE NEW CASE MODAL & UPLOADS
