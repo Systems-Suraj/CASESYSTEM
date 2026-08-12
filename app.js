@@ -5,7 +5,7 @@ window.normalizeCaseId = function(id) {
     return String(id || '')
         .trim()
         .replace(/\s+/g, '') 
-        .toUpperCase();      
+        .toUpperCase();       
 };
 window.isUserTypingGlobal = false;
 let activeInputElement = null;
