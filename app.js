@@ -7,6 +7,48 @@ window.normalizeCaseId = function(id) {
         .replace(/\s+/g, '') 
         .toUpperCase();       
 };
+
+// 🛠️ CUSTOM 12-HOUR FORMATTER (Bypasses OS Locale overrides)
+window.formatDateTo12Hour = function(dateInput) {
+    if (!dateInput) return '';
+    if (!isNaN(dateInput) && String(dateInput).trim() !== '') dateInput = parseInt(dateInput, 10);
+    let d = new Date(dateInput);
+    
+    if (isNaN(d.getTime()) && typeof dateInput === 'string') {
+        d = new Date(dateInput.replace(/-/g, '/'));
+    }
+    if (isNaN(d.getTime())) return String(dateInput); 
+    
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    let hours = d.getHours();
+    let minutes = d.getMinutes();
+    
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; 
+    minutes = minutes < 10 ? '0' + minutes : minutes;
+    
+    return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}, ${hours}:${minutes} ${ampm}`;
+};
+
+window.formatTimeTo12Hour = function(dateInput) {
+    if (!dateInput) return '';
+    if (!isNaN(dateInput) && String(dateInput).trim() !== '') dateInput = parseInt(dateInput, 10);
+    let d = new Date(dateInput);
+    if (isNaN(d.getTime()) && typeof dateInput === 'string') d = new Date(dateInput.replace(/-/g, '/'));
+    if (isNaN(d.getTime())) return String(dateInput);
+    
+    let hours = d.getHours();
+    let minutes = d.getMinutes();
+    
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    minutes = minutes < 10 ? '0' + minutes : minutes;
+    
+    return `${hours}:${minutes} ${ampm}`;
+};
+
 window.isUserTypingGlobal = false;
 let activeInputElement = null;
 document.addEventListener('focusin', (e) => {
@@ -43,7 +85,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v75";
+const APP_VERSION = "v77"; // 🔥 BUMPED VERSION: Forces devices to refresh and get the new time format
 function checkAppUpdate() {
     const storedVersion = localStorage.getItem("app_version");
     if (!storedVersion) {
@@ -547,7 +589,7 @@ function updateNotificationUI() {
         if (notifications.length === 0) {
             panel.innerHTML = `<div class="p-5 text-center text-sm text-slate-500 font-medium w-72 sm:w-80">No new notifications</div>`;
         } else {
-            panel.innerHTML = `<div class="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50 sticky top-0 z-10 w-72 sm:w-80"> <span class="font-extrabold text-sm text-slate-800">Notifications</span> <button type="button" onclick="clearAllNotifications()" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-100 px-2 py-1 rounded-md">Clear All</button> </div> <div class="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto w-72 sm:w-80"> ${notifications.map(n => `<div onclick="openFromNotification('${n.caseId}', '${n.id}')" class="p-3 sm:p-4 hover:bg-slate-50 cursor-pointer transition-colors relative ${n.type === 'Ask' ? 'bg-red-50/50 hover:bg-red-50' : ''}"> <div class="flex justify-between items-start mb-1"> <span class="font-bold text-xs text-slate-900">${escapeHTML(window.getUserNameByEmail(n.sender))}</span> <span class="text-[10px] text-slate-500 font-medium">${new Date(n.time).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit', hour12: true})}</span> </div> <div class="text-xs text-slate-600 line-clamp-2 leading-relaxed break-words">${escapeHTML(n.text)}</div> <div class="mt-2 flex items-center justify-between"> <span class="text-[9px] font-extrabold text-indigo-500 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded shadow-sm border border-indigo-100">Case #${n.caseId}</span> ${n.type === 'Ask' ? '<span class="text-[9px] font-extrabold text-white uppercase tracking-widest bg-red-500 px-2 py-0.5 rounded shadow-sm">Action Req</span>' : ''} </div> </div>`).join('')} </div>`;
+            panel.innerHTML = `<div class="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50 sticky top-0 z-10 w-72 sm:w-80"> <span class="font-extrabold text-sm text-slate-800">Notifications</span> <button type="button" onclick="clearAllNotifications()" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-100 px-2 py-1 rounded-md">Clear All</button> </div> <div class="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto w-72 sm:w-80"> ${notifications.map(n => `<div onclick="openFromNotification('${n.caseId}', '${n.id}')" class="p-3 sm:p-4 hover:bg-slate-50 cursor-pointer transition-colors relative ${n.type === 'Ask' ? 'bg-red-50/50 hover:bg-red-50' : ''}"> <div class="flex justify-between items-start mb-1"> <span class="font-bold text-xs text-slate-900">${escapeHTML(window.getUserNameByEmail(n.sender))}</span> <span class="text-[10px] text-slate-500 font-medium">${window.formatTimeTo12Hour(n.time)}</span> </div> <div class="text-xs text-slate-600 line-clamp-2 leading-relaxed break-words">${escapeHTML(n.text)}</div> <div class="mt-2 flex items-center justify-between"> <span class="text-[9px] font-extrabold text-indigo-500 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded shadow-sm border border-indigo-100">Case #${n.caseId}</span> ${n.type === 'Ask' ? '<span class="text-[9px] font-extrabold text-white uppercase tracking-widest bg-red-500 px-2 py-0.5 rounded shadow-sm">Action Req</span>' : ''} </div> </div>`).join('')} </div>`;
         }
     }
 }
@@ -2186,7 +2228,7 @@ function renderThreadHTML(list, level = 0) {
         
         let processedText = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(cleanMsg) : cleanMsg;
         
-        const formattedTime = new Date(c.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+        const formattedTime = window.formatDateTo12Hour(c.timestamp);
 
         return `
         <div class="mb-3 group" style="${indentStyle}" data-id="reply-container">
@@ -2943,7 +2985,7 @@ async function loadConversations() {
                 badgeClasses = ['bg-blue-100', 'text-blue-800', 'border', 'border-blue-300'];
                 isSnoozed = false;
             } else if (originalSnoozeMs > Date.now()) {
-                const snoozeDateStr = new Date(originalSnoozeMs).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+                const snoozeDateStr = window.formatDateTo12Hour(originalSnoozeMs);
                 badgeText = `SNOOZED TILL ${snoozeDateStr.toUpperCase()}`;
                 badgeClasses = ['bg-orange-100', 'text-orange-700'];
                 isSnoozed = true;
@@ -2984,7 +3026,7 @@ async function loadConversations() {
             cardDiv.querySelector('[data-id="details"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.details) : conv.details;
             cardDiv.querySelector('[data-id="message"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.message) : conv.message;
             cardDiv.querySelector('[data-id="author"]').textContent = creatorName;
-            cardDiv.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+            cardDiv.querySelector('[data-id="timestamp"]').textContent = window.formatDateTo12Hour(conv.timestamp);
             cardDiv.querySelector('[data-id="display-case-id"]').textContent = conv.id;
             
             const avatarEl = cardDiv.querySelector('[data-id="avatar-letter"]');
