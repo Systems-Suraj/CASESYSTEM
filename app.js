@@ -8,27 +8,22 @@ window.normalizeCaseId = function(id) {
         .toUpperCase();       
 };
 
-// 🛠️ SIMPLE AM/PM MATH FORMATTER (No Timezone Shifting)
+// 🛠️ SIMPLE AM/PM FORMATTER (Bina kisi TimeZone conversion ke)
 window.formatDateTo12Hour = function(dateInput) {
     if (!dateInput) return '';
-    let d;
-    // Safely convert to Date object whether it's a number (timestamp) or string
-    if (!isNaN(dateInput) && dateInput !== null && dateInput !== '') {
-        d = new Date(Number(dateInput));
-    } else {
-        d = new Date(dateInput);
+    let d = new Date(dateInput);
+    if (isNaN(d.getTime()) && typeof dateInput === 'string') {
+        d = new Date(dateInput.replace(/-/g, '/'));
     }
-    
-    if (isNaN(d.getTime())) return String(dateInput); // Fallback string if invalid
+    if (isNaN(d.getTime())) return String(dateInput); 
     
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     let hours = d.getHours();
     let minutes = d.getMinutes();
     
-    // Core math: 18 -> 6 PM, 7 -> 7 AM
     const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12;
-    hours = hours ? hours : 12; // the hour '0' should be '12'
+    hours = hours ? hours : 12; 
     minutes = minutes < 10 ? '0' + minutes : minutes;
     
     return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}, ${hours}:${minutes} ${ampm}`;
@@ -36,13 +31,10 @@ window.formatDateTo12Hour = function(dateInput) {
 
 window.formatTimeTo12Hour = function(dateInput) {
     if (!dateInput) return '';
-    let d;
-    if (!isNaN(dateInput) && dateInput !== null && dateInput !== '') {
-        d = new Date(Number(dateInput));
-    } else {
-        d = new Date(dateInput);
+    let d = new Date(dateInput);
+    if (isNaN(d.getTime()) && typeof dateInput === 'string') {
+        d = new Date(dateInput.replace(/-/g, '/'));
     }
-    
     if (isNaN(d.getTime())) return String(dateInput);
     
     let hours = d.getHours();
@@ -50,7 +42,7 @@ window.formatTimeTo12Hour = function(dateInput) {
     
     const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12;
-    hours = hours ? hours : 12;
+    hours = hours ? hours : 12; 
     minutes = minutes < 10 ? '0' + minutes : minutes;
     
     return `${hours}:${minutes} ${ampm}`;
@@ -92,19 +84,19 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v82"; // 🔥 BUMPED VERSION: Hard clears old cache to fix login & time issue
+const APP_VERSION = "v80"; // 🔥 BUMPED VERSION: Hard clears old cache to fix login & time issue
 function checkAppUpdate() {
     const storedVersion = localStorage.getItem("app_version");
-    if (!storedVersion) {
-        localStorage.setItem("app_version", APP_VERSION);
-        return;
-    }
     if (storedVersion !== APP_VERSION) {
         console.log("🔄 New version detected");
         localStorage.setItem("app_version", APP_VERSION);
         setTimeout(() => {
             if (!window.isUserTypingGlobal) {
-                window.location.reload(true);
+                caches.keys().then(keys => {
+                    keys.forEach(k => caches.delete(k));
+                }).then(() => {
+                    window.location.reload(true);
+                });
             } else {
                 console.log("⛔ App update delayed (user typing)");
             }
