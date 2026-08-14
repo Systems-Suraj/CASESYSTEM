@@ -68,7 +68,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v86"; // Bumped for Cache Invalidation
+const APP_VERSION = "v85"; // Bumped for Cache Invalidation
 function checkAppUpdate() {
     const storedVersion = localStorage.getItem("app_version");
     if (!storedVersion) {
