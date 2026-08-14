@@ -8,15 +8,19 @@ window.normalizeCaseId = function(id) {
         .toUpperCase();       
 };
 
-// 🛠️ CUSTOM 12-HOUR FORMATTER (Bypasses OS Locale overrides)
+// 🛠️ SIMPLE AM/PM FORMATTER (Zero Timezone Conversion)
 window.formatDateTo12Hour = function(dateInput) {
     if (!dateInput) return '';
-    if (!isNaN(dateInput) && String(dateInput).trim() !== '') dateInput = parseInt(dateInput, 10);
-    let d = new Date(dateInput);
     
-    if (isNaN(d.getTime()) && typeof dateInput === 'string') {
-        d = new Date(dateInput.replace(/-/g, '/'));
+    // If it's a numeric string timestamp, parse to Integer
+    if (typeof dateInput === 'string' && !isNaN(dateInput) && dateInput.trim() !== '') {
+        dateInput = parseInt(dateInput, 10);
+    } else if (typeof dateInput === 'string') {
+        // STOP TIMEZONE CONVERSION: Remove "Z" or GMT info so JS treats it as exact local time
+        dateInput = dateInput.replace(/(Z|[+-]\d{2}:\d{2})$/, '').trim();
     }
+    
+    let d = new Date(dateInput);
     if (isNaN(d.getTime())) return String(dateInput); 
     
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -33,9 +37,14 @@ window.formatDateTo12Hour = function(dateInput) {
 
 window.formatTimeTo12Hour = function(dateInput) {
     if (!dateInput) return '';
-    if (!isNaN(dateInput) && String(dateInput).trim() !== '') dateInput = parseInt(dateInput, 10);
+    
+    if (typeof dateInput === 'string' && !isNaN(dateInput) && dateInput.trim() !== '') {
+        dateInput = parseInt(dateInput, 10);
+    } else if (typeof dateInput === 'string') {
+        dateInput = dateInput.replace(/(Z|[+-]\d{2}:\d{2})$/, '').trim();
+    }
+    
     let d = new Date(dateInput);
-    if (isNaN(d.getTime()) && typeof dateInput === 'string') d = new Date(dateInput.replace(/-/g, '/'));
     if (isNaN(d.getTime())) return String(dateInput);
     
     let hours = d.getHours();
@@ -85,7 +94,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v79"; // 🔥 BUMPED VERSION: Forces devices to refresh and get the new time format
+const APP_VERSION = "v80"; // 🔥 BUMPED VERSION
 function checkAppUpdate() {
     const storedVersion = localStorage.getItem("app_version");
     if (!storedVersion) {
