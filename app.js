@@ -7,47 +7,6 @@ window.normalizeCaseId = function(id) {
         .replace(/\s+/g, '') 
         .toUpperCase();       
 };
-
-// 🛠️ SIMPLE AM/PM FORMATTER (Bina kisi TimeZone conversion ke)
-window.formatDateTo12Hour = function(dateInput) {
-    if (!dateInput) return '';
-    let d = new Date(dateInput);
-    if (isNaN(d.getTime()) && typeof dateInput === 'string') {
-        d = new Date(dateInput.replace(/-/g, '/'));
-    }
-    if (isNaN(d.getTime())) return String(dateInput); 
-    
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    let hours = d.getHours();
-    let minutes = d.getMinutes();
-    
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12; 
-    minutes = minutes < 10 ? '0' + minutes : minutes;
-    
-    return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}, ${hours}:${minutes} ${ampm}`;
-};
-
-window.formatTimeTo12Hour = function(dateInput) {
-    if (!dateInput) return '';
-    let d = new Date(dateInput);
-    if (isNaN(d.getTime()) && typeof dateInput === 'string') {
-        d = new Date(dateInput.replace(/-/g, '/'));
-    }
-    if (isNaN(d.getTime())) return String(dateInput);
-    
-    let hours = d.getHours();
-    let minutes = d.getMinutes();
-    
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12; 
-    minutes = minutes < 10 ? '0' + minutes : minutes;
-    
-    return `${hours}:${minutes} ${ampm}`;
-};
-
 window.isUserTypingGlobal = false;
 let activeInputElement = null;
 document.addEventListener('focusin', (e) => {
@@ -84,19 +43,19 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v83"; // 🔥 BUMPED VERSION: Hard clears old cache to fix login & time issue
+const APP_VERSION = "v75";
 function checkAppUpdate() {
     const storedVersion = localStorage.getItem("app_version");
+    if (!storedVersion) {
+        localStorage.setItem("app_version", APP_VERSION);
+        return;
+    }
     if (storedVersion !== APP_VERSION) {
         console.log("🔄 New version detected");
         localStorage.setItem("app_version", APP_VERSION);
         setTimeout(() => {
             if (!window.isUserTypingGlobal) {
-                caches.keys().then(keys => {
-                    keys.forEach(k => caches.delete(k));
-                }).then(() => {
-                    window.location.reload(true);
-                });
+                window.location.reload(true);
             } else {
                 console.log("⛔ App update delayed (user typing)");
             }
@@ -211,7 +170,7 @@ async function deleteOfflineRequest(id) {
 }
 
 // ==========================================
-// 🔥 API COMMUNICATION (WITH RETRY + OFFLINE)
+// 🔥 API COMMUNICATION (WITH RETRY, TIMEOUT + OFFLINE)
 // ==========================================
 async function apiCall(action, params = {}, retries = 2) {
     if (currentUser && currentUser.email) {
@@ -226,25 +185,46 @@ async function apiCall(action, params = {}, retries = 2) {
             throw new Error("You are offline. This action requires internet.");
         }
     }
+
+    // 10 Seconds Timeout limit per Prompt requirements. 
+    // Except uploads and URLs fetch, which can take larger payloads bandwidth.
+    let timeoutMs = 10000; 
+    if (action.includes('upload') || action === 'getResumableUploadUrl') {
+        timeoutMs = 60000; // Allow 60s for files
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: action, params: params }),
-            credentials: 'omit'
+            credentials: 'omit',
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
+        
         const text = await response.text();
         const result = JSON.parse(text);
         if (!result.success) throw new Error(result.error || result.message);
         return result.data !== undefined ? result.data : result;
     } catch (err) {
-        if (retries > 0 && navigator.onLine) {
-            console.log(`🔁 Retrying [${action}]...`, retries);
+        clearTimeout(timeoutId);
+        let errorMsg = err.message || "Unknown error";
+        if (err.name === 'AbortError') {
+            errorMsg = "Timeout: Server ne 10 seconds mein response nahi diya. Please try again.";
+        }
+        
+        // IMPORTANT FIX: createCase is NOT safe to retry safely automatically
+        if (action !== 'createCase' && retries > 0 && navigator.onLine) {
+            console.log(`🔁 Retrying [${action}] due to Error/Timeout...`, retries);
             await new Promise(r => setTimeout(r, 1000));
             return apiCall(action, params, retries - 1);
         }
         console.error(`API Error [${action}]:`, err);
-        throw err;
+        throw new Error(errorMsg);
     }
 }
 
@@ -329,6 +309,7 @@ window.createBeautifulFileCard = function(file, index, removeFnName) {
     } else {
         previewHTML = `<i class="fas fa-file-alt text-indigo-400 text-sm"></i>`;
     }
+    // Reduced padding (p-1.5), width (w-48), and icon sizes
     return `<div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1.5 pr-6 relative shadow-sm w-48 max-w-full hover:border-indigo-300 transition-colors group">
         <div class="w-8 h-8 rounded-md bg-slate-50 shrink-0 flex items-center justify-center overflow-hidden border border-slate-100">
             ${previewHTML}
@@ -588,7 +569,7 @@ function updateNotificationUI() {
         if (notifications.length === 0) {
             panel.innerHTML = `<div class="p-5 text-center text-sm text-slate-500 font-medium w-72 sm:w-80">No new notifications</div>`;
         } else {
-            panel.innerHTML = `<div class="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50 sticky top-0 z-10 w-72 sm:w-80"> <span class="font-extrabold text-sm text-slate-800">Notifications</span> <button type="button" onclick="clearAllNotifications()" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-100 px-2 py-1 rounded-md">Clear All</button> </div> <div class="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto w-72 sm:w-80"> ${notifications.map(n => `<div onclick="openFromNotification('${n.caseId}', '${n.id}')" class="p-3 sm:p-4 hover:bg-slate-50 cursor-pointer transition-colors relative ${n.type === 'Ask' ? 'bg-red-50/50 hover:bg-red-50' : ''}"> <div class="flex justify-between items-start mb-1"> <span class="font-bold text-xs text-slate-900">${escapeHTML(window.getUserNameByEmail(n.sender))}</span> <span class="text-[10px] text-slate-500 font-medium">${window.formatTimeTo12Hour(n.time)}</span> </div> <div class="text-xs text-slate-600 line-clamp-2 leading-relaxed break-words">${escapeHTML(n.text)}</div> <div class="mt-2 flex items-center justify-between"> <span class="text-[9px] font-extrabold text-indigo-500 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded shadow-sm border border-indigo-100">Case #${n.caseId}</span> ${n.type === 'Ask' ? '<span class="text-[9px] font-extrabold text-white uppercase tracking-widest bg-red-500 px-2 py-0.5 rounded shadow-sm">Action Req</span>' : ''} </div> </div>`).join('')} </div>`;
+            panel.innerHTML = `<div class="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50 sticky top-0 z-10 w-72 sm:w-80"> <span class="font-extrabold text-sm text-slate-800">Notifications</span> <button type="button" onclick="clearAllNotifications()" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-100 px-2 py-1 rounded-md">Clear All</button> </div> <div class="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto w-72 sm:w-80"> ${notifications.map(n => `<div onclick="openFromNotification('${n.caseId}', '${n.id}')" class="p-3 sm:p-4 hover:bg-slate-50 cursor-pointer transition-colors relative ${n.type === 'Ask' ? 'bg-red-50/50 hover:bg-red-50' : ''}"> <div class="flex justify-between items-start mb-1"> <span class="font-bold text-xs text-slate-900">${escapeHTML(window.getUserNameByEmail(n.sender))}</span> <span class="text-[10px] text-slate-500 font-medium">${new Date(n.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span> </div> <div class="text-xs text-slate-600 line-clamp-2 leading-relaxed break-words">${escapeHTML(n.text)}</div> <div class="mt-2 flex items-center justify-between"> <span class="text-[9px] font-extrabold text-indigo-500 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded shadow-sm border border-indigo-100">Case #${n.caseId}</span> ${n.type === 'Ask' ? '<span class="text-[9px] font-extrabold text-white uppercase tracking-widest bg-red-500 px-2 py-0.5 rounded shadow-sm">Action Req</span>' : ''} </div> </div>`).join('')} </div>`;
         }
     }
 }
@@ -637,8 +618,36 @@ function debounce(func, wait) {
 }
 
 // ==========================================
-// 🔒 STRICT MENTION RESTRICTION LOGIC
+// 🔒 LIMIT DETAILS TYPING & STRICT MENTION
 // ==========================================
+const MAX_DETAILS_LENGTH = 5000;
+function enforceCharLimit(e) {
+    const target = e.target;
+    // Apply restriction only to details and message fields
+    if (target && (target.id === 'f_details_rich' || target.id === 'edit_details_rich' || target.id === 'f_message_rich')) {
+        const textContent = target.innerText || "";
+        const isControlKey = e.key && (e.key.length > 1 || e.ctrlKey || e.metaKey || e.altKey);
+        
+        if (e.type === 'keydown' && !isControlKey && textContent.length >= MAX_DETAILS_LENGTH) {
+            e.preventDefault();
+            showCustomDialog("Limit Reached ⚠️", `Aap 5000 characters se zyada nahi likh sakte.`, false);
+        }
+        
+        if (e.type === 'paste') {
+            e.preventDefault();
+            const pasteText = (e.clipboardData || window.clipboardData).getData('text/plain');
+            const allowedSpace = MAX_DETAILS_LENGTH - textContent.length;
+            if (allowedSpace > 0) {
+                document.execCommand('insertText', false, pasteText.substring(0, allowedSpace));
+            } else {
+                showCustomDialog("Limit Reached ⚠️", `Max 5000 characters ki limit poori ho gayi hai.`, false);
+            }
+        }
+    }
+}
+document.addEventListener('keydown', enforceCharLimit);
+document.addEventListener('paste', enforceCharLimit);
+
 function checkComposerRestrictions(editor, type = 'main') {
     if (!editor) return;
     const hasMention = !!editor.querySelector('.mention-badge');
@@ -756,53 +765,6 @@ document.addEventListener('paste', function(e) {
         e.preventDefault();
         const text = (e.clipboardData || window.clipboardData).getData('text/plain');
         document.execCommand('insertText', false, text);
-    }
-});
-
-// ==========================================
-// VALIDATION LOGIC FOR NEW CASE CREATION
-// ==========================================
-function getWordCount(htmlString) {
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = htmlString || '';
-    const text = tempDiv.textContent || tempDiv.innerText || '';
-    return text.trim().split(/\s+/).filter(word => word.length > 0).length;
-}
-
-window.validateNewCaseForm = function() {
-    const subjectEl = document.getElementById('f_subject');
-    const subject = subjectEl ? subjectEl.value.trim() : '';
-    
-    const detailsHtml = document.getElementById('f_details_rich') ? document.getElementById('f_details_rich').innerHTML : '';
-    const messageHtml = document.getElementById('f_message_rich') ? document.getElementById('f_message_rich').innerHTML : '';
-    
-    const hasLabels = selectedLabels && selectedLabels.size > 0;
-    const hasMembers = composerRecipients && composerRecipients.length > 0;
-
-    const submitBtn = document.getElementById('submitBtn');
-    if (!submitBtn) return;
-
-    const dCount = getWordCount(detailsHtml);
-    const mCount = getWordCount(messageHtml);
-    
-    if (dCount > 3000 || mCount > 3000) {
-        submitBtn.disabled = true;
-        submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-        return;
-    }
-
-    if (subject !== '' && dCount > 0 && hasLabels && hasMembers) {
-        submitBtn.disabled = false;
-        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-    } else {
-        submitBtn.disabled = true;
-        submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-    }
-};
-
-document.addEventListener('input', (e) => {
-    if (e.target && (e.target.id === 'f_subject' || e.target.id === 'f_details_rich' || e.target.id === 'f_message_rich')) {
-        window.validateNewCaseForm();
     }
 });
 
@@ -1120,16 +1082,8 @@ window.getMemberBadgeHTML = function(email, role, archivedByStr, snoozeTimeStr) 
 };
 
 // ==========================================
-// FILTERS & DROPDOWNS & GLOBAL PAGINATION STATE
+// FILTERS & DROPDOWNS
 // ==========================================
-let dashboardCurrentPage = 1;
-const dashboardItemsPerPage = 20;
-
-window.goToDashboardPage = function(page) {
-    dashboardCurrentPage = page;
-    window.applyFilters(false);
-};
-
 window.switchTab = function(tab) {
     currentTab = tab;
     ['Live', 'Snooze', 'Archive'].forEach(t => {
@@ -1147,8 +1101,7 @@ window.switchTab = function(tab) {
     });
     if(document.getElementById('reply_mention_dropdown')) document.getElementById('reply_mention_dropdown').classList.add('hidden');
     document.querySelectorAll('.inline-mention-dropdown').forEach(d => d.classList.add('hidden'));
-    
-    applyFilters(true);
+    applyFilters();
 };
 
 function populateFilterDropdowns() {
@@ -1216,7 +1169,7 @@ window.applyLookerFilters = function(containerId, type) {
         else if (appliedBoxes.length === 1) { btnText.innerText = appliedBoxes[0].value; btnText.classList.add('text-indigo-700', 'font-extrabold'); }
         else { btnText.innerText = `${appliedBoxes.length} Selected`; btnText.classList.add('text-indigo-700', 'font-extrabold'); }
     }
-    toggleDropdown(containerId, true); applyFilters(true);
+    toggleDropdown(containerId, true); applyFilters();
 };
 
 window.resetAllFilters = function() {
@@ -1230,7 +1183,7 @@ window.resetAllFilters = function() {
     if (membersBtnText) { membersBtnText.innerText = 'Filter Members'; membersBtnText.classList.remove('text-indigo-700', 'font-extrabold'); }
     document.querySelectorAll('.dropdown-item').forEach(item => item.style.display = 'flex');
     document.querySelectorAll('[id$="Dropdown"] input[type="text"]').forEach(inp => inp.value = '');
-    applyFilters(true);
+    applyFilters();
 };
 
 // ==========================================
@@ -1784,10 +1737,17 @@ window.saveCaseEdits = async function() {
             finalUrls = finalUrls.concat(newlyUploadedUrls);
             hideUploadOverlay();
         }
+
+        // Limit the edit details submission string as well
+        let eDetailsHtml = document.getElementById('edit_details_rich').innerHTML.trim();
+        if(document.getElementById('edit_details_rich').innerText.length > 5000) {
+            eDetailsHtml = eDetailsHtml.substring(0, 6000); // give slight margin for html tags
+        }
+
         await apiCall('updateCaseDetails', { 
             id: document.getElementById('detail-conv-id').value, 
             subject: document.getElementById('edit_subject').value.trim(), 
-            details: document.getElementById('edit_details_rich').innerHTML.trim(), 
+            details: eDetailsHtml, 
             labels: Array.from(currentEditLabels), 
             attachments: finalUrls, 
             userEmail: currentUser.email 
@@ -1846,7 +1806,7 @@ window.openCaseDetail = async function(cardEl) {
     if(document.getElementById('detail-admins')) document.getElementById('detail-admins').innerHTML = '';
     if(document.getElementById('detail-users')) document.getElementById('detail-users').innerHTML = '';
     if(document.getElementById('detail-attachments')) document.getElementById('detail-attachments').innerHTML = '';
-    if(document.getElementById('detail-thread-container')) document.getElementById('detail-thread-container').innerHTML = `<div class="flex justify-center py-10"><div class="loader"></div></div>`;
+    if(document.getElementById('detail-thread-container')) document.getElementById('detail-thread-container').innerHTML = `<div class="flex flex-col items-center justify-center py-10"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>`;
     
     try {
         let card = cardEl.classList && cardEl.classList.contains('card-main') ? cardEl : null;
@@ -2230,13 +2190,12 @@ function renderThreadHTML(list, level = 0) {
         const parentAskIdForBackend = (c.type === 'Ask') ? c.askId : (c.parentAskId || '');
         const senderName = window.getUserNameByEmail(c.sender || 'Unknown');
 
+        // Removes invisible HTML tags (<br>, empty <div>) that create huge gaps above/below text
         let cleanMsg = c.text || '';
         cleanMsg = cleanMsg.replace(/^(<br\s*\/?>|\s|&nbsp;|<div>(\s|<br\s*\/?>|&nbsp;)*<\/div>|<p>(\s|<br\s*\/?>|&nbsp;)*<\/p>)+/gi, '');
         cleanMsg = cleanMsg.replace(/(<br\s*\/?>|\s|&nbsp;|<div>(\s|<br\s*\/?>|&nbsp;)*<\/div>|<p>(\s|<br\s*\/?>|&nbsp;)*<\/p>)+$/gi, '');
         
         let processedText = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(cleanMsg) : cleanMsg;
-        
-        const formattedTime = window.formatDateTo12Hour(c.timestamp);
 
         return `
         <div class="mb-3 group" style="${indentStyle}" data-id="reply-container">
@@ -2246,7 +2205,7 @@ function renderThreadHTML(list, level = 0) {
                     <div class="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold shadow-inner">${senderName.charAt(0).toUpperCase()}</div>
                     <span class="font-bold text-sm text-slate-900">${senderName}</span>
                     ${badge}
-                    <span class="text-[10px] text-slate-500 font-medium ml-auto">${formattedTime}</span>
+                    <span class="text-[10px] text-slate-500 font-medium ml-auto">${new Date(c.timestamp).toLocaleString()}</span>
                 </div>
                 
                 <div class="rich-text text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">${processedText}</div>
@@ -2549,6 +2508,7 @@ window.finalizeInlineMention = function(name, email, role) {
 
         const detAdm = document.getElementById('detail-admins');
         const detUsr = document.getElementById('detail-users');
+        const shortName = window.getUserNameByEmail(email);
 
         const convId = document.getElementById('detail-conv-id').value;
         const cardEl = document.querySelector(`[data-conv-id="${window.normalizeCaseId(convId)}"]`);
@@ -2578,6 +2538,7 @@ window.finalizeInlineMention = function(name, email, role) {
 };
 
 window.submitInlineReply = async function(btn) {
+
     const container = btn.closest('[data-id="reply-container"]');
     const replyBox = container.querySelector('[data-id="inline-reply-box"]');
     const toggleBtn = container.querySelector('.inline-reply-toggle-btn');
@@ -2611,6 +2572,7 @@ window.submitInlineReply = async function(btn) {
         .join(',');
 
     const typeVal = replyBox.querySelector('.inline-type-val').value;
+
     const askId = toggleBtn?.dataset.askid || "";
     const threadId = toggleBtn?.dataset.threadid || "";
     const threadColor = toggleBtn?.dataset.threadcolor || "";
@@ -2620,10 +2582,12 @@ window.submitInlineReply = async function(btn) {
     btn.innerText = "...";
 
     try {
+
         let fileUrl = "";
         let fileName = "";
 
         if (inlinePendingFiles.length > 0) {
+
             showUploadOverlay(
                 "Uploading Attachments",
                 inlinePendingFiles
@@ -2647,49 +2611,92 @@ window.submitInlineReply = async function(btn) {
             Math.floor(Math.random() * 100000);
 
         const payload = {
+
             caseId,
+
             text: msgHTML,
+
             mentionType: typeVal,
+
             sender: currentUser.email,
+
             receiver: mentionedEmails,
+
             parentAskId: askId,
+
             threadId,
+
             threadColor,
+
             attachmentUrl: fileUrl,
+
             attachmentFileName: fileName,
+
             uniqueId: tempId
+
         };
+
+        //------------------------------------------
+        // Local optimistic UI
+        //------------------------------------------
 
         seenMessages.add(tempId);
 
         allLoadedComments.push({
+
             caseId: String(caseId),
+
             timestamp: Date.now(),
+
             sender: currentUser.name || currentUser.email,
+
             receiver: mentionedEmails,
+
             text: msgHTML,
+
             attachmentUrl: fileUrl,
+
             attachmentFileName: fileName,
+
             type: typeVal,
+
             askId: "",
+
             parentAskId: askId,
+
             status: typeVal === "Ask" ? "Open" : "",
+
             uniqueId: tempId,
-            threadId: threadId || ("LOCAL-" + Math.random()),
-            threadColor: threadColor || "#f8fafc"
+
+            threadId:
+                threadId ||
+                ("LOCAL-" + Math.random()),
+
+            threadColor:
+                threadColor || "#f8fafc"
+
         });
 
+        //------------------------------------------
+        // Close notification if replying to Ask
+        //------------------------------------------
+
         if (askId) {
+
             notifications = notifications.filter(n =>
                 String(n.askId) !== String(askId) &&
                 String(n.id) !== String(askId)
             );
-            const parentAsk = allLoadedComments.find(c =>
+
+            const parentAsk =
+                allLoadedComments.find(c =>
                     String(c.askId) === String(askId)
                 );
+
             if (parentAsk) {
                 parentAsk.status = "Closed";
             }
+
         }
 
         notifications = notifications.filter(
@@ -2699,48 +2706,86 @@ window.submitInlineReply = async function(btn) {
         );
 
         unreadCount = notifications.length;
+
         updateNotificationUI();
 
+        //------------------------------------------
+        // Clear UI
+        //------------------------------------------
+
         inputDiv.innerHTML = "";
+
         inlinePendingFiles = [];
+
         replyBox.querySelector(".inline-file-list").innerHTML = "";
+
         replyBox.classList.add("hidden");
 
         renderAllCommentsLocally();
 
+        //------------------------------------------
+        // Save members
+        //------------------------------------------
+
         await apiCall("updateCaseMembers", {
+
             id: caseId,
+
             admins: [...new Set(currentCaseAdmins)],
+
             users: [...new Set(currentCaseUsers)],
+
             userEmail: currentUser.email
+
         });
 
-        const result = await apiCall("addNewComment", payload);
+        //------------------------------------------
+        // Save comment
+        //------------------------------------------
+
+        const result =
+            await apiCall("addNewComment", payload);
 
         if (!result.success) {
             throw new Error(result.error || "Failed to save");
         }
 
+        //------------------------------------------
+        // Refresh
+        //------------------------------------------
+
         if (typeof window.openCaseModal === "function") {
+
             await window.openCaseModal(caseId);
-        } else if (typeof window.openCaseDetails === "function") {
+
+        } else if (
+            typeof window.openCaseDetails === "function"
+        ) {
+
             await window.openCaseDetails(caseId);
+
         }
 
     } catch (e) {
+
         hideUploadOverlay();
+
         showCustomDialog(
             "Error",
             "Failed to post inline reply.\n" +
                 (e.message || e),
             false
         );
-    } finally {
-        btn.disabled = false;
-        btn.innerText = originalText;
-    }
-};
 
+    } finally {
+
+        btn.disabled = false;
+
+        btn.innerText = originalText;
+
+    }
+
+};
 // ==========================================
 // CREATE NEW CASE MODAL & UPLOADS
 // ==========================================
@@ -2760,7 +2805,7 @@ window.removePendingFile = function(index) { pendingFiles.splice(index, 1); rend
 window.renderNewCaseMembers = function() {
     const listContainer = document.getElementById('new_case_members_list');
     if (!listContainer) return;
-    listContainer.innerHTML = composerRecipients.map((m, i) =>     `<span class="px-2 py-1 ${m.role === 'Admin' ? 'bg-blue-100 text-blue-800 border-blue-200' : 'bg-slate-100 text-slate-800 border-slate-200'} border text-xs rounded-lg font-bold shadow-sm flex items-center gap-1">
+    listContainer.innerHTML = composerRecipients.map((m, i) =>      `<span class="px-2 py-1 ${m.role === 'Admin' ? 'bg-blue-100 text-blue-800 border-blue-200' : 'bg-slate-100 text-slate-800 border-slate-200'} border text-xs rounded-lg font-bold shadow-sm flex items-center gap-1">
         ${m.role === 'Admin' ? '👑' : '👤'} ${escapeHTML(m.name)}
         ${(m.email !== currentUser.email) ? `<button type="button" onclick="removeNewCaseMember(${i})" class="ml-1 text-slate-400 hover:text-red-500 font-bold">&times;</button>` : ''}
     </span>`).join('');
@@ -2768,7 +2813,6 @@ window.renderNewCaseMembers = function() {
 window.removeNewCaseMember = function(index) {
     composerRecipients.splice(index, 1);
     window.renderNewCaseMembers();
-    window.validateNewCaseForm();
 };
 window.searchNewCaseMember = debounce(function(q) {
     const dropdown = document.getElementById('new_case_member_dropdown');
@@ -2807,38 +2851,26 @@ window.addNewCaseMember = function(name, email, role) {
     document.getElementById('new_case_member_search').value = '';
     document.getElementById('new_case_member_dropdown').classList.add('hidden');
     window.renderNewCaseMembers();
-    window.validateNewCaseForm();
 };
 
 async function loadLabelsForForm() { availableLabels = await apiCall('getLabels'); renderLabels(); populateFilterDropdowns(); }
 function renderLabels() { document.getElementById('labels_container').innerHTML = availableLabels.map(label => `<span onclick="toggleLabel('${label}')" class="cursor-pointer px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm border ${selectedLabels.has(label) ? 'bg-green-800 text-white border-green-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">${label}</span>`).join(''); }
-window.toggleLabel = function(label) { selectedLabels.has(label) ? selectedLabels.delete(label) : selectedLabels.add(label); renderLabels(); window.validateNewCaseForm(); };
-window.createNewLabel = async function() { const val = document.getElementById('new_label_input').value.trim(); if(!val) return; await apiCall('addLabel', {label: val}); availableLabels.push(val); selectedLabels.add(val); document.getElementById('new_label_input').value = ''; renderLabels(); populateFilterDropdowns(); window.validateNewCaseForm(); };
+window.toggleLabel = function(label) { selectedLabels.has(label) ? selectedLabels.delete(label) : selectedLabels.add(label); renderLabels(); };
+window.createNewLabel = async function() { const val = document.getElementById('new_label_input').value.trim(); if(!val) return; await apiCall('addLabel', {label: val}); availableLabels.push(val); selectedLabels.add(val); document.getElementById('new_label_input').value = ''; renderLabels(); populateFilterDropdowns(); };
 
 window.openModal = function() {
     document.getElementById('appModal').classList.remove('hidden');
     pendingFiles = []; renderFileList();
-    if(document.getElementById('f_subject')) document.getElementById('f_subject').value = '';
     if(document.getElementById('f_message_rich')) document.getElementById('f_message_rich').innerHTML = '';
     if(document.getElementById('f_details_rich')) document.getElementById('f_details_rich').innerHTML = '';
     document.getElementById('new_case_member_search').value = '';
     composerRecipients = []; composerRecipients.push({ name: currentUser.name || currentUser.email, email: currentUser.email, role: 'Admin' });
     window.renderNewCaseMembers();
-    window.validateNewCaseForm();
 };
 window.closeModal = function() { document.getElementById('appModal').classList.add('hidden'); document.getElementById('convForm').reset(); };
 
 window.handleFormSubmit = async function(e) {
     e.preventDefault();
-    
-    const detailsWordCount = getWordCount('f_details_rich');
-    const messageWordCount = getWordCount('f_message_rich');
-
-    if (detailsWordCount > 3000 || messageWordCount > 3000) {
-        showCustomDialog("Word Limit Exceeds ⚠️", "Details and Initial Note cannot have more than 3000 words.", false);
-        return;
-    }
-
     const btn = document.getElementById('submitBtn');
     btn.disabled = true;
     btn.innerText = 'Uploading...';
@@ -2850,19 +2882,33 @@ window.handleFormSubmit = async function(e) {
             fileUrls = uploadedData.map(d => d.url);
             hideUploadOverlay();
         } 
+        
+        let fDetailsHtml = document.getElementById('f_details_rich') ? document.getElementById('f_details_rich').innerHTML.trim() : '';
+        // Final safety net truncation to exactly limit server payload size.
+        if (document.getElementById('f_details_rich') && document.getElementById('f_details_rich').innerText.length > 5000) {
+            fDetailsHtml = fDetailsHtml.substring(0, 6000); // 6k allows buffer for HTML tags but limits text footprint.
+        }
+
+        // Generate a unique Request ID for idempotency to prevent duplicate cases
+        const clientRequestId = 'CASE-' + Date.now() + '-' + crypto.randomUUID();
 
         const payload = { 
             createdBy: currentUser.email || currentUser.name, 
             subject: document.getElementById('f_subject').value, 
-            details: document.getElementById('f_details_rich') ? document.getElementById('f_details_rich').innerHTML : '', 
+            details: fDetailsHtml, 
             message: document.getElementById('f_message_rich') ? document.getElementById('f_message_rich').innerHTML : '', 
             labels: Array.from(selectedLabels), 
             adminEmails: composerRecipients.filter(r => r.role === 'Admin').map(r => r.email), 
             userEmails: composerRecipients.filter(r => r.role === 'User').map(r => r.email), 
-            attachments: fileUrls 
+            attachments: fileUrls,
+            clientRequestId: clientRequestId 
         };
 
-        await apiCall('createCase', payload); 
+        const response = await apiCall('createCase', payload); 
+        
+        if (response && response.duplicate) {
+             console.warn("Duplicate submission intercepted by server. Existing Case ID returned.");
+        }
 
         if(window.isMobileClient && window.isMobileClient()) {
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'VIBRATE' }));
@@ -2872,32 +2918,39 @@ window.handleFormSubmit = async function(e) {
     } catch(err) {
         hideUploadOverlay();
         showCustomDialog("Error", "Failed to create case.\n" + err.toString(), false);
+    } finally {
         btn.disabled = false;
         btn.innerText = 'Post Case';
     }
 };
 
 // ==========================================
-// LOAD CONVERSATIONS & APPLY DASHBOARD FILTERS (PAGINATED)
+// LOAD CONVERSATIONS (DASHBOARD FEED)
 // ==========================================
 async function loadConversations() {
     if (window.isOpeningDetailView) return;
     const feed = document.getElementById('conversationFeed');
     if(!feed) return;
-    try {
-        allCasesData = await apiCall('getConversations', currentUser);
+    
+    // Show Small Loader to let user know it's working
+    feed.innerHTML = `
+        <div class="flex flex-col items-center justify-center py-10 mt-6 space-y-4">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <p class="text-xs text-slate-500 font-bold uppercase tracking-wider">Loading your cases...</p>
+        </div>`;
         
-        // ⚡ Limit to max 4000 rows fetched
-        if (allCasesData && allCasesData.length > 4000) {
-            allCasesData = allCasesData.slice(0, 4000);
-        }
-
-        feed.innerHTML = '';
+    try {
+        allCasesData = await apiCall('getConversations', currentUser); feed.innerHTML = '';
         let counts = { Live: 0, Snooze: 0, Archive: 0 };
         const uEmail = (currentUser.email || '').toLowerCase();
         const uName = (currentUser.name || '').toLowerCase();
         
         allCasesData.forEach(c => {
+            // Safety Truncation on initial Fetch: Ensure large details do not bloat DOM memory.
+            if (c.details && c.details.length > 5000) {
+                c.details = c.details.substring(0, 5000) + '... (truncated as limit reached)';
+            }
+            
             let originalSnoozeMs = parseInt(c.snoozeTime || "0", 10);
             if (String(c.snoozeTime).startsWith('{')) {
                 try { originalSnoozeMs = parseInt(JSON.parse(c.snoozeTime)[uEmail], 10) || 0; } catch(e){}
@@ -2957,6 +3010,7 @@ async function loadConversations() {
             const wrapperDiv = cardFragment.firstElementChild;
             const cardDiv = wrapperDiv.classList.contains('card-main') ? wrapperDiv : wrapperDiv.querySelector('.card-main');
             
+            // FIX: added fallback || [] to avoid crashes if arrays are missing from DB
             const safeAdmins = conv.admins || [];
             const safeUsers = conv.users || [];
             const safeLabels = conv.labels || [];
@@ -2993,7 +3047,7 @@ async function loadConversations() {
                 badgeClasses = ['bg-blue-100', 'text-blue-800', 'border', 'border-blue-300'];
                 isSnoozed = false;
             } else if (originalSnoozeMs > Date.now()) {
-                const snoozeDateStr = window.formatDateTo12Hour(originalSnoozeMs);
+                const snoozeDateStr = new Date(originalSnoozeMs).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                 badgeText = `SNOOZED TILL ${snoozeDateStr.toUpperCase()}`;
                 badgeClasses = ['bg-orange-100', 'text-orange-700'];
                 isSnoozed = true;
@@ -3019,7 +3073,9 @@ async function loadConversations() {
             cardDiv.dataset.caseAdmins = JSON.stringify(safeAdmins);
             cardDiv.dataset.caseUsers = JSON.stringify(safeUsers);
             
+            // Case Source Setup
             cardDiv.dataset.caseSourceUrl = conv.caseSourceUrl || conv.caseUrl || conv.sourceUrl || conv.fmsUrl || '';
+            
             cardDiv.dataset.creatorEmail = conv.creatorEmail || '';
             cardDiv.dataset.archivedBy = conv.archivedBy || '';
             cardDiv.dataset.snoozeRawStr = conv.snoozeTime || '';
@@ -3034,7 +3090,7 @@ async function loadConversations() {
             cardDiv.querySelector('[data-id="details"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.details) : conv.details;
             cardDiv.querySelector('[data-id="message"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.message) : conv.message;
             cardDiv.querySelector('[data-id="author"]').textContent = creatorName;
-            cardDiv.querySelector('[data-id="timestamp"]').textContent = window.formatDateTo12Hour(conv.timestamp);
+            cardDiv.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString();
             cardDiv.querySelector('[data-id="display-case-id"]').textContent = conv.id;
             
             const avatarEl = cardDiv.querySelector('[data-id="avatar-letter"]');
@@ -3056,6 +3112,7 @@ async function loadConversations() {
             cbContainer.classList.add('hidden'); cbContainer.classList.remove('flex'); snoozeBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden');
             unarchiveBtn.classList.add('hidden');
             
+            // Show/Hide Case Source button on card
             if (caseSourceCardBtn) {
                 if (cardDiv.dataset.caseSourceUrl) {
                     caseSourceCardBtn.classList.remove('hidden');
@@ -3077,6 +3134,7 @@ async function loadConversations() {
                 else if (currentTab === 'Live') { snoozeBtn.classList.remove('hidden'); }
             }
             
+            // FIX: Added fallbacks for array methods
             const lCont = cardDiv.querySelector('[data-id="labels-container"]');
             safeLabels.forEach(l => { if(l){ const s = document.createElement('span'); s.className='px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded font-bold'; s.innerText=l; lCont.appendChild(s); } });
 
@@ -3133,45 +3191,200 @@ async function loadConversations() {
             wrapperDiv.style.display = showInitial ? 'block' : 'none';
             fragment.appendChild(cardFragment);
         });
-        feed.appendChild(fragment); 
-        window.switchTab(currentTab);
+        feed.appendChild(fragment); window.switchTab(currentTab);
     } catch(e) { console.error(e); }
 }
-
-function renderDashboardPagination(totalItems, totalPages) {
-    let container = document.getElementById('dashboardPagination');
-    const feed = document.getElementById('conversationFeed');
-    if (!feed) return;
-    
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'dashboardPagination';
-        container.className = 'flex justify-between items-center bg-white p-3 rounded-xl shadow-sm mb-4 border border-slate-200 sticky top-0 z-10';
-        feed.parentNode.insertBefore(container, feed);
-    }
-
-    if (totalItems === 0) {
-        container.style.display = 'none';
-        return;
-    }
-    
-    container.style.display = 'flex';
-
-    let prevDisabled = dashboardCurrentPage === 1 ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'hover:bg-slate-50 cursor-pointer';
-    let nextDisabled = dashboardCurrentPage === totalPages ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'hover:bg-slate-50 cursor-pointer';
-
-    container.innerHTML = `
-        <div class="text-xs font-bold text-slate-600">Showing ${(dashboardCurrentPage - 1) * dashboardItemsPerPage + 1} - ${Math.min(dashboardCurrentPage * dashboardItemsPerPage, totalItems)} of ${totalItems} Cases</div>
-        <div class="flex gap-2">
-            <button type="button" onclick="goToDashboardPage(${dashboardCurrentPage - 1})" class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 bg-white shadow-sm transition-all ${prevDisabled}">Previous</button>
-            <span class="px-3 py-1.5 text-xs font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">Page ${dashboardCurrentPage} of ${totalPages}</span>
-            <button type="button" onclick="goToDashboardPage(${dashboardCurrentPage + 1})" class="px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 bg-white shadow-sm transition-all ${nextDisabled}">Next</button>
-        </div>
-    `;
+let deferredPrompt = null;
+const installBtn = document.getElementById('installAppBtn');
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
+if (installBtn && isMobileDevice()) {
+    installBtn.classList.remove('hidden');
+}
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (installBtn && isMobileDevice()) {
+        installBtn.classList.remove('hidden');
+    }
+});
+if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt = null;
+            installBtn.classList.add('hidden');
+        } else {
+            showCustomDialog("Install CaseSys 📱", "Click 3-dots (⋮) and select 'Add to Home screen'.", false);
+        }
+    });
+}
+window.addEventListener('appinstalled', () => {
+    if (installBtn) {
+        installBtn.classList.add('hidden');
+        installBtn.classList.remove('flex');
+    }
+    console.log('CaseSys has been installed!');
+});
+window.addEventListener('online', async () => {
+    const requests = await getOfflineRequests();
+    if (requests.length > 0) {
+        let successCount = 0;
+        for (const req of requests) {
+            try {
+                await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: req.action, params: req.params })
+                });
+                await deleteOfflineRequest(req.id);
+                successCount++;
+            } catch (err) { console.error("Sync failed:", err); }
+        }
+        if (successCount > 0) {
+            if(currentUser) loadConversations();
+            showCustomDialog("Sync Complete", `${successCount} items synced!`, false);
+        }
+    }
+});
+window.addEventListener('offline', () => {
+    console.log("You are now offline. Actions will be queued.");
+});
 
-window.applyFilters = debounce(function(resetPageFlag) {
-    if (resetPageFlag !== false) dashboardCurrentPage = 1;
+// ==========================================
+// NOTIFICATION CLEARING FIXES
+// ==========================================
+window.openFromNotification = async function(caseId, uniqueId) {
+
+    if (isOpeningCase) return;
+    isOpeningCase = true;
+
+    try {
+
+        const panel = document.getElementById("notifPanel");
+        if (panel) panel.classList.add("hidden");
+
+        if (!caseId || caseId === "undefined") {
+            showCustomDialog("Notice", "Case ID missing hai.", false);
+            return;
+        }
+
+        const cleanCaseId = window.normalizeCaseId(caseId);
+
+        // ==========================================
+        // Remove notification immediately
+        // ==========================================
+        if (uniqueId) {
+            const clickedNotif = notifications.find(n => n.id === uniqueId);
+
+            if (!clickedNotif || clickedNotif.type !== "Ask") {
+                locallySeenNotifications.add(uniqueId);
+            }
+        }
+
+        notifications = notifications.filter(
+            n => n.id !== uniqueId ||
+            (n.type === "Ask" &&
+             String(n.status).toLowerCase() === "open")
+        );
+
+        unreadCount = notifications.length;
+        updateNotificationUI();
+
+        if (uniqueId && currentUser?.email) {
+            apiCall("markSeen", {
+                notificationId: uniqueId,
+                userEmail: currentUser.email,
+                userName: currentUser.name || currentUser.email
+            }).catch(console.log);
+        }
+
+        // ==========================================
+        // Wait until card exists
+        // ==========================================
+        let card = null;
+
+        for (let i = 0; i < 20; i++) {
+
+            card = [...document.querySelectorAll("[data-conv-id]")]
+                .find(el =>
+                    window.normalizeCaseId(el.dataset.convId) === cleanCaseId
+                );
+
+            if (card) break;
+
+            await new Promise(r => setTimeout(r, 250));
+        }
+
+        // ==========================================
+        // If still not found, refresh dashboard once
+        // ==========================================
+        if (!card) {
+
+            if (typeof loadConversations === "function") {
+                try {
+                    await loadConversations();
+                } catch (e) {
+                    console.log(e);
+                }
+
+                await new Promise(r => setTimeout(r, 500));
+
+                card = [...document.querySelectorAll("[data-conv-id]")]
+                    .find(el =>
+                        window.normalizeCaseId(el.dataset.convId) === cleanCaseId
+                    );
+            }
+        }
+
+        // ==========================================
+        // Final check
+        // ==========================================
+        if (!card) {
+            showCustomDialog(
+                "Loading...",
+                "Case is still loading. Please try again in a moment.",
+                false
+            );
+            return;
+        }
+
+        // ==========================================
+        // Open case
+        // ==========================================
+        const requestId = Date.now();
+        currentOpenRequest = requestId;
+
+        await window.openCaseDetail(card);
+
+        if (currentOpenRequest !== requestId) return;
+
+    }
+    catch (err) {
+
+        console.error("Notification Open Error:", err);
+
+        showCustomDialog(
+            "Error",
+            "Failed to load case properly.",
+            false
+        );
+
+    }
+    finally {
+
+        setTimeout(() => {
+            isOpeningCase = false;
+        }, 300);
+
+    }
+};
+
+// ==========================================
+// applyFilters FIX
+// ==========================================
+window.applyFilters = debounce(function() {
     try {
         const filterInput = document.getElementById('filterId');
         if(!filterInput) return;
@@ -3180,8 +3393,6 @@ window.applyFilters = debounce(function(resetPageFlag) {
         const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => String(cb.value).toLowerCase().trim());
         let visibleLabels = new Set(); let visibleMembers = new Set();
         let newCounts = { Live: 0, Snooze: 0, Archive: 0 };
-        let matchedCards = [];
-
         Array.from(document.getElementById('conversationFeed').children).forEach(wrapper => {
             const card = wrapper.classList.contains('card-main') ? wrapper : wrapper.querySelector('.card-main');
             if(!card || !card.dataset.convId) return; 
@@ -3263,31 +3474,14 @@ window.applyFilters = debounce(function(resetPageFlag) {
             const matchesId = !idQuery || String(card.dataset.convId).toLowerCase().includes(idQuery) || (card.dataset.subject && String(card.dataset.subject).toLowerCase().includes(idQuery));
             const baseMatch = showTab && matchesId;
             
-            if (baseMatch && matchesLabels && matchesMembers) {
-                matchedCards.push(wrapper);
-            } else {
-                wrapper.style.display = 'none';
-            }
+            if (baseMatch && matchesLabels && matchesMembers) wrapper.style.display = 'block';
+            else wrapper.style.display = 'none';
 
             if (baseMatch && matchesMembers) cardLabels.forEach(l => visibleLabels.add(String(l)));
             if (baseMatch && matchesLabels) cardMembers.forEach(m => {
                 if(m) { visibleMembers.add(String(m).toLowerCase().trim()); visibleMembers.add(String(window.getUserNameByEmail(m)).toLowerCase().trim()); }
             });
         });
-
-        const startIndex = (dashboardCurrentPage - 1) * dashboardItemsPerPage;
-        const endIndex = startIndex + dashboardItemsPerPage;
-        const totalPages = Math.ceil(matchedCards.length / dashboardItemsPerPage) || 1;
-
-        matchedCards.forEach((wrapper, index) => {
-            if (index >= startIndex && index < endIndex) {
-                wrapper.style.display = 'block';
-            } else {
-                wrapper.style.display = 'none';
-            }
-        });
-
-        renderDashboardPagination(matchedCards.length, totalPages);
 
         if(document.getElementById('count-Live')) document.getElementById('count-Live').innerText = newCounts.Live;
         if(document.getElementById('count-Snooze')) document.getElementById('count-Snooze').innerText = newCounts.Snooze;
@@ -3309,197 +3503,25 @@ window.applyFilters = debounce(function(resetPageFlag) {
             else { item.style.display = 'none'; item.dataset.available = 'false'; }
         });
     } catch(e) {}
-}, 150);
+}, 150);  
 
-// ==========================================
-// APP INSTALL & OFFLINE PWA EVENTS
-// ==========================================
-let deferredPrompt = null;
-const installBtn = document.getElementById('installAppBtn');
-function isMobileDevice() {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-}
-if (installBtn && isMobileDevice()) {
-    installBtn.classList.remove('hidden');
-}
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    if (installBtn && isMobileDevice()) {
-        installBtn.classList.remove('hidden');
-    }
-});
-if (installBtn) {
-    installBtn.addEventListener('click', async () => {
-        if (deferredPrompt) {
-            deferredPrompt.prompt();
-            deferredPrompt = null;
-            installBtn.classList.add('hidden');
-        } else {
-            showCustomDialog("Install CaseSys 📱", "Click 3-dots (⋮) and select 'Add to Home screen'.", false);
-        }
-    });
-}
-window.addEventListener('appinstalled', () => {
-    if (installBtn) {
-        installBtn.classList.add('hidden');
-        installBtn.classList.remove('flex');
-    }
-    console.log('CaseSys has been installed!');
-});
-window.addEventListener('online', async () => {
-    const requests = await getOfflineRequests();
-    if (requests.length > 0) {
-        let successCount = 0;
-        for (const req of requests) {
-            try {
-                await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action: req.action, params: req.params })
-                });
-                await deleteOfflineRequest(req.id);
-                successCount++;
-            } catch (err) { console.error("Sync failed:", err); }
-        }
-        if (successCount > 0) {
-            if(currentUser) loadConversations();
-            showCustomDialog("Sync Complete", `${successCount} items synced!`, false);
-        }
-    }
-});
-window.addEventListener('offline', () => {
-    console.log("You are now offline. Actions will be queued.");
-});
-
-// ==========================================
-// NOTIFICATION CLEARING FIXES
-// ==========================================
-window.openFromNotification = async function(caseId, uniqueId) {
-
-    if (isOpeningCase) return;
-    isOpeningCase = true;
-
-    try {
-
-        const panel = document.getElementById("notifPanel");
-        if (panel) panel.classList.add("hidden");
-
-        if (!caseId || caseId === "undefined") {
-            showCustomDialog("Notice", "Case ID missing hai.", false);
-            return;
-        }
-
-        const cleanCaseId = window.normalizeCaseId(caseId);
-
-        if (uniqueId) {
-            const clickedNotif = notifications.find(n => n.id === uniqueId);
-
-            if (!clickedNotif || clickedNotif.type !== "Ask") {
-                locallySeenNotifications.add(uniqueId);
-            }
-        }
-
-        notifications = notifications.filter(
-            n => n.id !== uniqueId ||
-            (n.type === "Ask" &&
-             String(n.status).toLowerCase() === "open")
-        );
-
-        unreadCount = notifications.length;
-        updateNotificationUI();
-
-        if (uniqueId && currentUser?.email) {
-            apiCall("markSeen", {
-                notificationId: uniqueId,
-                userEmail: currentUser.email,
-                userName: currentUser.name || currentUser.email
-            }).catch(console.log);
-        }
-
-        let card = null;
-
-        for (let i = 0; i < 20; i++) {
-
-            card = [...document.querySelectorAll("[data-conv-id]")]
-                .find(el =>
-                    window.normalizeCaseId(el.dataset.convId) === cleanCaseId
-                );
-
-            if (card) break;
-
-            await new Promise(r => setTimeout(r, 250));
-        }
-
-        if (!card) {
-
-            if (typeof loadConversations === "function") {
-                try {
-                    await loadConversations();
-                } catch (e) {
-                    console.log(e);
-                }
-
-                await new Promise(r => setTimeout(r, 500));
-
-                card = [...document.querySelectorAll("[data-conv-id]")]
-                    .find(el =>
-                        window.normalizeCaseId(el.dataset.convId) === cleanCaseId
-                    );
-            }
-        }
-
-        if (!card) {
-            showCustomDialog(
-                "Loading...",
-                "Case is still loading. Please try again in a moment.",
-                false
-            );
-            return;
-        }
-
-        const requestId = Date.now();
-        currentOpenRequest = requestId;
-
-        await window.openCaseDetail(card);
-
-        if (currentOpenRequest !== requestId) return;
-
-    }
-    catch (err) {
-
-        console.error("Notification Open Error:", err);
-
-        showCustomDialog(
-            "Error",
-            "Failed to load case properly.",
-            false
-        );
-
-    }
-    finally {
-
-        setTimeout(() => {
-            isOpeningCase = false;
-        }, 300);
-
-    }
-};
 
 // ==========================================
 // CASE SOURCE MODAL LOGIC
 // ==========================================
 window.openCaseSourceModal = function(event, url) {
-    if (event) event.stopPropagation();
+    if (event) event.stopPropagation(); // Prevents the card click from opening case details
     
     if (!url || String(url).trim() === '' || url === 'undefined') {
         showCustomDialog("Case Source", "No Case Source URL is available for this case.", false);
         return;
     }
     
+    // Set iframe and button href
     document.getElementById('caseSourceIframe').src = url;
     document.getElementById('caseSourceNewTabBtn').href = url;
     
+    // Show modal
     document.getElementById('caseSourceModal').classList.remove('hidden');
     document.getElementById('caseSourceModal').classList.add('flex');
 };
@@ -3509,5 +3531,6 @@ window.closeCaseSourceModal = function() {
     modal.classList.add('hidden');
     modal.classList.remove('flex');
     
+    // Clear iframe src to stop background loading/playing
     document.getElementById('caseSourceIframe').src = '';
 };
