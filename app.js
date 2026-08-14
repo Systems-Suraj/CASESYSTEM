@@ -1149,21 +1149,51 @@ window.getMemberBadgeHTML = function(email, role, archivedByStr, snoozeTimeStr) 
 // ==========================================
 window.switchTab = function(tab) {
     currentTab = tab;
+    
+    // Tab Styling Update
     ['Live', 'Snooze', 'Archive'].forEach(t => {
-        if(document.getElementById(`tab-${t}`)) {
-            document.getElementById(`tab-${t}`).className = t === tab
+        const tabEl = document.getElementById(`tab-${t}`);
+        if(tabEl) {
+            tabEl.className = t === tab
             ? "px-4 sm:px-6 py-4 text-sm font-bold border-b-2 border-indigo-600 text-indigo-600 transition-colors flex items-center gap-2"
             : "px-4 sm:px-6 py-4 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-2";
         }
     });
-    if(document.getElementById('bulkArchiveBtn')) document.getElementById('bulkArchiveBtn').classList.toggle('hidden', tab !== 'Live');
+
+    // Bulk Archive Button Visibility
+    const bulkBtn = document.getElementById('bulkArchiveBtn');
+    if(bulkBtn) {
+        if (tab === 'Live') {
+            bulkBtn.classList.remove('hidden');
+            bulkBtn.classList.add('flex'); // Ya block, HTML ke hisaab se
+        } else {
+            bulkBtn.classList.add('hidden');
+            bulkBtn.classList.remove('flex');
+        }
+    }
+
+    // Checkboxes ko uncheck aur hide/show karna
     document.querySelectorAll('.archive-cb-container').forEach(container => {
-        if (tab === 'Live') { container.classList.remove('hidden'); container.classList.add('flex'); }
-        else { container.classList.add('hidden'); container.classList.remove('flex'); }
-        container.querySelector('.bulk-archive-cb').checked = false;
+        if (tab === 'Live') { 
+            container.classList.remove('hidden'); 
+            container.classList.add('flex'); 
+        } else { 
+            container.classList.add('hidden'); 
+            container.classList.remove('flex'); 
+        }
+        const cb = container.querySelector('.bulk-archive-cb');
+        if (cb) cb.checked = false; // Reset selection on tab switch
     });
-    if(document.getElementById('reply_mention_dropdown')) document.getElementById('reply_mention_dropdown').classList.add('hidden');
+
+    // Close any open dropdowns
+    const replyDrop = document.getElementById('reply_mention_dropdown');
+    if(replyDrop) replyDrop.classList.add('hidden');
     document.querySelectorAll('.inline-mention-dropdown').forEach(d => d.classList.add('hidden'));
+    
+    // Reset to page 1 on tab switch and apply filters
+    if (typeof currentDashboardPage !== 'undefined') {
+        currentDashboardPage = 1;
+    }
     applyFilters();
 };
 
@@ -3061,6 +3091,7 @@ function renderDashboardPage() {
 function createCardDOM(conv) {
     const cardTemp = document.getElementById('cardTemplate');
     if(!cardTemp) return null;
+    
     const cardFragment = cardTemp.content.cloneNode(true);
     const wrapperDiv = cardFragment.firstElementChild;
     const cardDiv = wrapperDiv.classList.contains('card-main') ? wrapperDiv : wrapperDiv.querySelector('.card-main');
@@ -3150,6 +3181,7 @@ function createCardDOM(conv) {
     const checkbox = footerActions.querySelector('.bulk-archive-cb');
     const caseSourceCardBtn = footerActions.querySelector('.case-source-card-btn');
     
+    // Sabko default hidden karo
     if(cbContainer) { cbContainer.classList.add('hidden'); cbContainer.classList.remove('flex'); }
     if(snoozeBtn) snoozeBtn.classList.add('hidden'); 
     if(unsnoozeBtn) unsnoozeBtn.classList.add('hidden');
@@ -3160,14 +3192,18 @@ function createCardDOM(conv) {
         else caseSourceCardBtn.classList.add('hidden');
     }
 
+    // Archived Tab Actions
     if (conv.status === 'Archived' && unarchiveBtn) {
         unarchiveBtn.classList.remove('hidden');
     }
+    
+    // 🔥 LIVE TAB ACTIONS (Checkbox for Bulk Archive dikhega yahan)
     if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed && cbContainer) {
         cbContainer.classList.remove('hidden');
         cbContainer.classList.add('flex');
         if(checkbox) checkbox.disabled = false;
     }
+    
     if (conv.status !== 'Archived') {
         if (isSnoozed && unsnoozeBtn) { unsnoozeBtn.classList.remove('hidden'); }
         else if (currentTab === 'Live' && snoozeBtn) { snoozeBtn.classList.remove('hidden'); }
