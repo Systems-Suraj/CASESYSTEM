@@ -1,5 +1,5 @@
 // 🔥 CACHE VERSION UPDATED
-const CACHE_NAME = 'casesys-v76';
+const CACHE_NAME = 'casesys-v77';
 
 // 🔥 CACHE FILES
 const ASSETS_TO_CACHE = [
@@ -16,7 +16,7 @@ const ASSETS_TO_CACHE = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('✅ Cache Opened v36');
+      console.log('✅ Cache Opened v77');
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
