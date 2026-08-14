@@ -43,7 +43,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v76";
+const APP_VERSION = "v75";
 function checkAppUpdate() {
     const storedVersion = localStorage.getItem("app_version");
     if (!storedVersion) {
@@ -1818,9 +1818,7 @@ window.openCaseDetail = async function(cardEl) {
             apiCall('unsnoozeCaseServer', { id: convId, userEmail: currentUser.email }).catch(e => {});
         }
         
-        // 🔥 FIXED: Robust Subject Loading
         let subjectText = card.querySelector('[data-id="subject"]')?.innerText;
-        // Fallback: If DOM is empty/missing, look up the subject from global loaded data
         if (!subjectText && typeof allCasesData !== 'undefined') {
             const match = allCasesData.find(c => String(c.id).trim() === convId);
             if (match) subjectText = match.subject;
@@ -2188,7 +2186,6 @@ function renderThreadHTML(list, level = 0) {
         
         let processedText = typeof window.makeLinksClickable === 'function' ? window.makeLinksClickable(cleanMsg) : cleanMsg;
         
-        // Format explicit AM/PM time
         const formattedTime = new Date(c.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
 
         return `
