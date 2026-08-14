@@ -84,7 +84,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v80"; // 🔥 BUMPED VERSION: Hard clears old cache to fix login & time issue
+const APP_VERSION = "v83"; // 🔥 BUMPED VERSION: Hard clears old cache to fix login & time issue
 function checkAppUpdate() {
     const storedVersion = localStorage.getItem("app_version");
     if (storedVersion !== APP_VERSION) {
