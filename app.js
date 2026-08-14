@@ -8,33 +8,16 @@ window.normalizeCaseId = function(id) {
         .toUpperCase();       
 };
 
-// 🛠️ CUSTOM TIMEZONE STRIPPER (Forces Local Time matching Sheet visual time exactly)
-function parseSafeDate(dateInput) {
-    if (!dateInput) return new Date(NaN);
-    if (!isNaN(dateInput) && String(dateInput).trim() !== '') {
-        return new Date(parseInt(dateInput, 10));
-    }
-    if (typeof dateInput === 'string') {
-        let cleanStr = dateInput;
-        if (cleanStr.includes('T')) {
-            cleanStr = cleanStr.replace(/(Z|[+-]\d{2}:\d{2})$/, ''); 
-        } else {
-            cleanStr = cleanStr.replace(/GMT[+-]\d{4}.*$/, '').trim();
-        }
-        let d = new Date(cleanStr);
-        if (!isNaN(d.getTime())) return d;
-        
-        // Safari browser fallback
-        cleanStr = cleanStr.replace(/-/g, '/').replace('T', ' ').replace(/\.\d+/, '');
-        d = new Date(cleanStr);
-        if (!isNaN(d.getTime())) return d;
-    }
-    return new Date(dateInput);
-}
-
+// 🛠️ CUSTOM 12-HOUR FORMATTER (Bypasses OS Locale overrides)
 window.formatDateTo12Hour = function(dateInput) {
-    let d = parseSafeDate(dateInput);
-    if (isNaN(d.getTime())) return String(dateInput || ''); 
+    if (!dateInput) return '';
+    if (!isNaN(dateInput) && String(dateInput).trim() !== '') dateInput = parseInt(dateInput, 10);
+    let d = new Date(dateInput);
+    
+    if (isNaN(d.getTime()) && typeof dateInput === 'string') {
+        d = new Date(dateInput.replace(/-/g, '/'));
+    }
+    if (isNaN(d.getTime())) return String(dateInput); 
     
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     let hours = d.getHours();
@@ -49,8 +32,11 @@ window.formatDateTo12Hour = function(dateInput) {
 };
 
 window.formatTimeTo12Hour = function(dateInput) {
-    let d = parseSafeDate(dateInput);
-    if (isNaN(d.getTime())) return String(dateInput || '');
+    if (!dateInput) return '';
+    if (!isNaN(dateInput) && String(dateInput).trim() !== '') dateInput = parseInt(dateInput, 10);
+    let d = new Date(dateInput);
+    if (isNaN(d.getTime()) && typeof dateInput === 'string') d = new Date(dateInput.replace(/-/g, '/'));
+    if (isNaN(d.getTime())) return String(dateInput);
     
     let hours = d.getHours();
     let minutes = d.getMinutes();
@@ -99,7 +85,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v78"; // 🔥 BUMPED VERSION: Clears cache to enforce correct date parsing
+const APP_VERSION = "v79"; // 🔥 BUMPED VERSION: Forces devices to refresh and get the new time format
 function checkAppUpdate() {
     const storedVersion = localStorage.getItem("app_version");
     if (!storedVersion) {
@@ -3284,4 +3270,237 @@ window.applyFilters = debounce(function(resetPageFlag) {
         // Paginate logic after matched filtering
         const startIndex = (dashboardCurrentPage - 1) * dashboardItemsPerPage;
         const endIndex = startIndex + dashboardItemsPerPage;
-        const totalPages = Math.ceil(matchedCards.lengthSorry, something went wrong. Please try your request again.
+        const totalPages = Math.ceil(matchedCards.length / dashboardItemsPerPage) || 1;
+
+        matchedCards.forEach((wrapper, index) => {
+            if (index >= startIndex && index < endIndex) {
+                wrapper.style.display = 'block';
+            } else {
+                wrapper.style.display = 'none';
+            }
+        });
+
+        renderDashboardPagination(matchedCards.length, totalPages);
+
+        if(document.getElementById('count-Live')) document.getElementById('count-Live').innerText = newCounts.Live;
+        if(document.getElementById('count-Snooze')) document.getElementById('count-Snooze').innerText = newCounts.Snooze;
+        if(document.getElementById('count-Archive')) document.getElementById('count-Archive').innerText = newCounts.Archive;
+
+        document.querySelectorAll('#labelsDropdown .dropdown-item').forEach(item => {
+            const cb = item.querySelector('input[type="checkbox"]');
+            if(!cb) return;
+            if (cb.hasAttribute('data-applied') || visibleLabels.has(cb.value)) { item.style.display = 'flex'; item.dataset.available = 'true'; } 
+            else { item.style.display = 'none'; item.dataset.available = 'false'; }
+        });
+
+        document.querySelectorAll('#membersDropdown .dropdown-item').forEach(item => {
+            const cb = item.querySelector('input[type="checkbox"]');
+            if(!cb) return;
+            const valLower = String(cb.value).toLowerCase().trim();
+            const isVisible = visibleMembers.has(valLower);
+            if (cb.hasAttribute('data-applied') || isVisible) { item.style.display = 'flex'; item.dataset.available = 'true'; } 
+            else { item.style.display = 'none'; item.dataset.available = 'false'; }
+        });
+    } catch(e) {}
+}, 150);
+
+// ==========================================
+// APP INSTALL & OFFLINE PWA EVENTS
+// ==========================================
+let deferredPrompt = null;
+const installBtn = document.getElementById('installAppBtn');
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+if (installBtn && isMobileDevice()) {
+    installBtn.classList.remove('hidden');
+}
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (installBtn && isMobileDevice()) {
+        installBtn.classList.remove('hidden');
+    }
+});
+if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt = null;
+            installBtn.classList.add('hidden');
+        } else {
+            showCustomDialog("Install CaseSys 📱", "Click 3-dots (⋮) and select 'Add to Home screen'.", false);
+        }
+    });
+}
+window.addEventListener('appinstalled', () => {
+    if (installBtn) {
+        installBtn.classList.add('hidden');
+        installBtn.classList.remove('flex');
+    }
+    console.log('CaseSys has been installed!');
+});
+window.addEventListener('online', async () => {
+    const requests = await getOfflineRequests();
+    if (requests.length > 0) {
+        let successCount = 0;
+        for (const req of requests) {
+            try {
+                await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: req.action, params: req.params })
+                });
+                await deleteOfflineRequest(req.id);
+                successCount++;
+            } catch (err) { console.error("Sync failed:", err); }
+        }
+        if (successCount > 0) {
+            if(currentUser) loadConversations();
+            showCustomDialog("Sync Complete", `${successCount} items synced!`, false);
+        }
+    }
+});
+window.addEventListener('offline', () => {
+    console.log("You are now offline. Actions will be queued.");
+});
+
+// ==========================================
+// NOTIFICATION CLEARING FIXES
+// ==========================================
+window.openFromNotification = async function(caseId, uniqueId) {
+
+    if (isOpeningCase) return;
+    isOpeningCase = true;
+
+    try {
+
+        const panel = document.getElementById("notifPanel");
+        if (panel) panel.classList.add("hidden");
+
+        if (!caseId || caseId === "undefined") {
+            showCustomDialog("Notice", "Case ID missing hai.", false);
+            return;
+        }
+
+        const cleanCaseId = window.normalizeCaseId(caseId);
+
+        if (uniqueId) {
+            const clickedNotif = notifications.find(n => n.id === uniqueId);
+
+            if (!clickedNotif || clickedNotif.type !== "Ask") {
+                locallySeenNotifications.add(uniqueId);
+            }
+        }
+
+        notifications = notifications.filter(
+            n => n.id !== uniqueId ||
+            (n.type === "Ask" &&
+             String(n.status).toLowerCase() === "open")
+        );
+
+        unreadCount = notifications.length;
+        updateNotificationUI();
+
+        if (uniqueId && currentUser?.email) {
+            apiCall("markSeen", {
+                notificationId: uniqueId,
+                userEmail: currentUser.email,
+                userName: currentUser.name || currentUser.email
+            }).catch(console.log);
+        }
+
+        let card = null;
+
+        for (let i = 0; i < 20; i++) {
+
+            card = [...document.querySelectorAll("[data-conv-id]")]
+                .find(el =>
+                    window.normalizeCaseId(el.dataset.convId) === cleanCaseId
+                );
+
+            if (card) break;
+
+            await new Promise(r => setTimeout(r, 250));
+        }
+
+        if (!card) {
+
+            if (typeof loadConversations === "function") {
+                try {
+                    await loadConversations();
+                } catch (e) {
+                    console.log(e);
+                }
+
+                await new Promise(r => setTimeout(r, 500));
+
+                card = [...document.querySelectorAll("[data-conv-id]")]
+                    .find(el =>
+                        window.normalizeCaseId(el.dataset.convId) === cleanCaseId
+                    );
+            }
+        }
+
+        if (!card) {
+            showCustomDialog(
+                "Loading...",
+                "Case is still loading. Please try again in a moment.",
+                false
+            );
+            return;
+        }
+
+        const requestId = Date.now();
+        currentOpenRequest = requestId;
+
+        await window.openCaseDetail(card);
+
+        if (currentOpenRequest !== requestId) return;
+
+    }
+    catch (err) {
+
+        console.error("Notification Open Error:", err);
+
+        showCustomDialog(
+            "Error",
+            "Failed to load case properly.",
+            false
+        );
+
+    }
+    finally {
+
+        setTimeout(() => {
+            isOpeningCase = false;
+        }, 300);
+
+    }
+};
+
+// ==========================================
+// CASE SOURCE MODAL LOGIC
+// ==========================================
+window.openCaseSourceModal = function(event, url) {
+    if (event) event.stopPropagation();
+    
+    if (!url || String(url).trim() === '' || url === 'undefined') {
+        showCustomDialog("Case Source", "No Case Source URL is available for this case.", false);
+        return;
+    }
+    
+    document.getElementById('caseSourceIframe').src = url;
+    document.getElementById('caseSourceNewTabBtn').href = url;
+    
+    document.getElementById('caseSourceModal').classList.remove('hidden');
+    document.getElementById('caseSourceModal').classList.add('flex');
+};
+
+window.closeCaseSourceModal = function() {
+    const modal = document.getElementById('caseSourceModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    
+    document.getElementById('caseSourceIframe').src = '';
+};
