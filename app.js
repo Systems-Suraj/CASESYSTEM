@@ -5,8 +5,33 @@ window.normalizeCaseId = function(id) {
     return String(id || '')
         .trim()
         .replace(/\s+/g, '') 
-        .toUpperCase();       
+        .toUpperCase();        
 };
+
+// ------------------------------------------
+// 🕒 NEW DIRECT 12-HOUR (AM/PM) FORMATTERS
+// ------------------------------------------
+window.formatTimeTo12Hour = function(dateInput) {
+    if (!dateInput) return '';
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return String(dateInput);
+    let hours = d.getHours();
+    let minutes = d.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // 0 becomes 12
+    minutes = minutes < 10 ? '0' + minutes : minutes;
+    return hours + ':' + minutes + ' ' + ampm;
+};
+
+window.formatDateTo12Hour = function(dateInput) {
+    if (!dateInput) return '';
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return String(dateInput);
+    const options = { month: 'short', day: 'numeric', year: 'numeric' };
+    return d.toLocaleDateString('en-US', options) + ' ' + window.formatTimeTo12Hour(d);
+};
+
 window.isUserTypingGlobal = false;
 let activeInputElement = null;
 document.addEventListener('focusin', (e) => {
@@ -43,7 +68,7 @@ document.addEventListener('focusout', (e) => {
 // ==========================================
 // 🔥 AUTO UPDATE SYSTEM (VERSION CONTROL)
 // ==========================================
-const APP_VERSION = "v75";
+const APP_VERSION = "v86"; // Bumped for Cache Invalidation
 function checkAppUpdate() {
     const storedVersion = localStorage.getItem("app_version");
     if (!storedVersion) {
@@ -186,8 +211,6 @@ async function apiCall(action, params = {}, retries = 2) {
         }
     }
 
-    // 10 Seconds Timeout limit per Prompt requirements. 
-    // Except uploads and URLs fetch, which can take larger payloads bandwidth.
     let timeoutMs = 10000; 
     if (action.includes('upload') || action === 'getResumableUploadUrl') {
         timeoutMs = 60000; // Allow 60s for files
@@ -217,7 +240,6 @@ async function apiCall(action, params = {}, retries = 2) {
             errorMsg = "Timeout: Server ne 10 seconds mein response nahi diya. Please try again.";
         }
         
-        // IMPORTANT FIX: createCase is NOT safe to retry safely automatically
         if (action !== 'createCase' && retries > 0 && navigator.onLine) {
             console.log(`🔁 Retrying [${action}] due to Error/Timeout...`, retries);
             await new Promise(r => setTimeout(r, 1000));
@@ -256,7 +278,7 @@ let currentEditLabels = new Set();
 let currentEditAttachments = [];
 let newEditPendingFiles = [];
 let page = 0;
-const limit = 5;
+const limit = 5; // Detail thread limit
 let isLoading = false;
 let hasMore = true;
 let lastTimestamp = 0;
@@ -264,6 +286,11 @@ let seenMessages = new Set();
 let realtimeInterval = null;
 let isInitialLoadDone = false;
 let allLoadedComments = [];
+
+// Pagination State
+let filteredCasesForDashboard = [];
+let currentDashboardPage = 1;
+const CASES_PER_PAGE = 20;
 
 // ⚡ MASTER VIEW STATE & TOGGLE
 window.masterViewMode = 'ME'; 
@@ -309,7 +336,6 @@ window.createBeautifulFileCard = function(file, index, removeFnName) {
     } else {
         previewHTML = `<i class="fas fa-file-alt text-indigo-400 text-sm"></i>`;
     }
-    // Reduced padding (p-1.5), width (w-48), and icon sizes
     return `<div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1.5 pr-6 relative shadow-sm w-48 max-w-full hover:border-indigo-300 transition-colors group">
         <div class="w-8 h-8 rounded-md bg-slate-50 shrink-0 flex items-center justify-center overflow-hidden border border-slate-100">
             ${previewHTML}
@@ -569,7 +595,7 @@ function updateNotificationUI() {
         if (notifications.length === 0) {
             panel.innerHTML = `<div class="p-5 text-center text-sm text-slate-500 font-medium w-72 sm:w-80">No new notifications</div>`;
         } else {
-            panel.innerHTML = `<div class="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50 sticky top-0 z-10 w-72 sm:w-80"> <span class="font-extrabold text-sm text-slate-800">Notifications</span> <button type="button" onclick="clearAllNotifications()" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-100 px-2 py-1 rounded-md">Clear All</button> </div> <div class="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto w-72 sm:w-80"> ${notifications.map(n => `<div onclick="openFromNotification('${n.caseId}', '${n.id}')" class="p-3 sm:p-4 hover:bg-slate-50 cursor-pointer transition-colors relative ${n.type === 'Ask' ? 'bg-red-50/50 hover:bg-red-50' : ''}"> <div class="flex justify-between items-start mb-1"> <span class="font-bold text-xs text-slate-900">${escapeHTML(window.getUserNameByEmail(n.sender))}</span> <span class="text-[10px] text-slate-500 font-medium">${new Date(n.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span> </div> <div class="text-xs text-slate-600 line-clamp-2 leading-relaxed break-words">${escapeHTML(n.text)}</div> <div class="mt-2 flex items-center justify-between"> <span class="text-[9px] font-extrabold text-indigo-500 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded shadow-sm border border-indigo-100">Case #${n.caseId}</span> ${n.type === 'Ask' ? '<span class="text-[9px] font-extrabold text-white uppercase tracking-widest bg-red-500 px-2 py-0.5 rounded shadow-sm">Action Req</span>' : ''} </div> </div>`).join('')} </div>`;
+            panel.innerHTML = `<div class="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50 sticky top-0 z-10 w-72 sm:w-80"> <span class="font-extrabold text-sm text-slate-800">Notifications</span> <button type="button" onclick="clearAllNotifications()" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-100 px-2 py-1 rounded-md">Clear All</button> </div> <div class="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto w-72 sm:w-80"> ${notifications.map(n => `<div onclick="openFromNotification('${n.caseId}', '${n.id}')" class="p-3 sm:p-4 hover:bg-slate-50 cursor-pointer transition-colors relative ${n.type === 'Ask' ? 'bg-red-50/50 hover:bg-red-50' : ''}"> <div class="flex justify-between items-start mb-1"> <span class="font-bold text-xs text-slate-900">${escapeHTML(window.getUserNameByEmail(n.sender))}</span> <span class="text-[10px] text-slate-500 font-medium">${window.formatTimeTo12Hour(n.time)}</span> </div> <div class="text-xs text-slate-600 line-clamp-2 leading-relaxed break-words">${escapeHTML(n.text)}</div> <div class="mt-2 flex items-center justify-between"> <span class="text-[9px] font-extrabold text-indigo-500 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded shadow-sm border border-indigo-100">Case #${n.caseId}</span> ${n.type === 'Ask' ? '<span class="text-[9px] font-extrabold text-white uppercase tracking-widest bg-red-500 px-2 py-0.5 rounded shadow-sm">Action Req</span>' : ''} </div> </div>`).join('')} </div>`;
         }
     }
 }
@@ -620,33 +646,69 @@ function debounce(func, wait) {
 // ==========================================
 // 🔒 LIMIT DETAILS TYPING & STRICT MENTION
 // ==========================================
-const MAX_DETAILS_LENGTH = 5000;
-function enforceCharLimit(e) {
+const MAX_DETAILS_WORDS = 3000;
+
+window.getWordCount = function(text) {
+    if (!text) return 0;
+    return text.trim().split(/\s+/).filter(w => w.length > 0).length;
+};
+
+window.checkNewCaseFormValidity = function() {
+    const subj = document.getElementById('f_subject');
+    const details = document.getElementById('f_details_rich');
+    const btn = document.getElementById('submitBtn');
+    
+    if (!btn || !subj || !details) return;
+
+    const subjVal = subj.value.trim();
+    const detailsVal = details.innerText.trim();
+    const wordCount = window.getWordCount(detailsVal);
+    
+    const hasLabels = typeof selectedLabels !== 'undefined' && selectedLabels.size > 0;
+    const hasMembers = typeof composerRecipients !== 'undefined' && composerRecipients.length > 0;
+
+    if (subjVal !== '' && detailsVal !== '' && hasLabels && hasMembers && wordCount <= MAX_DETAILS_WORDS) {
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+    } else {
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+    }
+};
+
+function enforceWordLimit(e) {
     const target = e.target;
-    // Apply restriction only to details and message fields
     if (target && (target.id === 'f_details_rich' || target.id === 'edit_details_rich' || target.id === 'f_message_rich')) {
         const textContent = target.innerText || "";
         const isControlKey = e.key && (e.key.length > 1 || e.ctrlKey || e.metaKey || e.altKey);
         
-        if (e.type === 'keydown' && !isControlKey && textContent.length >= MAX_DETAILS_LENGTH) {
-            e.preventDefault();
-            showCustomDialog("Limit Reached ⚠️", `Aap 5000 characters se zyada nahi likh sakte.`, false);
+        if (e.type === 'keydown' && !isControlKey && window.getWordCount(textContent) >= MAX_DETAILS_WORDS) {
+            if (e.key === ' ' || e.key === 'Enter' || String(e.key).match(/^\w$/)) {
+                e.preventDefault();
+                showCustomDialog("Limit Reached ⚠️", `Aap 3000 words se zyada nahi likh sakte.`, false);
+            }
         }
         
         if (e.type === 'paste') {
-            e.preventDefault();
             const pasteText = (e.clipboardData || window.clipboardData).getData('text/plain');
-            const allowedSpace = MAX_DETAILS_LENGTH - textContent.length;
-            if (allowedSpace > 0) {
-                document.execCommand('insertText', false, pasteText.substring(0, allowedSpace));
-            } else {
-                showCustomDialog("Limit Reached ⚠️", `Max 5000 characters ki limit poori ho gayi hai.`, false);
+            const currentWords = window.getWordCount(textContent);
+            const pastedWords = window.getWordCount(pasteText);
+            if (currentWords + pastedWords > MAX_DETAILS_WORDS) {
+                e.preventDefault();
+                showCustomDialog("Limit Reached ⚠️", `Pasting this will exceed the 3000 words limit.`, false);
             }
         }
+        
+        setTimeout(() => { if (typeof window.checkNewCaseFormValidity === 'function') window.checkNewCaseFormValidity(); }, 50);
     }
 }
-document.addEventListener('keydown', enforceCharLimit);
-document.addEventListener('paste', enforceCharLimit);
+document.addEventListener('keydown', enforceWordLimit);
+document.addEventListener('paste', enforceWordLimit);
+document.addEventListener('input', (e) => {
+    if (e.target && (e.target.id === 'f_details_rich' || e.target.id === 'f_subject')) {
+        if (typeof window.checkNewCaseFormValidity === 'function') window.checkNewCaseFormValidity();
+    }
+});
 
 function checkComposerRestrictions(editor, type = 'main') {
     if (!editor) return;
@@ -1001,6 +1063,7 @@ async function initNotifications(user) {
         }
     } catch (err) { console.error("Notification Error:", err); }
 }
+
 // ==========================================
 // HELPERS
 // ==========================================
@@ -1738,10 +1801,9 @@ window.saveCaseEdits = async function() {
             hideUploadOverlay();
         }
 
-        // Limit the edit details submission string as well
         let eDetailsHtml = document.getElementById('edit_details_rich').innerHTML.trim();
-        if(document.getElementById('edit_details_rich').innerText.length > 5000) {
-            eDetailsHtml = eDetailsHtml.substring(0, 6000); // give slight margin for html tags
+        if(window.getWordCount(document.getElementById('edit_details_rich').innerText) > MAX_DETAILS_WORDS) {
+            eDetailsHtml = eDetailsHtml.substring(0, 8000); 
         }
 
         await apiCall('updateCaseDetails', { 
@@ -2205,7 +2267,7 @@ function renderThreadHTML(list, level = 0) {
                     <div class="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold shadow-inner">${senderName.charAt(0).toUpperCase()}</div>
                     <span class="font-bold text-sm text-slate-900">${senderName}</span>
                     ${badge}
-                    <span class="text-[10px] text-slate-500 font-medium ml-auto">${new Date(c.timestamp).toLocaleString()}</span>
+                    <span class="text-[10px] text-slate-500 font-medium ml-auto">${window.formatDateTo12Hour(c.timestamp)}</span>
                 </div>
                 
                 <div class="rich-text text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">${processedText}</div>
@@ -2786,6 +2848,7 @@ window.submitInlineReply = async function(btn) {
     }
 
 };
+
 // ==========================================
 // CREATE NEW CASE MODAL & UPLOADS
 // ==========================================
@@ -2809,6 +2872,7 @@ window.renderNewCaseMembers = function() {
         ${m.role === 'Admin' ? '👑' : '👤'} ${escapeHTML(m.name)}
         ${(m.email !== currentUser.email) ? `<button type="button" onclick="removeNewCaseMember(${i})" class="ml-1 text-slate-400 hover:text-red-500 font-bold">&times;</button>` : ''}
     </span>`).join('');
+    setTimeout(() => { if (typeof window.checkNewCaseFormValidity === 'function') window.checkNewCaseFormValidity(); }, 50);
 };
 window.removeNewCaseMember = function(index) {
     composerRecipients.splice(index, 1);
@@ -2854,9 +2918,25 @@ window.addNewCaseMember = function(name, email, role) {
 };
 
 async function loadLabelsForForm() { availableLabels = await apiCall('getLabels'); renderLabels(); populateFilterDropdowns(); }
-function renderLabels() { document.getElementById('labels_container').innerHTML = availableLabels.map(label => `<span onclick="toggleLabel('${label}')" class="cursor-pointer px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm border ${selectedLabels.has(label) ? 'bg-green-800 text-white border-green-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">${label}</span>`).join(''); }
-window.toggleLabel = function(label) { selectedLabels.has(label) ? selectedLabels.delete(label) : selectedLabels.add(label); renderLabels(); };
-window.createNewLabel = async function() { const val = document.getElementById('new_label_input').value.trim(); if(!val) return; await apiCall('addLabel', {label: val}); availableLabels.push(val); selectedLabels.add(val); document.getElementById('new_label_input').value = ''; renderLabels(); populateFilterDropdowns(); };
+function renderLabels() { 
+    document.getElementById('labels_container').innerHTML = availableLabels.map(label => `<span onclick="toggleLabel('${label}')" class="cursor-pointer px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm border ${selectedLabels.has(label) ? 'bg-green-800 text-white border-green-900' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">${label}</span>`).join(''); 
+}
+window.toggleLabel = function(label) { 
+    selectedLabels.has(label) ? selectedLabels.delete(label) : selectedLabels.add(label); 
+    renderLabels(); 
+    setTimeout(() => { if (typeof window.checkNewCaseFormValidity === 'function') window.checkNewCaseFormValidity(); }, 50);
+};
+window.createNewLabel = async function() { 
+    const val = document.getElementById('new_label_input').value.trim(); 
+    if(!val) return; 
+    await apiCall('addLabel', {label: val}); 
+    availableLabels.push(val); 
+    selectedLabels.add(val); 
+    document.getElementById('new_label_input').value = ''; 
+    renderLabels(); 
+    populateFilterDropdowns(); 
+    setTimeout(() => { if (typeof window.checkNewCaseFormValidity === 'function') window.checkNewCaseFormValidity(); }, 50);
+};
 
 window.openModal = function() {
     document.getElementById('appModal').classList.remove('hidden');
@@ -2866,12 +2946,21 @@ window.openModal = function() {
     document.getElementById('new_case_member_search').value = '';
     composerRecipients = []; composerRecipients.push({ name: currentUser.name || currentUser.email, email: currentUser.email, role: 'Admin' });
     window.renderNewCaseMembers();
+    setTimeout(() => { if (typeof window.checkNewCaseFormValidity === 'function') window.checkNewCaseFormValidity(); }, 50);
 };
 window.closeModal = function() { document.getElementById('appModal').classList.add('hidden'); document.getElementById('convForm').reset(); };
 
 window.handleFormSubmit = async function(e) {
     e.preventDefault();
     const btn = document.getElementById('submitBtn');
+    
+    // Additional validation check
+    let fDetailsHtml = document.getElementById('f_details_rich') ? document.getElementById('f_details_rich').innerHTML.trim() : '';
+    const wordCount = window.getWordCount(document.getElementById('f_details_rich')?.innerText || '');
+    if (wordCount > MAX_DETAILS_WORDS) {
+        return showCustomDialog("Error", `Aap 3000 words se zyada nahi likh sakte.`, false);
+    }
+    
     btn.disabled = true;
     btn.innerText = 'Uploading...';
     try {
@@ -2883,10 +2972,9 @@ window.handleFormSubmit = async function(e) {
             hideUploadOverlay();
         } 
         
-        let fDetailsHtml = document.getElementById('f_details_rich') ? document.getElementById('f_details_rich').innerHTML.trim() : '';
-        // Final safety net truncation to exactly limit server payload size.
-        if (document.getElementById('f_details_rich') && document.getElementById('f_details_rich').innerText.length > 5000) {
-            fDetailsHtml = fDetailsHtml.substring(0, 6000); // 6k allows buffer for HTML tags but limits text footprint.
+        // Final safety net truncation to limit server payload size.
+        if (wordCount > MAX_DETAILS_WORDS) {
+            fDetailsHtml = fDetailsHtml.substring(0, 8000); 
         }
 
         // Generate a unique Request ID for idempotency to prevent duplicate cases
@@ -2925,14 +3013,319 @@ window.handleFormSubmit = async function(e) {
 };
 
 // ==========================================
-// LOAD CONVERSATIONS (DASHBOARD FEED)
+// LOAD CONVERSATIONS & DASHBOARD PAGINATION
 // ==========================================
+window.changeDashboardPage = function(dir) {
+    currentDashboardPage += dir;
+    renderDashboardPage();
+    const feed = document.getElementById('conversationFeed');
+    if (feed) feed.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+function renderDashboardPage() {
+    const feed = document.getElementById('conversationFeed');
+    if (!feed) return;
+    feed.innerHTML = '';
+    
+    if(filteredCasesForDashboard.length === 0) {
+        feed.innerHTML = `<p class="text-center py-10 text-slate-500 font-medium">No cases found.</p>`;
+        return;
+    }
+    
+    const start = (currentDashboardPage - 1) * CASES_PER_PAGE;
+    const end = start + CASES_PER_PAGE;
+    const paginated = filteredCasesForDashboard.slice(start, end);
+    
+    const fragment = document.createDocumentFragment();
+    
+    paginated.forEach(conv => {
+        const cardNode = createCardDOM(conv);
+        if (cardNode) fragment.appendChild(cardNode);
+    });
+    
+    const totalPages = Math.ceil(filteredCasesForDashboard.length / CASES_PER_PAGE);
+    if (totalPages > 1) {
+        const pagControls = document.createElement('div');
+        pagControls.className = "flex justify-between items-center py-3 px-4 bg-white sticky bottom-0 border-t border-slate-200 mt-4 rounded-b-lg shadow-sm z-20";
+        pagControls.innerHTML = `
+            <button onclick="changeDashboardPage(-1)" ${currentDashboardPage === 1 ? 'disabled class="opacity-50 cursor-not-allowed px-4 py-1.5 bg-slate-100 text-slate-500 rounded-md text-xs font-bold"' : 'class="px-4 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-md text-xs font-bold transition-colors shadow-sm"'}>Previous</button>
+            <span class="text-xs font-bold text-slate-600">Page ${currentDashboardPage} of ${totalPages}</span>
+            <button onclick="changeDashboardPage(1)" ${currentDashboardPage === totalPages ? 'disabled class="opacity-50 cursor-not-allowed px-4 py-1.5 bg-slate-100 text-slate-500 rounded-md text-xs font-bold"' : 'class="px-4 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-md text-xs font-bold transition-colors shadow-sm"'}>Next</button>
+        `;
+        fragment.appendChild(pagControls);
+    }
+    
+    feed.appendChild(fragment);
+}
+
+function createCardDOM(conv) {
+    const cardTemp = document.getElementById('cardTemplate');
+    if(!cardTemp) return null;
+    const cardFragment = cardTemp.content.cloneNode(true);
+    const wrapperDiv = cardFragment.firstElementChild;
+    const cardDiv = wrapperDiv.classList.contains('card-main') ? wrapperDiv : wrapperDiv.querySelector('.card-main');
+    
+    const safeAdmins = conv.admins || [];
+    const safeUsers = conv.users || [];
+    const safeLabels = conv.labels || [];
+    const uEmail = (currentUser.email || '').toLowerCase().trim();
+    const uName = (currentUser.name || '').toLowerCase().trim();
+    const hasAdminRights = conv.createdBy.toLowerCase().includes(uEmail) || conv.createdBy.toLowerCase().includes(uName) || safeAdmins.some(a => String(a).toLowerCase().includes(uEmail) || String(a).toLowerCase().includes(uName));
+    
+    let originalSnoozeMs = conv._computedSnoozeMs || 0;
+    
+    const unreadNotifsForCase = notifications.filter(n => String(n.caseId).trim() === String(conv.id).trim());
+    const hasUnread = unreadNotifsForCase.length > 0;
+    let isSnoozed = false;
+    let badgeText = "ACTIVE";
+    let badgeClasses = ['bg-emerald-500', 'text-white'];
+    
+    if (conv.status === 'Archived') {
+        badgeText = "ARCHIVED";
+        badgeClasses = ['bg-emerald-700', 'text-white'];
+    } else if (hasUnread && originalSnoozeMs > 0) {
+        const lastNotif = unreadNotifsForCase[0];
+        const replierName = window.getUserNameByEmail(lastNotif.sender);
+        const actType = String(lastNotif.type || "REPLY").toUpperCase();
+        badgeText = `MOVED TO LIVE: ${actType} BY ${replierName.toUpperCase()}`;
+        badgeClasses = ['bg-blue-100', 'text-blue-800', 'border', 'border-blue-300'];
+        isSnoozed = false;
+    } else if (originalSnoozeMs > Date.now()) {
+        const snoozeDateStr = window.formatDateTo12Hour(originalSnoozeMs);
+        badgeText = `SNOOZED TILL ${snoozeDateStr.toUpperCase()}`;
+        badgeClasses = ['bg-orange-100', 'text-orange-700'];
+        isSnoozed = true;
+    } else if (originalSnoozeMs > 0 && originalSnoozeMs <= Date.now()) {
+        badgeText = "MOVED TO LIVE: TIME EXPIRED";
+        badgeClasses = ['bg-purple-100', 'text-purple-800', 'border', 'border-purple-200'];
+        isSnoozed = false;
+    }
+    
+    let safeSnoozeMs = isSnoozed ? originalSnoozeMs : 0;
+    
+    cardDiv._cachedLabels = safeLabels;
+    cardDiv._cachedMembers = [...safeAdmins, ...safeUsers, conv.createdBy];
+    cardDiv.dataset.convId = String(conv.id).trim();
+    cardDiv.dataset.subject = String(conv.subject).toLowerCase();
+    cardDiv.dataset.status = conv.status;
+    cardDiv.dataset.snooze = safeSnoozeMs;
+    cardDiv.dataset.snoozeRaw = originalSnoozeMs;
+    cardDiv.dataset.hasAdminRights = hasAdminRights;
+    cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments || []);
+    cardDiv.dataset.labels = JSON.stringify(safeLabels);
+    cardDiv.dataset.members = JSON.stringify(cardDiv._cachedMembers);
+    cardDiv.dataset.caseAdmins = JSON.stringify(safeAdmins);
+    cardDiv.dataset.caseUsers = JSON.stringify(safeUsers);
+    cardDiv.dataset.caseSourceUrl = conv.caseSourceUrl || conv.caseUrl || conv.sourceUrl || conv.fmsUrl || '';
+    cardDiv.dataset.creatorEmail = conv.creatorEmail || '';
+    cardDiv.dataset.archivedBy = conv.archivedBy || '';
+    cardDiv.dataset.snoozeRawStr = conv.snoozeTime || '';
+    
+    if (wrapperDiv !== cardDiv) {
+        wrapperDiv.dataset.convId = String(conv.id).trim();
+    }
+    
+    const creatorName = window.getUserNameByEmail(conv.createdBy);
+    cardDiv.querySelector('[data-id="conv-id"]').textContent = conv.id;
+    cardDiv.querySelector('[data-id="subject"]').textContent = conv.subject;
+    cardDiv.querySelector('[data-id="details"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.details) : conv.details;
+    cardDiv.querySelector('[data-id="message"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.message) : conv.message;
+    cardDiv.querySelector('[data-id="author"]').textContent = creatorName;
+    cardDiv.querySelector('[data-id="timestamp"]').textContent = window.formatDateTo12Hour(conv.timestamp);
+    cardDiv.querySelector('[data-id="display-case-id"]').textContent = conv.id;
+    
+    const avatarEl = cardDiv.querySelector('[data-id="avatar-letter"]');
+    if(avatarEl) avatarEl.textContent = String(creatorName).charAt(0).toUpperCase();
+    
+    const badge = cardDiv.querySelector('[data-id="status-badge"]');
+    badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm";
+    badge.classList.add(...badgeClasses);
+    badge.innerText = badgeText;
+    
+    const footerActions = cardDiv.querySelector('.flex.items-center.gap-3.text-sm');
+    const cbContainer = footerActions.querySelector('.archive-cb-container');
+    const snoozeBtn = footerActions.querySelector('.snooze-card-btn');
+    const unsnoozeBtn = footerActions.querySelector('.unsnooze-card-btn');
+    const unarchiveBtn = footerActions.querySelector('.unarchive-card-btn');
+    const checkbox = footerActions.querySelector('.bulk-archive-cb');
+    const caseSourceCardBtn = footerActions.querySelector('.case-source-card-btn');
+    
+    if(cbContainer) { cbContainer.classList.add('hidden'); cbContainer.classList.remove('flex'); }
+    if(snoozeBtn) snoozeBtn.classList.add('hidden'); 
+    if(unsnoozeBtn) unsnoozeBtn.classList.add('hidden');
+    if(unarchiveBtn) unarchiveBtn.classList.add('hidden');
+    
+    if (caseSourceCardBtn) {
+        if (cardDiv.dataset.caseSourceUrl) caseSourceCardBtn.classList.remove('hidden');
+        else caseSourceCardBtn.classList.add('hidden');
+    }
+
+    if (conv.status === 'Archived' && unarchiveBtn) {
+        unarchiveBtn.classList.remove('hidden');
+    }
+    if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed && cbContainer) {
+        cbContainer.classList.remove('hidden');
+        cbContainer.classList.add('flex');
+        if(checkbox) checkbox.disabled = false;
+    }
+    if (conv.status !== 'Archived') {
+        if (isSnoozed && unsnoozeBtn) { unsnoozeBtn.classList.remove('hidden'); }
+        else if (currentTab === 'Live' && snoozeBtn) { snoozeBtn.classList.remove('hidden'); }
+    }
+    
+    const lCont = cardDiv.querySelector('[data-id="labels-container"]');
+    safeLabels.forEach(l => { if(l){ const s = document.createElement('span'); s.className='px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded font-bold'; s.innerText=l; lCont.appendChild(s); } });
+
+    const admCont = cardDiv.querySelector('[data-id="admins-container"]');
+    const usrCont = cardDiv.querySelector('[data-id="users-container"]');
+    safeAdmins.forEach(a => { if(a && admCont) admCont.innerHTML += window.getMemberBadgeHTML(a, 'Admin', conv.archivedBy, conv.snoozeTime); });
+    safeUsers.forEach(u => { if(u && usrCont) usrCont.innerHTML += window.getMemberBadgeHTML(u, 'User', conv.archivedBy, conv.snoozeTime); });
+
+    wrapperDiv.style.display = 'block'; 
+    return wrapperDiv;
+}
+
+window.applyFilters = debounce(function() {
+    try {
+        const filterInput = document.getElementById('filterId');
+        if(!filterInput) return;
+        const idQuery = filterInput.value.toLowerCase().trim();
+        const checkedLabels = Array.from(document.querySelectorAll('.flabel[data-applied="true"]')).map(cb => cb.value);
+        const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => String(cb.value).toLowerCase().trim());
+        
+        let visibleLabels = new Set(); let visibleMembers = new Set();
+        let newCounts = { Live: 0, Snooze: 0, Archive: 0 };
+        filteredCasesForDashboard = [];
+        
+        const uEmail = (currentUser.email || '').toLowerCase().trim();
+        const uName = (currentUser.name || '').toLowerCase().trim();
+
+        allCasesData.forEach(conv => {
+            const safeLabels = conv.labels || [];
+            const safeAdmins = conv.admins || [];
+            const safeUsers = conv.users || [];
+            const cardMembers = [...safeAdmins, ...safeUsers, conv.createdBy];
+
+            let isMyCase = false;
+            if (currentUser && currentUser.isMaster) {
+                cardMembers.forEach(m => {
+                    if(!m) return;
+                    const em = String(m).toLowerCase().trim();
+                    const nm = String(window.getUserNameByEmail(m)).toLowerCase().trim();
+                    if(em === uEmail || nm === uName || em.includes(uEmail) || nm.includes(uName)) isMyCase = true;
+                });
+                const creatorName = String(conv.createdBy || '').toLowerCase().trim();
+                if(creatorName === uName || creatorName === uEmail || creatorName.includes(uName)) isMyCase = true;
+            } else {
+                isMyCase = true; 
+            }
+
+            let isArchived, isSnoozed, isLive;
+            let currentRecordStatus = String(conv.status || '').trim();
+            const creatorEmail = String(conv.creatorEmail || '').trim();
+            const creatorN = String(conv.createdBy || '').toLowerCase().trim();
+            const archivedBy = String(conv.archivedBy || '').toLowerCase();
+            let creatorSnoozeMs = 0;
+            const snoozeStr = String(conv.snoozeTime || '');
+            
+            if (snoozeStr && snoozeStr !== '0' && snoozeStr !== 'NaN') {
+                if (snoozeStr.startsWith('{')) {
+                    try { 
+                        const sObj = JSON.parse(snoozeStr);
+                        if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
+                            creatorSnoozeMs = parseInt(sObj[creatorEmail], 10) || 0; 
+                        } else {
+                            creatorSnoozeMs = parseInt(sObj[uEmail], 10) || 0;
+                        }
+                    } catch(e){}
+                } else {
+                    creatorSnoozeMs = parseInt(snoozeStr, 10) || 0;
+                }
+            }
+
+            if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
+                isArchived = (creatorEmail && archivedBy.includes(creatorEmail)) || (creatorN && archivedBy.includes(creatorN));
+                isSnoozed = creatorSnoozeMs > Date.now();
+                isLive = !isArchived && !isSnoozed; 
+                
+                if (isLive) newCounts.Live++;
+                if (isSnoozed) newCounts.Snooze++;
+                if (isArchived) newCounts.Archive++;
+            } else {
+                isArchived = currentRecordStatus === 'Archived';
+                isSnoozed = creatorSnoozeMs > Date.now();
+                isLive = !isArchived && !isSnoozed;
+                
+                if (window.masterViewMode === 'ME' && isMyCase) {
+                    if (isArchived) newCounts.Archive++;
+                    else if (isSnoozed) newCounts.Snooze++;
+                    else newCounts.Live++;
+                }
+            }
+
+            let showTab = false;
+            if (currentTab === 'Live' && isLive) showTab = true;
+            if (currentTab === 'Archive' && isArchived) showTab = true;
+            if (currentTab === 'Snooze' && isSnoozed) showTab = true;
+
+            if (currentUser && currentUser.isMaster) {
+                if (window.masterViewMode === 'ME' && !isMyCase) showTab = false;
+                if (window.masterViewMode === 'NOT_ME' && isMyCase) showTab = false;
+            }
+            
+            const matchesLabels = checkedLabels.length === 0 || checkedLabels.every(l => safeLabels.includes(l));
+            const matchesMembers = checkedMembers.length === 0 || checkedMembers.every(m => 
+                cardMembers.some(cm => {
+                    if (!cm) return false;
+                    const cmEmail = String(cm).toLowerCase().trim();
+                    const cmName = String(window.getUserNameByEmail(cm)).toLowerCase().trim();
+                    return cmEmail === m || cmName === m;
+                })
+            );
+            const matchesId = !idQuery || String(conv.id).toLowerCase().includes(idQuery) || String(conv.subject || '').toLowerCase().includes(idQuery);
+            const baseMatch = showTab && matchesId;
+            
+            if (baseMatch && matchesLabels && matchesMembers) {
+                conv._computedSnoozeMs = creatorSnoozeMs;
+                filteredCasesForDashboard.push(conv);
+            }
+
+            if (baseMatch && matchesMembers) safeLabels.forEach(l => visibleLabels.add(String(l)));
+            if (baseMatch && matchesLabels) cardMembers.forEach(m => {
+                if(m) { visibleMembers.add(String(m).toLowerCase().trim()); visibleMembers.add(String(window.getUserNameByEmail(m)).toLowerCase().trim()); }
+            });
+        });
+
+        if(document.getElementById('count-Live')) document.getElementById('count-Live').innerText = newCounts.Live;
+        if(document.getElementById('count-Snooze')) document.getElementById('count-Snooze').innerText = newCounts.Snooze;
+        if(document.getElementById('count-Archive')) document.getElementById('count-Archive').innerText = newCounts.Archive;
+
+        document.querySelectorAll('#labelsDropdown .dropdown-item').forEach(item => {
+            const cb = item.querySelector('input[type="checkbox"]');
+            if(!cb) return;
+            if (cb.hasAttribute('data-applied') || visibleLabels.has(cb.value)) { item.style.display = 'flex'; item.dataset.available = 'true'; } 
+            else { item.style.display = 'none'; item.dataset.available = 'false'; }
+        });
+
+        document.querySelectorAll('#membersDropdown .dropdown-item').forEach(item => {
+            const cb = item.querySelector('input[type="checkbox"]');
+            if(!cb) return;
+            const valLower = String(cb.value).toLowerCase().trim();
+            const isVisible = visibleMembers.has(valLower);
+            if (cb.hasAttribute('data-applied') || isVisible) { item.style.display = 'flex'; item.dataset.available = 'true'; } 
+            else { item.style.display = 'none'; item.dataset.available = 'false'; }
+        });
+        
+        currentDashboardPage = 1;
+        renderDashboardPage();
+    } catch(e) { console.error("Filter Error:", e); }
+}, 150);  
+
 async function loadConversations() {
     if (window.isOpeningDetailView) return;
     const feed = document.getElementById('conversationFeed');
     if(!feed) return;
     
-    // Show Small Loader to let user know it's working
     feed.innerHTML = `
         <div class="flex flex-col items-center justify-center py-10 mt-6 space-y-4">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -2940,260 +3333,20 @@ async function loadConversations() {
         </div>`;
         
     try {
-        allCasesData = await apiCall('getConversations', currentUser); feed.innerHTML = '';
-        let counts = { Live: 0, Snooze: 0, Archive: 0 };
-        const uEmail = (currentUser.email || '').toLowerCase();
-        const uName = (currentUser.name || '').toLowerCase();
+        const payload = currentUser ? { ...currentUser, limit: 4000 } : { limit: 4000 };
+        allCasesData = await apiCall('getConversations', payload);
         
+        // Truncate locally to save RAM during rendering
         allCasesData.forEach(c => {
-            // Safety Truncation on initial Fetch: Ensure large details do not bloat DOM memory.
-            if (c.details && c.details.length > 5000) {
-                c.details = c.details.substring(0, 5000) + '... (truncated as limit reached)';
-            }
-            
-            let originalSnoozeMs = parseInt(c.snoozeTime || "0", 10);
-            if (String(c.snoozeTime).startsWith('{')) {
-                try { originalSnoozeMs = parseInt(JSON.parse(c.snoozeTime)[uEmail], 10) || 0; } catch(e){}
-            }
-            const hasUnread = notifications.filter(n => String(n.caseId).trim() === String(c.id).trim()).length > 0;
-            const isSnoozed = originalSnoozeMs > Date.now();
-
-            let isMyCase = false;
-            if (currentUser && currentUser.isMaster) {
-                const members = [...(c.admins||[]), ...(c.users||[]), c.createdBy];
-                members.forEach(m => {
-                    if(!m) return;
-                    const em = String(m).toLowerCase().trim();
-                    const nm = String(window.getUserNameByEmail(m)).toLowerCase().trim();
-                    if(em === uEmail || nm === uName || em.includes(uEmail) || nm.includes(uName)) isMyCase = true;
-                });
-                const cName = String(window.getUserNameByEmail(c.createdBy)).toLowerCase().trim();
-                if(cName === uName || cName === uEmail || cName.includes(uName)) isMyCase = true;
-            } else {
-                isMyCase = true;
-            }
-
-            if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
-                const creatorEmail = String(c.creatorEmail || '').trim();
-                const creatorName = String(c.createdBy || '').toLowerCase().trim();
-                const archivedBy = String(c.archivedBy || '').toLowerCase();
-                
-                let isCreatorArchived = (creatorEmail && archivedBy.includes(creatorEmail)) || (creatorName && archivedBy.includes(creatorName));
-                
-                let creatorSnoozeMs = 0;
-                if (String(c.snoozeTime).startsWith('{')) {
-                    try { creatorSnoozeMs = parseInt(JSON.parse(c.snoozeTime)[creatorEmail], 10) || 0; } catch(e){}
-                }
-                let isCreatorSnoozed = creatorSnoozeMs > Date.now();
-
-                if (isCreatorArchived) counts.Archive++;
-                else if (isCreatorSnoozed && !hasUnread) counts.Snooze++;
-                else counts.Live++;
-            } else if (window.masterViewMode === 'ME' && isMyCase) {
-                if (c.status === 'Archived') counts.Archive++;
-                else if (isSnoozed && !hasUnread) counts.Snooze++;
-                else counts.Live++;
+            if (c.details && c.details.length > 8000) {
+                c.details = c.details.substring(0, 8000) + '... (truncated as limit reached)';
             }
         });
         
-        if(document.getElementById('count-Live')) document.getElementById('count-Live').innerText = counts.Live;
-        if(document.getElementById('count-Snooze')) document.getElementById('count-Snooze').innerText = counts.Snooze;
-        if(document.getElementById('count-Archive')) document.getElementById('count-Archive').innerText = counts.Archive;
-        if(allCasesData.length === 0) { feed.innerHTML = `<p class="text-center py-10 text-slate-500 font-medium">No cases found.</p>`; return; }
-        
-        const fragment = document.createDocumentFragment();
-        
-        allCasesData.forEach(conv => {
-            const cardTemp = document.getElementById('cardTemplate');
-            if(!cardTemp) return;
-            const cardFragment = cardTemp.content.cloneNode(true);
-            const wrapperDiv = cardFragment.firstElementChild;
-            const cardDiv = wrapperDiv.classList.contains('card-main') ? wrapperDiv : wrapperDiv.querySelector('.card-main');
-            
-            // FIX: added fallback || [] to avoid crashes if arrays are missing from DB
-            const safeAdmins = conv.admins || [];
-            const safeUsers = conv.users || [];
-            const safeLabels = conv.labels || [];
-
-            const hasAdminRights = conv.createdBy.toLowerCase().includes(uEmail) || conv.createdBy.toLowerCase().includes(uName) || safeAdmins.some(a => String(a).toLowerCase().includes(uEmail) || String(a).toLowerCase().includes(uName));
-            
-            let originalSnoozeMs = 0;
-            const snoozeStr = String(conv.snoozeTime || "").trim();
-            if (snoozeStr && snoozeStr !== '0' && snoozeStr !== 'NaN') {
-                if (snoozeStr.startsWith('{')) {
-                    try {
-                        const obj = JSON.parse(snoozeStr);
-                        originalSnoozeMs = parseInt(obj[uEmail], 10) || 0;
-                    } catch(e) { originalSnoozeMs = 0; }
-                } else {
-                    originalSnoozeMs = parseInt(snoozeStr, 10) || 0;
-                }
-            }
-            
-            const unreadNotifsForCase = notifications.filter(n => String(n.caseId).trim() === String(conv.id).trim());
-            const hasUnread = unreadNotifsForCase.length > 0;
-            let isSnoozed = false;
-            let badgeText = "ACTIVE";
-            let badgeClasses = ['bg-emerald-500', 'text-white'];
-            
-            if (conv.status === 'Archived') {
-                badgeText = "ARCHIVED";
-                badgeClasses = ['bg-emerald-700', 'text-white'];
-            } else if (hasUnread && originalSnoozeMs > 0) {
-                const lastNotif = unreadNotifsForCase[0];
-                const replierName = window.getUserNameByEmail(lastNotif.sender);
-                const actType = String(lastNotif.type || "REPLY").toUpperCase();
-                badgeText = `MOVED TO LIVE: ${actType} BY ${replierName.toUpperCase()}`;
-                badgeClasses = ['bg-blue-100', 'text-blue-800', 'border', 'border-blue-300'];
-                isSnoozed = false;
-            } else if (originalSnoozeMs > Date.now()) {
-                const snoozeDateStr = new Date(originalSnoozeMs).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                badgeText = `SNOOZED TILL ${snoozeDateStr.toUpperCase()}`;
-                badgeClasses = ['bg-orange-100', 'text-orange-700'];
-                isSnoozed = true;
-            } else if (originalSnoozeMs > 0 && originalSnoozeMs <= Date.now()) {
-                badgeText = "MOVED TO LIVE: TIME EXPIRED";
-                badgeClasses = ['bg-purple-100', 'text-purple-800', 'border', 'border-purple-200'];
-                isSnoozed = false;
-            }
-            
-            let safeSnoozeMs = isSnoozed ? originalSnoozeMs : 0;
-            
-            cardDiv._cachedLabels = safeLabels;
-            cardDiv._cachedMembers = [...safeAdmins, ...safeUsers, conv.createdBy];
-            cardDiv.dataset.convId = String(conv.id).trim();
-            cardDiv.dataset.subject = String(conv.subject).toLowerCase();
-            cardDiv.dataset.status = conv.status;
-            cardDiv.dataset.snooze = safeSnoozeMs;
-            cardDiv.dataset.snoozeRaw = originalSnoozeMs;
-            cardDiv.dataset.hasAdminRights = hasAdminRights;
-            cardDiv.dataset.attachmentsData = JSON.stringify(conv.attachments || []);
-            cardDiv.dataset.labels = JSON.stringify(safeLabels);
-            cardDiv.dataset.members = JSON.stringify(cardDiv._cachedMembers);
-            cardDiv.dataset.caseAdmins = JSON.stringify(safeAdmins);
-            cardDiv.dataset.caseUsers = JSON.stringify(safeUsers);
-            
-            // Case Source Setup
-            cardDiv.dataset.caseSourceUrl = conv.caseSourceUrl || conv.caseUrl || conv.sourceUrl || conv.fmsUrl || '';
-            
-            cardDiv.dataset.creatorEmail = conv.creatorEmail || '';
-            cardDiv.dataset.archivedBy = conv.archivedBy || '';
-            cardDiv.dataset.snoozeRawStr = conv.snoozeTime || '';
-            
-            if (wrapperDiv !== cardDiv) {
-                wrapperDiv.dataset.convId = String(conv.id).trim();
-            }
-            
-            const creatorName = window.getUserNameByEmail(conv.createdBy);
-            cardDiv.querySelector('[data-id="conv-id"]').textContent = conv.id;
-            cardDiv.querySelector('[data-id="subject"]').textContent = conv.subject;
-            cardDiv.querySelector('[data-id="details"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.details) : conv.details;
-            cardDiv.querySelector('[data-id="message"]').innerHTML = typeof makeLinksClickable === 'function' ? makeLinksClickable(conv.message) : conv.message;
-            cardDiv.querySelector('[data-id="author"]').textContent = creatorName;
-            cardDiv.querySelector('[data-id="timestamp"]').textContent = new Date(conv.timestamp).toLocaleDateString();
-            cardDiv.querySelector('[data-id="display-case-id"]').textContent = conv.id;
-            
-            const avatarEl = cardDiv.querySelector('[data-id="avatar-letter"]');
-            if(avatarEl) avatarEl.textContent = String(creatorName).charAt(0).toUpperCase();
-            
-            const badge = cardDiv.querySelector('[data-id="status-badge"]');
-            badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-md uppercase tracking-widest shadow-sm";
-            badge.classList.add(...badgeClasses);
-            badge.innerText = badgeText;
-            
-            const footerActions = cardDiv.querySelector('.flex.items-center.gap-3.text-sm');
-            const cbContainer = footerActions.querySelector('.archive-cb-container');
-            const snoozeBtn = footerActions.querySelector('.snooze-card-btn');
-            const unsnoozeBtn = footerActions.querySelector('.unsnooze-card-btn');
-            const unarchiveBtn = footerActions.querySelector('.unarchive-card-btn');
-            const checkbox = footerActions.querySelector('.bulk-archive-cb');
-            const caseSourceCardBtn = footerActions.querySelector('.case-source-card-btn');
-            
-            cbContainer.classList.add('hidden'); cbContainer.classList.remove('flex'); snoozeBtn.classList.add('hidden'); unsnoozeBtn.classList.add('hidden');
-            unarchiveBtn.classList.add('hidden');
-            
-            // Show/Hide Case Source button on card
-            if (caseSourceCardBtn) {
-                if (cardDiv.dataset.caseSourceUrl) {
-                    caseSourceCardBtn.classList.remove('hidden');
-                } else {
-                    caseSourceCardBtn.classList.add('hidden');
-                }
-            }
-
-            if (conv.status === 'Archived') {
-                unarchiveBtn.classList.remove('hidden');
-            }
-            if (currentTab === 'Live' && conv.status !== 'Archived' && !isSnoozed) {
-                cbContainer.classList.remove('hidden');
-                cbContainer.classList.add('flex');
-                checkbox.disabled = false;
-            }
-            if (conv.status !== 'Archived') {
-                if (isSnoozed) { unsnoozeBtn.classList.remove('hidden'); }
-                else if (currentTab === 'Live') { snoozeBtn.classList.remove('hidden'); }
-            }
-            
-            // FIX: Added fallbacks for array methods
-            const lCont = cardDiv.querySelector('[data-id="labels-container"]');
-            safeLabels.forEach(l => { if(l){ const s = document.createElement('span'); s.className='px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] rounded font-bold'; s.innerText=l; lCont.appendChild(s); } });
-
-            const admCont = cardDiv.querySelector('[data-id="admins-container"]');
-            const usrCont = cardDiv.querySelector('[data-id="users-container"]');
-            safeAdmins.forEach(a => { if(a) admCont.innerHTML += window.getMemberBadgeHTML(a, 'Admin', conv.archivedBy, conv.snoozeTime); });
-            safeUsers.forEach(u => { if(u) usrCont.innerHTML += window.getMemberBadgeHTML(u, 'User', conv.archivedBy, conv.snoozeTime); });
-
-            let isMyCase = false;
-            if (currentUser && currentUser.isMaster) {
-                const myEmail = currentUser.email.toLowerCase().trim();
-                const myName = (currentUser.name || '').toLowerCase().trim();
-                cardDiv._cachedMembers.forEach(m => {
-                    if(!m) return;
-                    const em = String(m).toLowerCase().trim();
-                    const nm = String(window.getUserNameByEmail(m)).toLowerCase().trim();
-                    if(em === myEmail || nm === myName || em.includes(myEmail) || nm.includes(myName)) isMyCase = true;
-                });
-                const cName = creatorName.toLowerCase().trim();
-                if(cName === myName || cName === myEmail || cName.includes(myName)) isMyCase = true;
-            } else {
-                isMyCase = true;
-            }
-
-            let isRecArchived, isRecSnoozed, isRecLive;
-            if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
-                const creatorEmail = String(conv.creatorEmail || '').trim();
-                const creatorN = String(creatorName || '').toLowerCase().trim();
-                const archivedBy = String(conv.archivedBy || '').toLowerCase();
-                isRecArchived = (creatorEmail && archivedBy.includes(creatorEmail)) || (creatorN && archivedBy.includes(creatorN));
-                
-                let creatorSnoozeMs = 0;
-                if (String(conv.snoozeTime).startsWith('{')) {
-                    try { creatorSnoozeMs = parseInt(JSON.parse(conv.snoozeTime)[creatorEmail], 10) || 0; } catch(e){}
-                }
-                isRecSnoozed = creatorSnoozeMs > Date.now();
-                isRecLive = !isRecArchived && !isRecSnoozed;
-            } else {
-                isRecArchived = conv.status === 'Archived';
-                isRecSnoozed = isSnoozed;
-                isRecLive = !isRecArchived && !isRecSnoozed;
-            }
-            
-            let showInitial = false;
-            if (currentTab === 'Live' && isRecLive) showInitial = true;
-            if (currentTab === 'Archive' && isRecArchived) showInitial = true;
-            if (currentTab === 'Snooze' && isRecSnoozed) showInitial = true;
-            
-            if (currentUser && currentUser.isMaster) {
-                if (window.masterViewMode === 'ME' && !isMyCase) showInitial = false;
-                if (window.masterViewMode === 'NOT_ME' && isMyCase) showInitial = false;
-            }
-            
-            wrapperDiv.style.display = showInitial ? 'block' : 'none';
-            fragment.appendChild(cardFragment);
-        });
-        feed.appendChild(fragment); window.switchTab(currentTab);
+        applyFilters(); 
     } catch(e) { console.error(e); }
 }
+
 let deferredPrompt = null;
 const installBtn = document.getElementById('installAppBtn');
 function isMobileDevice() {
@@ -3380,131 +3533,6 @@ window.openFromNotification = async function(caseId, uniqueId) {
 
     }
 };
-
-// ==========================================
-// applyFilters FIX
-// ==========================================
-window.applyFilters = debounce(function() {
-    try {
-        const filterInput = document.getElementById('filterId');
-        if(!filterInput) return;
-        const idQuery = filterInput.value.toLowerCase().trim();
-        const checkedLabels = Array.from(document.querySelectorAll('.flabel[data-applied="true"]')).map(cb => cb.value);
-        const checkedMembers = Array.from(document.querySelectorAll('.fmember[data-applied="true"]')).map(cb => String(cb.value).toLowerCase().trim());
-        let visibleLabels = new Set(); let visibleMembers = new Set();
-        let newCounts = { Live: 0, Snooze: 0, Archive: 0 };
-        Array.from(document.getElementById('conversationFeed').children).forEach(wrapper => {
-            const card = wrapper.classList.contains('card-main') ? wrapper : wrapper.querySelector('.card-main');
-            if(!card || !card.dataset.convId) return; 
-
-            let cardLabels = card._cachedLabels || JSON.parse(card.dataset.labels || '[]');
-            if(!Array.isArray(cardLabels)) cardLabels = [];
-            let cardMembers = card._cachedMembers || JSON.parse(card.dataset.members || '[]');
-            if(!Array.isArray(cardMembers)) cardMembers = [];
-
-            let isMyCase = false;
-            if (currentUser && currentUser.isMaster) {
-                const myEmail = currentUser.email.toLowerCase().trim();
-                const myName = (currentUser.name || '').toLowerCase().trim();
-                
-                cardMembers.forEach(m => {
-                    if(!m) return;
-                    const em = String(m).toLowerCase().trim();
-                    const nm = String(window.getUserNameByEmail(m)).toLowerCase().trim();
-                    if(em === myEmail || nm === myName || em.includes(myEmail) || nm.includes(myName)) isMyCase = true;
-                });
-                const creatorName = (card.querySelector('[data-id="author"]')?.innerText || '').toLowerCase().trim();
-                if(creatorName === myName || creatorName === myEmail || creatorName.includes(myName)) isMyCase = true;
-            } else {
-                isMyCase = true; 
-            }
-
-            let isArchived, isSnoozed, isLive;
-            let currentRecordStatus = String(card.dataset.status || '').trim();
-
-            if (window.masterViewMode === 'NOT_ME' && !isMyCase) {
-                const creatorEmail = String(card.dataset.creatorEmail || '').trim();
-                const creatorName = String(card.querySelector('[data-id="author"]')?.innerText || '').toLowerCase().trim();
-                const archivedBy = String(card.dataset.archivedBy || '').toLowerCase();
-                
-                isArchived = (creatorEmail && archivedBy.includes(creatorEmail)) || (creatorName && archivedBy.includes(creatorName));
-                
-                let creatorSnoozeMs = 0;
-                const snoozeStr = String(card.dataset.snoozeRawStr || '');
-                if (snoozeStr.startsWith('{')) {
-                    try { creatorSnoozeMs = parseInt(JSON.parse(snoozeStr)[creatorEmail], 10) || 0; } catch(e){}
-                }
-                isSnoozed = creatorSnoozeMs > Date.now();
-                isLive = !isArchived && !isSnoozed; 
-                
-                if (isLive) newCounts.Live++;
-                if (isSnoozed) newCounts.Snooze++;
-                if (isArchived) newCounts.Archive++;
-            } else {
-                isArchived = currentRecordStatus === 'Archived';
-                isSnoozed = parseInt(card.dataset.snooze || 0) > Date.now();
-                isLive = !isArchived && !isSnoozed;
-                
-                if (window.masterViewMode === 'ME' && isMyCase) {
-                    if (isArchived) newCounts.Archive++;
-                    else if (isSnoozed) newCounts.Snooze++;
-                    else newCounts.Live++;
-                }
-            }
-
-            let showTab = false;
-            if (currentTab === 'Live' && isLive) showTab = true;
-            if (currentTab === 'Archive' && isArchived) showTab = true;
-            if (currentTab === 'Snooze' && isSnoozed) showTab = true;
-
-            if (currentUser && currentUser.isMaster) {
-                if (window.masterViewMode === 'ME' && !isMyCase) showTab = false;
-                if (window.masterViewMode === 'NOT_ME' && isMyCase) showTab = false;
-            }
-            
-            const matchesLabels = checkedLabels.length === 0 || checkedLabels.every(l => cardLabels.includes(l));
-            const matchesMembers = checkedMembers.length === 0 || checkedMembers.every(m => 
-                cardMembers.some(cm => {
-                    if (!cm) return false;
-                    const cmEmail = String(cm).toLowerCase().trim();
-                    const cmName = String(window.getUserNameByEmail(cm)).toLowerCase().trim();
-                    return cmEmail === m || cmName === m;
-                })
-            );
-            const matchesId = !idQuery || String(card.dataset.convId).toLowerCase().includes(idQuery) || (card.dataset.subject && String(card.dataset.subject).toLowerCase().includes(idQuery));
-            const baseMatch = showTab && matchesId;
-            
-            if (baseMatch && matchesLabels && matchesMembers) wrapper.style.display = 'block';
-            else wrapper.style.display = 'none';
-
-            if (baseMatch && matchesMembers) cardLabels.forEach(l => visibleLabels.add(String(l)));
-            if (baseMatch && matchesLabels) cardMembers.forEach(m => {
-                if(m) { visibleMembers.add(String(m).toLowerCase().trim()); visibleMembers.add(String(window.getUserNameByEmail(m)).toLowerCase().trim()); }
-            });
-        });
-
-        if(document.getElementById('count-Live')) document.getElementById('count-Live').innerText = newCounts.Live;
-        if(document.getElementById('count-Snooze')) document.getElementById('count-Snooze').innerText = newCounts.Snooze;
-        if(document.getElementById('count-Archive')) document.getElementById('count-Archive').innerText = newCounts.Archive;
-
-        document.querySelectorAll('#labelsDropdown .dropdown-item').forEach(item => {
-            const cb = item.querySelector('input[type="checkbox"]');
-            if(!cb) return;
-            if (cb.hasAttribute('data-applied') || visibleLabels.has(cb.value)) { item.style.display = 'flex'; item.dataset.available = 'true'; } 
-            else { item.style.display = 'none'; item.dataset.available = 'false'; }
-        });
-
-        document.querySelectorAll('#membersDropdown .dropdown-item').forEach(item => {
-            const cb = item.querySelector('input[type="checkbox"]');
-            if(!cb) return;
-            const valLower = String(cb.value).toLowerCase().trim();
-            const isVisible = visibleMembers.has(valLower);
-            if (cb.hasAttribute('data-applied') || isVisible) { item.style.display = 'flex'; item.dataset.available = 'true'; } 
-            else { item.style.display = 'none'; item.dataset.available = 'false'; }
-        });
-    } catch(e) {}
-}, 150);  
-
 
 // ==========================================
 // CASE SOURCE MODAL LOGIC
